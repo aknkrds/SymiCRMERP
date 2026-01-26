@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Order, OrderFormData } from '../types';
 
-const API_URL = 'http://localhost:3000/orders';
+const API_URL = '/api/orders';
 
 export function useOrders() {
     const [orders, setOrders] = useState<Order[]>([]);

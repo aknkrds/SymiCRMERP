@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { StockItem, StockItemFormData } from '../types';
 
-const API_URL = 'http://localhost:3000/stock-items';
+const API_URL = '/api/stock-items';
 
 export function useStock() {
     const [stockItems, setStockItems] = useState<StockItem[]>([]);

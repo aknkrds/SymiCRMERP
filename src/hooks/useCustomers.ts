@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Customer, CustomerFormData } from '../types';
 
-const API_URL = 'http://localhost:3000/customers';
+const API_URL = '/customers';
 
 export function useCustomers() {
     const [customers, setCustomers] = useState<Customer[]>([]);

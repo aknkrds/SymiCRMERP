@@ -10,7 +10,7 @@ import { tr } from 'date-fns/locale';
 import { Modal } from '../components/ui/Modal';
 import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData } from '../types';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = '/api';
 
 const PRODUCTION_STATUSES = [
     { value: 'production_planning', label: 'Üretim Planlaması Yapılıyor' },

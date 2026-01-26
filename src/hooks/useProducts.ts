@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Product, ProductFormData } from '../types';
 
-const API_URL = 'http://localhost:3000/products';
+const API_URL = '/api/products';
 
 export function useProducts() {
     const [products, setProducts] = useState<Product[]>([]);
