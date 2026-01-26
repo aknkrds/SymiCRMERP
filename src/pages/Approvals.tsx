@@ -1,0 +1,356 @@
+import { useState } from 'react';
+import { useOrders } from '../hooks/useOrders';
+import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package } from 'lucide-react';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import type { Order } from '../types';
+
+export default function Approvals() {
+    const { orders, updateStatus } = useOrders();
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [showModal, setShowModal] = useState(false);
+
+    // Filter orders
+    const pendingApprovals = orders.filter(o => o.status === 'shipping_completed');
+    const completedHistory = orders.filter(o => o.status === 'order_completed' || o.status === 'cancelled');
+
+    const handleCompleteOrder = async (orderId: string) => {
+        if (confirm('Bu sipariş tamamen tamamlandı olarak işaretlensin mi?')) {
+            await updateStatus(orderId, 'order_completed');
+        }
+    };
+
+    const handleCancelOrder = async (orderId: string) => {
+        if (confirm('DİKKAT: Bu sipariş iptal edilecek! Bu işlem geri alınamaz. Onaylıyor musunuz?')) {
+            await updateStatus(orderId, 'order_cancelled' as any); // Using 'as any' just in case type def isn't updated in memory yet, though it looked fine
+        }
+    };
+
+    const handleViewDetails = (order: Order) => {
+        setSelectedOrder(order);
+        setShowModal(true);
+    };
+
+    const closeModal = () => {
+        setShowModal(false);
+        setSelectedOrder(null);
+    };
+
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'order_completed':
+                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 flex items-center gap-1 w-fit"><CheckCircle2 size={12} /> Tamamlandı</span>;
+            case 'cancelled':
+            case 'order_cancelled':
+                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 flex items-center gap-1 w-fit"><XCircle size={12} /> İptal Edildi</span>;
+            default:
+                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{status}</span>;
+        }
+    };
+
+    return (
+        <div className="space-y-8">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">Onaylar</h1>
+                    <p className="text-slate-500">Sevkiyatı yapılan ve final onayı bekleyen siparişler</p>
+                </div>
+            </div>
+
+            {/* Pending Approvals Section */}
+            <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <AlertTriangle className="text-amber-500" size={20} />
+                    Onay Bekleyen Siparişler
+                </h2>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Sipariş No</th>
+                                    <th className="px-6 py-4">Müşteri</th>
+                                    <th className="px-6 py-4">Tarih</th>
+                                    <th className="px-6 py-4">Evraklar</th>
+                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {pendingApprovals.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                                            Onay bekleyen sipariş bulunmuyor.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    pendingApprovals.map((order) => (
+                                        <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
+                                            <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
+                                            <td className="px-6 py-4">
+                                                {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {order.invoiceUrl && (
+                                                        <a 
+                                                            href={order.invoiceUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition-colors"
+                                                            title="Faturayı Görüntüle"
+                                                        >
+                                                            <FileText size={14} /> Fatura
+                                                        </a>
+                                                    )}
+                                                    {order.waybillUrl && (
+                                                        <a 
+                                                            href={order.waybillUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs hover:bg-amber-100 transition-colors"
+                                                            title="İrsaliyeyi Görüntüle"
+                                                        >
+                                                            <FileText size={14} /> İrsaliye
+                                                        </a>
+                                                    )}
+                                                    {order.additionalDocUrl && (
+                                                        <a 
+                                                            href={order.additionalDocUrl} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs hover:bg-purple-100 transition-colors"
+                                                            title="Ek Evrak Görüntüle"
+                                                        >
+                                                            <FileText size={14} /> Ek Evrak
+                                                        </a>
+                                                    )}
+                                                    <button 
+                                                        onClick={() => handleViewDetails(order)}
+                                                        className="flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs hover:bg-slate-200 transition-colors"
+                                                    >
+                                                        <Eye size={14} /> Detay
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button
+                                                        onClick={() => handleCancelOrder(order.id)}
+                                                        className="flex items-center gap-2 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors text-xs font-medium"
+                                                    >
+                                                        <XCircle size={16} />
+                                                        İptal Et
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleCompleteOrder(order.id)}
+                                                        className="flex items-center gap-2 px-3 py-1.5 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-xs font-medium"
+                                                    >
+                                                        <CheckCircle2 size={16} />
+                                                        Siparişi Bitir
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* Completed History Section */}
+            <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <CheckCircle2 className="text-emerald-600" size={20} />
+                    Tamamlanan İşlemler
+                </h2>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Sipariş No</th>
+                                    <th className="px-6 py-4">Müşteri</th>
+                                    <th className="px-6 py-4">Tarih</th>
+                                    <th className="px-6 py-4">Durum</th>
+                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {completedHistory.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                                            Geçmiş işlem bulunmuyor.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    completedHistory.map((order) => (
+                                        <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
+                                            <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
+                                            <td className="px-6 py-4">
+                                                {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {getStatusBadge(order.status)}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button
+                                                    onClick={() => handleViewDetails(order)}
+                                                    className="flex items-center gap-2 ml-auto px-3 py-1.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors text-xs font-medium"
+                                                >
+                                                    <Eye size={16} />
+                                                    Görüntüle
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* Order Detail Modal */}
+            {showModal && selectedOrder && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">Sipariş Detayı</h3>
+                                <p className="text-sm text-slate-500">#{selectedOrder.id}</p>
+                            </div>
+                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
+                                <XCircle size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 space-y-8">
+                            {/* Customer & Order Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="p-4 bg-slate-50 rounded-xl space-y-2">
+                                    <h4 className="font-semibold text-slate-800 mb-3">Müşteri Bilgileri</h4>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Müşteri Adı:</span>
+                                        <span className="font-medium">{selectedOrder.customerName}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Sipariş Tarihi:</span>
+                                        <span className="font-medium">{format(new Date(selectedOrder.createdAt), 'dd MMMM yyyy HH:mm', { locale: tr })}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-500">Son Durum:</span>
+                                        <span>{getStatusBadge(selectedOrder.status)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-indigo-50 rounded-xl space-y-2">
+                                    <h4 className="font-semibold text-indigo-900 mb-3 flex items-center gap-2">
+                                        <Truck size={18} /> Sevkiyat Bilgileri
+                                    </h4>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-indigo-600">Paketleme:</span>
+                                        <span className="font-medium text-indigo-900">{selectedOrder.packagingType} ({selectedOrder.packagingCount} Adet)</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-indigo-600">Paket No:</span>
+                                        <span className="font-medium text-indigo-900">{selectedOrder.packageNumber}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-indigo-600">Araç Plaka:</span>
+                                        <span className="font-medium text-indigo-900">{selectedOrder.vehiclePlate}</span>
+                                    </div>
+                                    {selectedOrder.trailerPlate && (
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-indigo-600">Dorse Plaka:</span>
+                                            <span className="font-medium text-indigo-900">{selectedOrder.trailerPlate}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Documents */}
+                            <div>
+                                <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                                    <FileText size={18} /> Evraklar
+                                </h4>
+                                <div className="flex flex-wrap gap-3">
+                                    {selectedOrder.invoiceUrl ? (
+                                        <a href={selectedOrder.invoiceUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors border border-blue-200">
+                                            <FileText size={16} /> Fatura Görüntüle
+                                        </a>
+                                    ) : <span className="text-sm text-slate-400 italic">Fatura yok</span>}
+
+                                    {selectedOrder.waybillUrl ? (
+                                        <a href={selectedOrder.waybillUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors border border-amber-200">
+                                            <FileText size={16} /> İrsaliye Görüntüle
+                                        </a>
+                                    ) : <span className="text-sm text-slate-400 italic">İrsaliye yok</span>}
+
+                                    {selectedOrder.additionalDocUrl ? (
+                                        <a href={selectedOrder.additionalDocUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors border border-purple-200">
+                                            <FileText size={16} /> Ek Evrak Görüntüle
+                                        </a>
+                                    ) : <span className="text-sm text-slate-400 italic">Ek evrak yok</span>}
+                                </div>
+                            </div>
+
+                            {/* Order Items */}
+                            <div>
+                                <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                                    <Package size={18} /> Ürünler
+                                </h4>
+                                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-50 text-slate-700 font-medium">
+                                            <tr>
+                                                <th className="px-4 py-3">Ürün</th>
+                                                <th className="px-4 py-3 text-right">Miktar</th>
+                                                <th className="px-4 py-3 text-right">Birim Fiyat</th>
+                                                <th className="px-4 py-3 text-right">Toplam</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-200">
+                                            {selectedOrder.items.map((item, idx) => (
+                                                <tr key={idx}>
+                                                    <td className="px-4 py-3">{item.productName}</td>
+                                                    <td className="px-4 py-3 text-right">{item.quantity}</td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        {item.unitPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {selectedOrder.currency}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right font-medium">
+                                                        {(item.quantity * item.unitPrice).toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {selectedOrder.currency}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot className="bg-slate-50 font-semibold text-slate-800">
+                                            <tr>
+                                                <td colSpan={3} className="px-4 py-3 text-right">Genel Toplam:</td>
+                                                <td className="px-4 py-3 text-right">
+                                                    {selectedOrder.grandTotal?.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {selectedOrder.currency}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-slate-100 bg-slate-50 rounded-b-xl flex justify-end">
+                            <button 
+                                onClick={closeModal}
+                                className="px-6 py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors font-medium"
+                            >
+                                Kapat
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
