@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite\"",
+    "start": "node server/index.js",
     "server": "nodemon server/index.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
