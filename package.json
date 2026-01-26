@@ -7,7 +7,7 @@
     "dev": "concurrently \"npm run server\" \"vite\"",
     "start": "node server/index.js",
     "server": "nodemon server/index.js",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
