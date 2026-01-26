@@ -66,7 +66,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // Upload Endpoint
-app.post('/upload', upload.single('image'), (req, res) => {
+app.post('/api/upload', upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -92,7 +92,7 @@ app.post('/upload', upload.single('image'), (req, res) => {
 
 // --- STOCK ITEMS ---
 
-app.get('/stock-items', (req, res) => {
+app.get('/api/stock-items', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM stock_items ORDER BY createdAt DESC');
     const items = stmt.all();
@@ -102,7 +102,7 @@ app.get('/stock-items', (req, res) => {
   }
 });
 
-app.post('/stock-items', (req, res) => {
+app.post('/api/stock-items', (req, res) => {
   try {
     const { id, stockNumber, company, product, quantity, unit, createdAt } = req.body;
     const stmt = db.prepare(`
@@ -116,7 +116,7 @@ app.post('/stock-items', (req, res) => {
   }
 });
 
-app.delete('/stock-items/:id', (req, res) => {
+app.delete('/api/stock-items/:id', (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM stock_items WHERE id = ?');
@@ -129,7 +129,7 @@ app.delete('/stock-items/:id', (req, res) => {
 
 // --- CUSTOMERS ---
 
-app.get('/customers', (req, res) => {
+app.get('/api/customers', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM customers ORDER BY createdAt DESC');
     const customers = stmt.all();
@@ -139,7 +139,7 @@ app.get('/customers', (req, res) => {
   }
 });
 
-app.post('/customers', (req, res) => {
+app.post('/api/customers', (req, res) => {
   try {
     const { id, companyName, contactName, email, phone, mobile, address, createdAt } = req.body;
     const stmt = db.prepare(`
@@ -153,7 +153,7 @@ app.post('/customers', (req, res) => {
   }
 });
 
-app.patch('/customers/:id', (req, res) => {
+app.patch('/api/customers/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -172,7 +172,7 @@ app.patch('/customers/:id', (req, res) => {
   }
 });
 
-app.delete('/customers/:id', (req, res) => {
+app.delete('/api/customers/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM customers WHERE id = ?');
     stmt.run(req.params.id);
@@ -196,7 +196,7 @@ const parseProduct = (product) => {
   };
 };
 
-app.get('/products', (req, res) => {
+app.get('/api/products', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM products ORDER BY createdAt DESC');
     const products = stmt.all();
@@ -207,7 +207,7 @@ app.get('/products', (req, res) => {
   }
 });
 
-app.post('/products', (req, res) => {
+app.post('/api/products', (req, res) => {
   try {
     const { 
       id, code, description, dimensions, features, 
@@ -241,7 +241,7 @@ app.post('/products', (req, res) => {
   }
 });
 
-app.patch('/products/:id', (req, res) => {
+app.patch('/api/products/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -269,7 +269,7 @@ app.patch('/products/:id', (req, res) => {
   }
 });
 
-app.delete('/products/:id', (req, res) => {
+app.delete('/api/products/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM products WHERE id = ?');
     stmt.run(req.params.id);
@@ -307,7 +307,7 @@ const parseOrder = (order) => {
   };
 };
 
-app.get('/orders', (req, res) => {
+app.get('/api/orders', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM orders ORDER BY createdAt DESC');
     const orders = stmt.all();
@@ -318,7 +318,7 @@ app.get('/orders', (req, res) => {
   }
 });
 
-app.post('/orders', (req, res) => {
+app.post('/api/orders', (req, res) => {
   try {
     const { 
       id, customerId, customerName, items, currency, 
@@ -353,7 +353,7 @@ app.post('/orders', (req, res) => {
   }
 });
 
-app.patch('/orders/:id', (req, res) => {
+app.patch('/api/orders/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -380,7 +380,7 @@ app.patch('/orders/:id', (req, res) => {
   }
 });
 
-app.delete('/orders/:id', (req, res) => {
+app.delete('/api/orders/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM orders WHERE id = ?');
     stmt.run(req.params.id);
@@ -392,7 +392,7 @@ app.delete('/orders/:id', (req, res) => {
 
 // --- PERSONNEL ---
 
-app.get('/personnel', (req, res) => {
+app.get('/api/personnel', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM personnel ORDER BY createdAt DESC');
     const items = stmt.all();
@@ -402,7 +402,7 @@ app.get('/personnel', (req, res) => {
   }
 });
 
-app.post('/personnel', (req, res) => {
+app.post('/api/personnel', (req, res) => {
   try {
     const { id, firstName, lastName, role, createdAt } = req.body;
     const stmt = db.prepare(`
@@ -416,7 +416,7 @@ app.post('/personnel', (req, res) => {
   }
 });
 
-app.delete('/personnel/:id', (req, res) => {
+app.delete('/api/personnel/:id', (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM personnel WHERE id = ?');
@@ -429,7 +429,7 @@ app.delete('/personnel/:id', (req, res) => {
 
 // --- MACHINES ---
 
-app.get('/machines', (req, res) => {
+app.get('/api/machines', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM machines ORDER BY createdAt DESC');
     const items = stmt.all();
@@ -439,7 +439,7 @@ app.get('/machines', (req, res) => {
   }
 });
 
-app.post('/machines', (req, res) => {
+app.post('/api/machines', (req, res) => {
   try {
     const { id, machineNumber, features, maintenanceInterval, lastMaintenance, createdAt } = req.body;
     const stmt = db.prepare(`
@@ -453,7 +453,7 @@ app.post('/machines', (req, res) => {
   }
 });
 
-app.delete('/machines/:id', (req, res) => {
+app.delete('/api/machines/:id', (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM machines WHERE id = ?');
@@ -474,7 +474,7 @@ const parseShift = (shift) => {
   };
 };
 
-app.get('/shifts', (req, res) => {
+app.get('/api/shifts', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM shifts ORDER BY createdAt DESC');
     const shifts = stmt.all();
@@ -484,7 +484,7 @@ app.get('/shifts', (req, res) => {
   }
 });
 
-app.post('/shifts', (req, res) => {
+app.post('/api/shifts', (req, res) => {
   try {
     const { 
       id, orderId, machineId, supervisorId, personnelIds, 
@@ -514,7 +514,7 @@ app.post('/shifts', (req, res) => {
   }
 });
 
-app.patch('/shifts/:id', (req, res) => {
+app.patch('/api/shifts/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -538,7 +538,7 @@ app.patch('/shifts/:id', (req, res) => {
   }
 });
 
-app.delete('/shifts/:id', (req, res) => {
+app.delete('/api/shifts/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM shifts WHERE id = ?');
     stmt.run(req.params.id);
@@ -550,7 +550,7 @@ app.delete('/shifts/:id', (req, res) => {
 
 // --- AUTH & USERS ---
 
-app.post('/auth/login', (req, res) => {
+app.post('/api/auth/login', (req, res) => {
   try {
     const { username, password } = req.body;
     const user = db.prepare(`
@@ -582,7 +582,7 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-app.get('/users', (req, res) => {
+app.get('/api/users', (req, res) => {
   try {
     const users = db.prepare(`
       SELECT u.id, u.username, u.fullName, u.roleId, u.isActive, u.createdAt, r.name as roleName 
@@ -596,7 +596,7 @@ app.get('/users', (req, res) => {
   }
 });
 
-app.post('/users', (req, res) => {
+app.post('/api/users', (req, res) => {
   try {
     const { id, username, password, roleId, fullName, isActive, createdAt } = req.body;
     
@@ -619,7 +619,7 @@ app.post('/users', (req, res) => {
   }
 });
 
-app.patch('/users/:id', (req, res) => {
+app.patch('/api/users/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -645,7 +645,7 @@ app.patch('/users/:id', (req, res) => {
   }
 });
 
-app.delete('/users/:id', (req, res) => {
+app.delete('/api/users/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM users WHERE id = ?');
     stmt.run(req.params.id);
@@ -657,7 +657,7 @@ app.delete('/users/:id', (req, res) => {
 
 // --- ROLES ---
 
-app.get('/roles', (req, res) => {
+app.get('/api/roles', (req, res) => {
   try {
     const roles = db.prepare('SELECT * FROM roles ORDER BY createdAt DESC').all();
     const parsedRoles = roles.map(role => ({
@@ -670,7 +670,7 @@ app.get('/roles', (req, res) => {
   }
 });
 
-app.post('/roles', (req, res) => {
+app.post('/api/roles', (req, res) => {
   try {
     const { id, name, permissions, createdAt } = req.body;
     const stmt = db.prepare(`
@@ -684,7 +684,7 @@ app.post('/roles', (req, res) => {
   }
 });
 
-app.patch('/roles/:id', (req, res) => {
+app.patch('/api/roles/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -711,7 +711,7 @@ app.patch('/roles/:id', (req, res) => {
   }
 });
 
-app.delete('/roles/:id', (req, res) => {
+app.delete('/api/roles/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM roles WHERE id = ?');
     stmt.run(req.params.id);
@@ -721,12 +721,17 @@ app.delete('/roles/:id', (req, res) => {
   }
 });
 
+// API 404 handler
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // The "catchall" handler: for any request that doesn't
 // match one above, send back React's index.html file.
-app.get(/^(?!\/auth|\/api).*/, (req, res) => {
+app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 

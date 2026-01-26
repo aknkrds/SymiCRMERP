@@ -63,7 +63,7 @@ export default function Design() {
 
             try {
                 // Upload to 'tasarim' folder
-                const response = await fetch('/upload?folder=tasarim', {
+                const response = await fetch('/api/upload?folder=tasarim', {
                     method: 'POST',
                     body: formData,
                 });

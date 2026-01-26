@@ -58,7 +58,7 @@ export default function Logistics() {
             const formData = new FormData();
             formData.append('image', file);
             
-            const response = await fetch('/upload?folder=doc', {
+            const response = await fetch('/api/upload?folder=doc', {
                 method: 'POST',
                 body: formData,
             });

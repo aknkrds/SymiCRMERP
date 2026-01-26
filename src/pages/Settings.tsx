@@ -28,6 +28,7 @@ interface User {
   roleId: string;
   roleName: string;
   isActive: number;
+  password?: string;
 }
 
 const Settings = () => {
@@ -70,8 +71,8 @@ const Settings = () => {
     try {
       setLoading(true);
       const [rolesRes, usersRes] = await Promise.all([
-        fetch('http://localhost:3000/roles'),
-        fetch('http://localhost:3000/users')
+        fetch('/api/roles'),
+        fetch('/api/users')
       ]);
       
       const rolesData = await rolesRes.json();
@@ -90,8 +91,8 @@ const Settings = () => {
   const handleSaveRole = async () => {
     try {
       const url = currentRole.id 
-        ? `http://localhost:3000/roles/${currentRole.id}`
-        : 'http://localhost:3000/roles';
+        ? `/api/roles/${currentRole.id}`
+        : '/api/roles';
       
       const method = currentRole.id ? 'PATCH' : 'POST';
       
@@ -120,7 +121,7 @@ const Settings = () => {
   const handleDeleteRole = async (id: string) => {
     if (!window.confirm('Bu rolü silmek istediğinize emin misiniz?')) return;
     try {
-      await fetch(`http://localhost:3000/roles/${id}`, { method: 'DELETE' });
+      await fetch(`/api/roles/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
       console.error('Error deleting role:', error);
@@ -132,8 +133,8 @@ const Settings = () => {
     try {
       const isNew = !currentUser.id;
       const url = isNew 
-        ? 'http://localhost:3000/users'
-        : `http://localhost:3000/users/${currentUser.id}`;
+        ? '/api/users'
+        : `/api/users/${currentUser.id}`;
       
       const method = isNew ? 'POST' : 'PATCH';
       
@@ -171,7 +172,7 @@ const Settings = () => {
 
   const handleChangePassword = async () => {
     try {
-      const res = await fetch(`http://localhost:3000/users/${passwordForm.userId}`, {
+      const res = await fetch(`/api/users/${passwordForm.userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: passwordForm.newPassword })
@@ -189,7 +190,7 @@ const Settings = () => {
 
   const toggleUserStatus = async (user: User) => {
     try {
-      await fetch(`http://localhost:3000/users/${user.id}`, {
+      await fetch(`/api/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: user.isActive ? 0 : 1 })
@@ -203,7 +204,7 @@ const Settings = () => {
   const handleDeleteUser = async (id: string) => {
     if (!window.confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) return;
     try {
-      await fetch(`http://localhost:3000/users/${id}`, { method: 'DELETE' });
+      await fetch(`/api/users/${id}`, { method: 'DELETE' });
       fetchData();
     } catch (error) {
       console.error('Error deleting user:', error);

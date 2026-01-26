@@ -80,7 +80,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
             formData.append('image', file);
 
             try {
-                const response = await fetch('/upload', {
+                const response = await fetch('/api/upload', {
                     method: 'POST',
                     body: formData,
                 });
