@@ -544,6 +544,179 @@ app.delete('/shifts/:id', (req, res) => {
   }
 });
 
+// --- AUTH & USERS ---
+
+app.post('/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = db.prepare(`
+      SELECT u.*, r.name as roleName, r.permissions 
+      FROM users u 
+      LEFT JOIN roles r ON u.roleId = r.id 
+      WHERE u.username = ? AND u.password = ?
+    `).get(username, password);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ error: 'User account is inactive' });
+    }
+
+    // Parse permissions
+    const userData = {
+      ...user,
+      permissions: JSON.parse(user.permissions || '[]'),
+      // Don't send password back
+    };
+    delete userData.password;
+
+    res.json(userData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/users', (req, res) => {
+  try {
+    const users = db.prepare(`
+      SELECT u.id, u.username, u.fullName, u.roleId, u.isActive, u.createdAt, r.name as roleName 
+      FROM users u 
+      LEFT JOIN roles r ON u.roleId = r.id 
+      ORDER BY u.createdAt DESC
+    `).all();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/users', (req, res) => {
+  try {
+    const { id, username, password, roleId, fullName, isActive, createdAt } = req.body;
+    
+    // Check if username exists
+    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    if (existing) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO users (id, username, password, roleId, fullName, isActive, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(id, username, password, roleId, fullName, isActive, createdAt);
+    
+    const newUser = db.prepare('SELECT id, username, fullName, roleId, isActive, createdAt FROM users WHERE id = ?').get(id);
+    res.status(201).json(newUser);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/users/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(updates), id];
+    
+    if (fields.length > 0) {
+      const stmt = db.prepare(`UPDATE users SET ${fields} WHERE id = ?`);
+      stmt.run(...values);
+    }
+    
+    const updated = db.prepare(`
+      SELECT u.id, u.username, u.fullName, u.roleId, u.isActive, u.createdAt, r.name as roleName 
+      FROM users u 
+      LEFT JOIN roles r ON u.roleId = r.id 
+      WHERE u.id = ?
+    `).get(id);
+    
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/users/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM users WHERE id = ?');
+    stmt.run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- ROLES ---
+
+app.get('/roles', (req, res) => {
+  try {
+    const roles = db.prepare('SELECT * FROM roles ORDER BY createdAt DESC').all();
+    const parsedRoles = roles.map(role => ({
+      ...role,
+      permissions: JSON.parse(role.permissions || '[]')
+    }));
+    res.json(parsedRoles);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/roles', (req, res) => {
+  try {
+    const { id, name, permissions, createdAt } = req.body;
+    const stmt = db.prepare(`
+      INSERT INTO roles (id, name, permissions, createdAt)
+      VALUES (?, ?, ?, ?)
+    `);
+    stmt.run(id, name, JSON.stringify(permissions), createdAt);
+    res.status(201).json(req.body);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/roles/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    if (updates.permissions) {
+      updates.permissions = JSON.stringify(updates.permissions);
+    }
+
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(updates), id];
+    
+    if (fields.length > 0) {
+      const stmt = db.prepare(`UPDATE roles SET ${fields} WHERE id = ?`);
+      stmt.run(...values);
+    }
+    
+    const updated = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
+    res.json({
+      ...updated,
+      permissions: JSON.parse(updated.permissions || '[]')
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/roles/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM roles WHERE id = ?');
+    stmt.run(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });

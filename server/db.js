@@ -98,22 +98,78 @@ const initDb = () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS shifts (
       id TEXT PRIMARY KEY,
-      orderId TEXT NOT NULL,
       machineId TEXT NOT NULL,
-      supervisorId TEXT NOT NULL,
-      personnelIds TEXT NOT NULL, -- JSON array of IDs
+      operator TEXT NOT NULL,
       startTime TEXT NOT NULL,
-      endTime TEXT NOT NULL,
-      plannedQuantity REAL NOT NULL,
+      endTime TEXT,
       producedQuantity REAL DEFAULT 0,
-      scrapQuantity REAL DEFAULT 0,
-      status TEXT DEFAULT 'planned', -- planned, active, completed
-      createdAt TEXT NOT NULL,
-      FOREIGN KEY (orderId) REFERENCES orders(id),
-      FOREIGN KEY (machineId) REFERENCES machines(id),
-      FOREIGN KEY (supervisorId) REFERENCES personnel(id)
+      targetQuantity REAL DEFAULT 0,
+      orderId TEXT,
+      waste REAL DEFAULT 0,
+      notes TEXT,
+      status TEXT DEFAULT 'active',
+      createdAt TEXT NOT NULL
     )
   `);
+
+  // Roles
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      permissions TEXT NOT NULL, -- JSON array of allowed paths/modules
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Users
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password TEXT NOT NULL,
+      roleId TEXT NOT NULL,
+      fullName TEXT NOT NULL,
+      isActive INTEGER DEFAULT 1, -- 1: active, 0: inactive
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (roleId) REFERENCES roles (id)
+    )
+  `);
+
+  // Seed Roles if empty
+  const roleCount = db.prepare('SELECT count(*) as count FROM roles').get();
+  if (roleCount.count === 0) {
+    const roles = [
+      { id: '1', name: 'Admin', permissions: JSON.stringify(['all']) },
+      { id: '2', name: 'Genel Müdür', permissions: JSON.stringify(['all_except_settings']) },
+      { id: '3', name: 'Satış', permissions: JSON.stringify(['products', 'recipes', 'orders', 'dashboard']) },
+      { id: '4', name: 'Tasarımcı', permissions: JSON.stringify(['design', 'dashboard']) },
+      { id: '5', name: 'Matbaa', permissions: JSON.stringify(['procurement', 'dashboard']) },
+      { id: '6', name: 'Fabrika Müdürü', permissions: JSON.stringify(['production', 'logistics', 'dashboard']) },
+      { id: '7', name: 'Muhasebe', permissions: JSON.stringify(['accounting', 'dashboard']) },
+      { id: '8', name: 'Sevkiyat', permissions: JSON.stringify(['logistics', 'dashboard']) },
+    ];
+
+    const insertRole = db.prepare('INSERT INTO roles (id, name, permissions, createdAt) VALUES (?, ?, ?, ?)');
+    roles.forEach(role => {
+      insertRole.run(role.id, role.name, role.permissions, new Date().toISOString());
+    });
+  }
+
+  // Seed Admin User if empty
+  const userCount = db.prepare('SELECT count(*) as count FROM users').get();
+  if (userCount.count === 0) {
+    const insertUser = db.prepare('INSERT INTO users (id, username, password, roleId, fullName, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    insertUser.run(
+      'admin-user-id',
+      'admin',
+      'DorukNaz2010',
+      '1', // Admin Role ID
+      'System Admin',
+      1,
+      new Date().toISOString()
+    );
+  }
 
   // Migrations
   try {
