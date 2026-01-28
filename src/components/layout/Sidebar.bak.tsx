@@ -21,7 +21,7 @@ export function Sidebar() {
         { icon: Truck, label: 'Sevkiyat', to: '/logistics', permission: 'logistics' },
         { icon: CheckCircle, label: 'Onaylar', to: '/approvals', permission: 'all_except_settings' },
         { icon: Package, label: 'Stok', to: '/stock', permission: 'all_except_settings' },
-        { icon: BarChart2, label: 'Raporlar', to: '/reports', permission: 'all_except_settings' },
+        { icon: BarChart2, label: 'Raporlar', to: '/stock/reports', permission: 'all_except_settings' },
     ];
 
     return (

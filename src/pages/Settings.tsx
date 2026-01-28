@@ -10,7 +10,12 @@ import {
   UserCheck, 
   Save, 
   X,
-  CheckCircle2
+  CheckCircle2,
+  Download,
+  Upload,
+  Database,
+  AlertTriangle,
+  Wand2
 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
@@ -32,7 +37,7 @@ interface User {
 }
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState<'roles' | 'users'>('users');
+  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup'>('users');
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +46,9 @@ const Settings = () => {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState('');
+  const [showSeedModal, setShowSeedModal] = useState(false);
   
   // Form States
   const [currentRole, setCurrentRole] = useState<Partial<Role>>({ name: '', permissions: [] });
@@ -201,6 +209,103 @@ const Settings = () => {
     }
   };
 
+  // Backup Handlers
+  const handleExportBackup = async () => {
+    try {
+      const res = await fetch('/api/backup/export');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Yedek alınamadı.');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup-${new Date().toISOString().replace(/[:.]/g, '-')}.tar.gz`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export backup error:', error);
+      alert('Yedek alınırken hata oluştu.');
+    }
+  };
+
+  const [backupFile, setBackupFile] = useState<File | null>(null);
+  const handleImportBackup = async () => {
+    if (!backupFile) {
+      alert('Lütfen bir yedek arşivi seçin.');
+      return;
+    }
+    try {
+      const form = new FormData();
+      form.append('archive', backupFile);
+      const res = await fetch('/api/backup/import', {
+        method: 'POST',
+        body: form
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Yedek geri yüklenemedi.');
+        return;
+      }
+      alert(data.message || 'Yedek geri yüklendi. Sunucu yeniden başlayacak.');
+    } catch (error) {
+      console.error('Import backup error:', error);
+      alert('Yedek geri yüklenirken hata oluştu.');
+    }
+  };
+
+  const handleResetData = async () => {
+    if (resetConfirmation !== 'SIFIRLA') {
+      alert('Lütfen onaylamak için kutucuğa SIFIRLA yazın.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/reset-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: 'SIFIRLA' })
+      });
+
+      const data = await res.json();
+      
+      if (res.ok) {
+        alert(data.message);
+        setShowResetModal(false);
+        setResetConfirmation('');
+        window.location.reload(); // Reload to clear any cached state
+      } else {
+        alert(data.error || 'Sıfırlama başarısız.');
+      }
+    } catch (error) {
+      console.error('Reset error:', error);
+      alert('Bir hata oluştu.');
+    }
+  };
+
+  const handleSeedData = async () => {
+    try {
+      const res = await fetch('/api/seed-data', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        setShowSeedModal(false);
+        window.location.reload();
+      } else {
+        alert(data.error || 'Test verileri oluşturulamadı.');
+      }
+    } catch (error) {
+      console.error('Seed error:', error);
+      alert('Bir hata oluştu.');
+    }
+  };
+
   const handleDeleteUser = async (id: string) => {
     if (!window.confirm('Bu kullanıcıyı silmek istediğinize emin misiniz?')) return;
     try {
@@ -240,6 +345,17 @@ const Settings = () => {
           >
             <Shield size={18} />
             Roller ve İzinler
+          </button>
+          <button
+            onClick={() => setActiveTab('backup')}
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+              activeTab === 'backup'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Database size={18} />
+            Veri Yönetimi
           </button>
         </div>
 
@@ -401,6 +517,87 @@ const Settings = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'backup' && (
+            <div className="space-y-6">
+              {/* Backup & Restore Section */}
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="p-4 border border-slate-200 rounded-lg bg-slate-50">
+                  <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                    <Download size={16} /> Yedek Al
+                  </h3>
+                  <p className="text-sm text-slate-600 mb-3">
+                    Veritabanı ve tüm yüklenen dosyalar (img, doc) tek arşivde sıkıştırılır.
+                  </p>
+                  <button
+                    onClick={handleExportBackup}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Download size={18} />
+                    Yedeği İndir
+                  </button>
+                </div>
+                <div className="p-4 border border-slate-200 rounded-lg bg-slate-50">
+                  <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
+                    <Upload size={16} /> Yedeği Yükle
+                  </h3>
+                  <p className="text-sm text-slate-600 mb-3">
+                    Sıkıştırılmış yedek arşivini yükleyerek verileri ve dosyaları geri yükler.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept=".tar.gz,.tgz"
+                      onChange={(e) => setBackupFile(e.target.files?.[0] || null)}
+                      className="text-sm"
+                    />
+                    <button
+                      onClick={handleImportBackup}
+                      className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      Geri Yükle
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Not: Geri yükleme sonrası sunucu otomatik yeniden başlatılır.
+                  </p>
+                </div>
+              </div>
+
+              {/* Danger Zone: Reset Data */}
+              <div className="p-4 border border-blue-200 rounded-lg bg-blue-50">
+                <h3 className="font-semibold text-blue-700 mb-2 flex items-center gap-2">
+                  <Wand2 size={18} /> Örnek Veri Yükle (Test)
+                </h3>
+                <p className="text-sm text-blue-600 mb-4">
+                  Sistemi test etmek için rastgele Müşteriler, Ürünler ve Siparişler oluşturur.
+                </p>
+                <button
+                  onClick={() => setShowSeedModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Test Verisi Oluştur
+                </button>
+              </div>
+
+              <div className="p-4 border border-red-200 rounded-lg bg-red-50">
+                <h3 className="font-semibold text-red-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle size={18} /> Verileri Sıfırla / Fabrika Ayarları
+                </h3>
+                <p className="text-sm text-red-600 mb-4">
+                  Sisteme girilen tüm operasyonel verileri (Siparişler, Müşteriler, Stok, Üretim vb.) ve yüklenen dosyaları siler.
+                  <br />
+                  <strong>Silinmeyecekler:</strong> Sadece Kullanıcılar ve Roller.
+                </p>
+                <button
+                  onClick={() => setShowResetModal(true)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  Verileri Temizle
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -559,8 +756,97 @@ const Settings = () => {
           </div>
         </div>
       </Modal>
-    </div>
-  );
+
+      {/* Reset Confirmation Modal */}
+      <Modal
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        title="DİKKAT: Veri Sıfırlama"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 text-red-700 p-4 rounded-lg border border-red-200">
+            <p className="font-bold flex items-center gap-2">
+              <AlertTriangle size={20} />
+              BU İŞLEM GERİ ALINAMAZ!
+            </p>
+            <p className="mt-2 text-sm">
+              Siparişler, stok hareketleri, üretim kayıtları, müşteri bilgileri ve <strong>TÜM YÜKLENEN DOSYALAR (Resimler, Belgeler)</strong> kalıcı olarak silinecektir.
+            </p>
+            <p className="mt-2 text-sm font-semibold">
+              Sadece Kullanıcılar ve Roller (Şifreler dahil) KORUNACAKTIR.
+            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Onaylamak için kutucuğa <strong>SIFIRLA</strong> yazın:
+            </label>
+            <input
+              type="text"
+              value={resetConfirmation}
+              onChange={e => setResetConfirmation(e.target.value)}
+              className="w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-red-500 focus:border-red-500"
+              placeholder="SIFIRLA"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <button
+              onClick={() => {
+                setShowResetModal(false);
+                setResetConfirmation('');
+              }}
+              className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleResetData}
+              disabled={resetConfirmation !== 'SIFIRLA'}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Tüm Verileri Sil
+            </button>
+          </div>
+        </div>
+        </Modal>
+
+        {/* Seed Confirmation Modal */}
+        <Modal
+          isOpen={showSeedModal}
+          onClose={() => setShowSeedModal(false)}
+          title="Örnek Veri Yükleme"
+        >
+          <div className="space-y-4">
+            <p className="text-slate-600">
+              Bu işlem sisteme rastgele test verileri ekleyecektir:
+            </p>
+            <ul className="list-disc list-inside text-sm text-slate-600 ml-2 space-y-1">
+              <li>10 Adet Müşteri (Yıldız Ambalaj, Demir Lojistik vb.)</li>
+              <li>5 Adet Ürün (Kutular, Koliler vb.)</li>
+              <li>15 Adet Sipariş (Farklı durum ve tarihlerde)</li>
+            </ul>
+            <p className="text-sm text-slate-500 italic mt-2">
+              Mevcut veriler silinmez, üzerine eklenir. Temiz bir başlangıç için önce "Verileri Sıfırla" yapabilirsiniz.
+            </p>
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setShowSeedModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                İptal
+              </button>
+              <button
+                onClick={handleSeedData}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Verileri Oluştur
+              </button>
+            </div>
+          </div>
+        </Modal>
+      </div>
+    );
 };
 
 export default Settings;

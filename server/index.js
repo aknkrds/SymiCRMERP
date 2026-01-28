@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import db from './db.js';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,6 +87,325 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
     
     res.json({ url: fileUrl, filename: req.file.filename });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- BACKUP & RESTORE ---
+const ensureDir = (p) => {
+  if (!fs.existsSync(p)) {
+    fs.mkdirSync(p, { recursive: true });
+  }
+};
+
+const BACKUP_DIR = path.join(process.cwd(), 'server', 'backups');
+ensureDir(BACKUP_DIR);
+
+const tmpBase = path.join(process.cwd(), 'server', '_backup_tmp');
+ensureDir(tmpBase);
+
+// Export backup: includes SQLite db file and uploaded assets (img/doc)
+app.get('/api/backup/export', async (req, res) => {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const tmpDir = path.join(tmpBase, `backup-${timestamp}`);
+    ensureDir(tmpDir);
+    // Copy DB file
+    const dbFile = path.join(process.cwd(), 'crm.db');
+    if (fs.existsSync(dbFile)) {
+      fs.cpSync(dbFile, path.join(tmpDir, 'crm.db'));
+    } else {
+      throw new Error('Veritabanı dosyası bulunamadı: crm.db');
+    }
+    // Copy assets
+    const imgSrc = path.join(process.cwd(), 'server', 'img');
+    const docSrc = path.join(process.cwd(), 'server', 'doc');
+    if (fs.existsSync(imgSrc)) {
+      fs.cpSync(imgSrc, path.join(tmpDir, 'img'), { recursive: true });
+    }
+    if (fs.existsSync(docSrc)) {
+      fs.cpSync(docSrc, path.join(tmpDir, 'doc'), { recursive: true });
+    }
+    // Create archive with tar (tar.gz)
+    const archiveName = `backup-${timestamp}.tar.gz`;
+    const archivePath = path.join(BACKUP_DIR, archiveName);
+    execSync(`tar -czf "${archivePath}" -C "${tmpDir}" .`);
+    // Stream download
+    res.download(archivePath, archiveName, (err) => {
+      // Cleanup temp dir
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {}
+      if (err) {
+        console.error('Backup download error:', err);
+      }
+    });
+  } catch (error) {
+    console.error('Backup export error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Multer for backup import
+const backupStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    ensureDir(BACKUP_DIR);
+    cb(null, BACKUP_DIR);
+  },
+  filename: function (req, file, cb) {
+    const safe = file.originalname.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.\-_]/g, '');
+    cb(null, `${Date.now()}-${safe}`);
+  }
+});
+const backupUpload = multer({ storage: backupStorage });
+
+// Import backup: restore db and assets
+app.post('/api/backup/import', backupUpload.single('archive'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Arşiv dosyası gerekli' });
+    }
+    const uploaded = req.file.path;
+    const extractDir = path.join(tmpBase, `restore-${Date.now()}`);
+    ensureDir(extractDir);
+    // Extract tar.gz
+    execSync(`tar -xzf "${uploaded}" -C "${extractDir}"`);
+    // Replace DB
+    const extractedDb = path.join(extractDir, 'crm.db');
+    if (fs.existsSync(extractedDb)) {
+      const dbTarget = path.join(process.cwd(), 'crm.db');
+      fs.cpSync(extractedDb, dbTarget, { recursive: false });
+    }
+    // Replace assets
+    const extractedImg = path.join(extractDir, 'img');
+    const extractedDoc = path.join(extractDir, 'doc');
+    const imgTarget = path.join(process.cwd(), 'server', 'img');
+    const docTarget = path.join(process.cwd(), 'server', 'doc');
+    if (fs.existsSync(extractedImg)) {
+      // Clean and copy
+      try { fs.rmSync(imgTarget, { recursive: true, force: true }); } catch {}
+      fs.cpSync(extractedImg, imgTarget, { recursive: true });
+    }
+    if (fs.existsSync(extractedDoc)) {
+      try { fs.rmSync(docTarget, { recursive: true, force: true }); } catch {}
+      fs.cpSync(extractedDoc, docTarget, { recursive: true });
+    }
+    // Cleanup
+    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+    // Advise restart (nodemon will pick up exit)
+    res.json({ success: true, message: 'Yedek geri yüklendi. Sunucu yeniden başlatılacak.' });
+    setTimeout(() => {
+      process.exit(0);
+    }, 500);
+  } catch (error) {
+    console.error('Backup import error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Reset Data Endpoint
+app.post('/api/reset-data', (req, res) => {
+  try {
+    const { confirmation } = req.body;
+    if (confirmation !== 'SIFIRLA') {
+      return res.status(400).json({ error: 'Geçersiz onay kodu.' });
+    }
+
+    // List of tables to clear
+    const tablesToClear = [
+      'shifts',      // Has orderId, machineId
+      'orders',      // Has customerId
+      'stock_items', // Has productId
+      'products',
+      'customers',
+      'machines',
+      'personnel'
+    ];
+
+    // Execute deletions in a transaction with FK checks disabled
+    const deleteTransaction = db.transaction(() => {
+      // Disable Foreign Key constraints temporarily to allow mass deletion without order issues
+      db.prepare('PRAGMA foreign_keys = OFF').run();
+      
+      try {
+        for (const table of tablesToClear) {
+          db.prepare(`DELETE FROM ${table}`).run();
+        }
+      } finally {
+        // Re-enable Foreign Key constraints
+        db.prepare('PRAGMA foreign_keys = ON').run();
+      }
+    });
+
+    deleteTransaction();
+
+    // Clear uploaded files (keep directories)
+    const imgDir = path.join(process.cwd(), 'server', 'img');
+    const docDir = path.join(process.cwd(), 'server', 'doc');
+
+    const clearDirectory = (directory) => {
+      if (fs.existsSync(directory)) {
+        const files = fs.readdirSync(directory);
+        for (const file of files) {
+          const filePath = path.join(directory, file);
+          // Skip if it is a directory? No, user wants clean start. 
+          // But maybe we should keep 'tasarim' folder structure if it exists?
+          // User said "herşey sıfırlansın temizlensin" except admin/users/roles.
+          // So we delete everything inside img and doc.
+          try {
+            fs.rmSync(filePath, { recursive: true, force: true });
+          } catch (e) {
+            console.error(`Failed to delete ${filePath}:`, e);
+          }
+        }
+      }
+    };
+
+    clearDirectory(imgDir);
+    clearDirectory(docDir);
+
+    res.json({ success: true, message: 'Veriler ve dosyalar başarıyla sıfırlandı.' });
+  } catch (error) {
+    console.error('Reset data error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Seed Data Endpoint
+app.post('/api/seed-data', (req, res) => {
+  try {
+    const seedTransaction = db.transaction(() => {
+      // 1. Generate Customers (10)
+      const customers = [];
+      const customerNames = [
+        'Yıldız Ambalaj', 'Demir Lojistik', 'Akdeniz Gıda', 'Ege Tekstil', 
+        'Marmara Yapı', 'Anadolu Tarım', 'Karadeniz Nakliyat', 'Güneş Plastik', 
+        'Ay Metal', 'Deniz Kimya'
+      ];
+
+      const insertCustomer = db.prepare(`
+        INSERT INTO customers (id, companyName, contactName, email, phone, mobile, address, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (let i = 0; i < 10; i++) {
+        const id = crypto.randomUUID();
+        const company = customerNames[i];
+        const contact = `Yetkili ${i+1}`;
+        const email = `info@${company.toLowerCase().replace(/\s+/g, '')}.com`.replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c');
+        
+        insertCustomer.run(
+          id,
+          company,
+          contact,
+          email,
+          `0212 555 00 0${i}`,
+          `0532 555 00 0${i}`,
+          `İstanbul Organize Sanayi Bölgesi, No: ${i+1}`,
+          new Date().toISOString()
+        );
+        customers.push({ id, company });
+      }
+
+      // 2. Generate Products (5)
+      const products = [];
+      const productTypes = [
+        { code: 'PRD-001', desc: 'Standart Kutu 20x20x10', dim: { length: 20, width: 20, height: 10 } },
+        { code: 'PRD-002', desc: 'Büyük Koli 50x40x30', dim: { length: 50, width: 40, height: 30 } },
+        { code: 'PRD-003', desc: 'Pizza Kutusu 30x30x4', dim: { length: 30, width: 30, height: 4 } },
+        { code: 'PRD-004', desc: 'Hediye Kutusu 15x15x15', dim: { length: 15, width: 15, height: 15 } },
+        { code: 'PRD-005', desc: 'Dosya Klasörü', dim: { length: 25, width: 5, height: 35 } },
+      ];
+
+      const insertProduct = db.prepare(`
+        INSERT INTO products (id, code, description, dimensions, features, details, windowDetails, lidDetails, images, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const p of productTypes) {
+        const id = crypto.randomUUID();
+        insertProduct.run(
+          id,
+          p.code,
+          p.desc,
+          JSON.stringify(p.dim),
+          JSON.stringify({ material: 'Kraft', flute: 'E' }),
+          'Test ürünü detay açıklaması.',
+          JSON.stringify({ type: 'None' }),
+          JSON.stringify({ type: 'Standard' }),
+          JSON.stringify([]),
+          new Date().toISOString()
+        );
+        products.push({ id, ...p });
+      }
+
+      // 3. Generate Orders (15)
+      const statuses = [
+        'Sipariş Alındı', 'Onay Bekliyor', 'Grafik Tasarım', 
+        'Müşteri Onayı', 'Üretim Planlama', 'Üretimde', 
+        'Kalite Kontrol', 'Sevkiyata Hazır', 'Sevk Edildi'
+      ];
+
+      const insertOrder = db.prepare(`
+        INSERT INTO orders (id, customerId, customerName, items, currency, subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt, procurementStatus, productionStatus)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (let i = 0; i < 15; i++) {
+        const id = crypto.randomUUID();
+        const customer = customers[Math.floor(Math.random() * customers.length)];
+        const product = products[Math.floor(Math.random() * products.length)];
+        const quantity = Math.floor(Math.random() * 5000) + 100;
+        const price = (Math.random() * 10) + 1;
+        const total = quantity * price;
+        
+        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        
+        // Determine sub-statuses based on main status
+        let procurement = 'Beklemede';
+        let production = 'Beklemede';
+        
+        if (['Üretimde', 'Kalite Kontrol', 'Sevkiyata Hazır', 'Sevk Edildi'].includes(status)) {
+          procurement = 'Tamamlandı';
+          production = status === 'Üretimde' ? 'Devam Ediyor' : 'Tamamlandı';
+        } else if (status === 'Üretim Planlama') {
+          procurement = 'Devam Ediyor';
+        }
+
+        const deadline = new Date();
+        deadline.setDate(deadline.getDate() + Math.floor(Math.random() * 30));
+
+        insertOrder.run(
+          id,
+          customer.id,
+          customer.company,
+          JSON.stringify([{
+            productId: product.id,
+            productCode: product.code,
+            productName: product.desc,
+            quantity: quantity,
+            unitPrice: parseFloat(price.toFixed(2)),
+            totalPrice: parseFloat(total.toFixed(2)),
+            currency: 'TRY'
+          }]),
+          'TRY',
+          parseFloat(total.toFixed(2)),
+          parseFloat((total * 0.20).toFixed(2)),
+          parseFloat((total * 1.20).toFixed(2)),
+          status,
+          JSON.stringify([]),
+          deadline.toISOString().split('T')[0],
+          new Date().toISOString(),
+          procurement,
+          production
+        );
+      }
+    });
+
+    seedTransaction();
+    res.json({ success: true, message: 'Test verileri başarıyla oluşturuldu.' });
+  } catch (error) {
+    console.error('Seed data error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -322,15 +642,17 @@ app.post('/api/orders', (req, res) => {
   try {
     const { 
       id, customerId, customerName, items, currency, 
-      subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt 
+      subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
+      assignedUserId, assignedUserName, assignedRoleName
     } = req.body;
 
     const stmt = db.prepare(`
       INSERT INTO orders (
         id, customerId, customerName, items, currency, 
-        subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt
+        subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
+        assignedUserId, assignedUserName, assignedRoleName
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -345,7 +667,10 @@ app.post('/api/orders', (req, res) => {
       status, 
       designImages ? JSON.stringify(designImages) : null,
       deadline, 
-      createdAt
+      createdAt,
+      assignedUserId || null,
+      assignedUserName || null,
+      assignedRoleName || null
     );
     res.status(201).json(req.body);
   } catch (error) {
@@ -357,6 +682,7 @@ app.patch('/api/orders/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     
     if (updates.items) {
       updates.items = JSON.stringify(updates.items);
@@ -374,6 +700,35 @@ app.patch('/api/orders/:id', (req, res) => {
     }
     
     const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    // Shipping completed -> deduct finished stock
+    try {
+      const prevStatus = current?.status;
+      const newStatus = updated?.status;
+      if (prevStatus !== 'shipping_completed' && newStatus === 'shipping_completed') {
+        const parsedUpdated = parseOrder(updated);
+        const items = parsedUpdated.items || [];
+        const insertStock = db.prepare(`
+          INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, productId, notes, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        items.forEach(item => {
+          insertStock.run(
+            `${Date.now()}-${Math.random()}`,
+            `SHIP-${parsedUpdated.id}-${Date.now()}`,
+            parsedUpdated.customerName || 'Sevkiyat',
+            item.productName,
+            -Math.abs(item.quantity),
+            'adet',
+            'finished',
+            item.productId || null,
+            'Sevkiyat ile stoktan düşüş',
+            new Date().toISOString()
+          );
+        });
+      }
+    } catch (e) {
+      console.error('Stock deduction on shipping error:', e);
+    }
     res.json(parseOrder(updated));
   } catch (error) {
     res.status(500).json({ error: error.message });

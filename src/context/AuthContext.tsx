@@ -54,7 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const hasPermission = (permission: string) => {
-    if (!user) return false;
+    if (!user || !user.permissions) return false;
     if (user.permissions.includes('all')) return true;
     if (permission === 'dashboard') return true; // Everyone has dashboard access
     if (user.permissions.includes('all_except_settings') && permission !== 'settings') return true;

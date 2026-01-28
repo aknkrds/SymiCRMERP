@@ -5,6 +5,7 @@ const API_URL = '/api/orders';
 
 export function useOrders() {
     const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetch(API_URL)
@@ -20,7 +21,8 @@ export function useOrders() {
                 );
                 setOrders(sorted);
             })
-            .catch(err => console.error('Error fetching orders:', err));
+            .catch(err => console.error('Error fetching orders:', err))
+            .finally(() => setLoading(false));
     }, []);
 
     const calculateTotals = (items: Order['items']) => {
@@ -115,5 +117,5 @@ export function useOrders() {
         }
     };
 
-    return { orders, addOrder, updateOrder, updateStatus, deleteOrder };
+    return { orders, loading, addOrder, updateOrder, updateStatus, deleteOrder };
 }

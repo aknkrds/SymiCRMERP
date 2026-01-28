@@ -67,6 +67,9 @@ const initDb = () => {
       product TEXT NOT NULL,
       quantity REAL NOT NULL,
       unit TEXT NOT NULL,
+      category TEXT, -- 'procurement' or 'finished'
+      productId TEXT,
+      notes TEXT,
       createdAt TEXT NOT NULL
     )
   `);
@@ -236,8 +239,41 @@ const initDb = () => {
     if (!hasAdditionalDocUrl) {
         db.prepare("ALTER TABLE orders ADD COLUMN additionalDocUrl TEXT").run();
     }
+    
+    // Assignment columns
+    const hasAssignedUserId = tableInfo.some(col => col.name === 'assignedUserId');
+    if (!hasAssignedUserId) {
+        db.prepare("ALTER TABLE orders ADD COLUMN assignedUserId TEXT").run();
+    }
+    const hasAssignedUserName = tableInfo.some(col => col.name === 'assignedUserName');
+    if (!hasAssignedUserName) {
+        db.prepare("ALTER TABLE orders ADD COLUMN assignedUserName TEXT").run();
+    }
+    const hasAssignedRoleName = tableInfo.some(col => col.name === 'assignedRoleName');
+    if (!hasAssignedRoleName) {
+        db.prepare("ALTER TABLE orders ADD COLUMN assignedRoleName TEXT").run();
+    }
   } catch (error) {
     console.error("Migration error:", error);
+  }
+
+  // Migrate stock_items columns if missing
+  try {
+    const stockInfo = db.prepare("PRAGMA table_info(stock_items)").all();
+    const hasCategory = stockInfo.some(col => col.name === 'category');
+    if (!hasCategory) {
+      db.prepare("ALTER TABLE stock_items ADD COLUMN category TEXT").run();
+    }
+    const hasProductId = stockInfo.some(col => col.name === 'productId');
+    if (!hasProductId) {
+      db.prepare("ALTER TABLE stock_items ADD COLUMN productId TEXT").run();
+    }
+    const hasNotes = stockInfo.some(col => col.name === 'notes');
+    if (!hasNotes) {
+      db.prepare("ALTER TABLE stock_items ADD COLUMN notes TEXT").run();
+    }
+  } catch (error) {
+    console.error("Stock migration error:", error);
   }
 };
 

@@ -11,12 +11,11 @@ import Accounting from './pages/Accounting';
 import Logistics from './pages/Logistics';
 import Approvals from './pages/Approvals';
 import Stock from './pages/Stock';
-import Reports from './pages/Reports';
+import StockReports from './pages/StockReports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 
-// Protected Route Component
 const ProtectedRoute = ({ children, permission }: { children: JSX.Element, permission?: string }) => {
   const { isAuthenticated, hasPermission, user } = useAuth();
   const location = useLocation();
@@ -26,7 +25,6 @@ const ProtectedRoute = ({ children, permission }: { children: JSX.Element, permi
   }
 
   if (permission && !hasPermission(permission)) {
-    // Redirect to dashboard if they have access, otherwise login
     return <Navigate to="/" replace />;
   }
 
@@ -96,9 +94,9 @@ function App() {
                 <Stock />
               </ProtectedRoute>
             } />
-            <Route path="/reports" element={
+            <Route path="/stock/reports" element={
               <ProtectedRoute permission="all_except_settings">
-                <Reports />
+                <StockReports />
               </ProtectedRoute>
             } />
             <Route path="/settings" element={

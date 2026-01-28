@@ -39,11 +39,30 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                             {product.features.hasWindow && (
                                 <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
                             )}
+                            {product.features.gofre && (
+                                <span className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">Gofre</span>
+                            )}
+                            {product.features.foodGrade && (
+                                <span className="px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">Gıda İşlemi</span>
+                            )}
                             {product.features.extras && (
                                 <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full">{product.features.extras}</span>
                             )}
                         </div>
                     </div>
+
+                    {product.features.colors && product.features.colors.length > 0 && (
+                        <div>
+                            <h4 className="text-sm font-medium text-slate-500">Renkler</h4>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                                {product.features.colors.map((color, idx) => (
+                                    <span key={idx} className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-100">
+                                        {color}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     
                     {product.details && (
                         <div>
@@ -54,36 +73,86 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                 </div>
             </div>
 
-            {/* Specific Details (Window/Lid) */}
-            {(product.windowDetails || product.lidDetails) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
-                    {product.features.hasWindow && product.windowDetails && (
-                        <div className="bg-slate-50 p-4 rounded-lg">
-                            <h5 className="font-medium text-slate-800 mb-2">Pencere Detayları</h5>
-                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                                <dt className="text-slate-500">Boyut:</dt>
-                                <dd>{product.windowDetails.width} x {product.windowDetails.height} mm</dd>
-                                <dt className="text-slate-500">Adet:</dt>
-                                <dd>{product.windowDetails.count}</dd>
-                            </dl>
-                        </div>
-                    )}
-                    
-                    {product.features.hasLid && product.lidDetails && (
-                        <div className="bg-slate-50 p-4 rounded-lg">
-                            <h5 className="font-medium text-slate-800 mb-2">Kapak Detayları</h5>
+            {/* Specific Details (Window/Lid/Gofre) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                {product.features.hasWindow && product.windowDetails && (
+                    <div className="bg-slate-50 p-4 rounded-lg">
+                        <h5 className="font-medium text-slate-800 mb-2">Pencere Detayları</h5>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <dt className="text-slate-500">Boyut:</dt>
+                            <dd>{product.windowDetails.width} x {product.windowDetails.height} mm</dd>
+                            <dt className="text-slate-500">Pencere Adet:</dt>
+                            <dd>{product.windowDetails.count}</dd>
+                        </dl>
+                    </div>
+                )}
+                
+                {product.features.gofre && product.features.gofreDetails && (
+                    <div className="bg-slate-50 p-4 rounded-lg">
+                        <h5 className="font-medium text-slate-800 mb-2">Gofre Detayları</h5>
+                        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                            <dt className="text-slate-500">Adet:</dt>
+                            <dd>{product.features.gofreDetails.count || '-'}</dd>
+                            <dt className="text-slate-500">Konum/Not:</dt>
+                            <dd>{product.features.gofreDetails.notes || '-'}</dd>
+                        </dl>
+                    </div>
+                )}
+                
+                {product.features.hasLid && product.lidDetails && (
+                    <div className="bg-slate-50 p-4 rounded-lg md:col-span-2">
+                        <h5 className="font-medium text-slate-800 mb-2 flex items-center gap-2">
+                            Kapak Detayları
+                            {product.lidDetails.hasGofre && <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full">Gofre Var</span>}
+                            {product.lidDetails.hasWindow && <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Pencere Var</span>}
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                                 <dt className="text-slate-500">Materyal:</dt>
                                 <dd>{product.lidDetails.material || '-'}</dd>
-                                <dt className="text-slate-500">Renk:</dt>
-                                <dd>{product.lidDetails.color || '-'}</dd>
-                                <dt className="text-slate-500">Notlar:</dt>
-                                <dd className="col-span-2">{product.lidDetails.notes || '-'}</dd>
+                                <dt className="text-slate-500">Boya/Renk:</dt>
+                                <dd>{product.lidDetails.paint || product.lidDetails.color || '-'}</dd>
                             </dl>
+
+                            {product.lidDetails.dimensions && (
+                                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                    <dt className="text-slate-500">Boy:</dt>
+                                    <dd>{product.lidDetails.dimensions.length} mm</dd>
+                                    <dt className="text-slate-500">En:</dt>
+                                    <dd>{product.lidDetails.dimensions.width} mm</dd>
+                                    <dt className="text-slate-500">Derinlik:</dt>
+                                    <dd>{product.lidDetails.dimensions.depth} mm</dd>
+                                </dl>
+                            )}
+
+                            <div className="space-y-2">
+                                {product.lidDetails.hasGofre && product.lidDetails.gofreDetails && (
+                                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm border-b pb-2">
+                                        <dt className="text-slate-500">Gofre Adet:</dt>
+                                        <dd>{product.lidDetails.gofreDetails.count || '-'}</dd>
+                                        <dt className="text-slate-500">Konum:</dt>
+                                        <dd>{product.lidDetails.gofreDetails.notes || '-'}</dd>
+                                    </dl>
+                                )}
+                                {product.lidDetails.hasWindow && product.lidDetails.windowDimensions && (
+                                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm border-b pb-2">
+                                        <dt className="text-slate-500">Pencere En:</dt>
+                                        <dd>{product.lidDetails.windowDimensions.width} mm</dd>
+                                        <dt className="text-slate-500">Pencere Boy:</dt>
+                                        <dd>{product.lidDetails.windowDimensions.height} mm</dd>
+                                    </dl>
+                                )}
+                                {product.lidDetails.notes && (
+                                    <div className="text-sm pt-1">
+                                        <span className="text-slate-500 block">Notlar:</span>
+                                        <p className="text-slate-700">{product.lidDetails.notes}</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    )}
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
 
             {/* Images */}
             {product.images && (

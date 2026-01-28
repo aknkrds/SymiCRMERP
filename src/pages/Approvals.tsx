@@ -1,18 +1,81 @@
 import { useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
+import { useUsers } from '../hooks/useUsers';
 import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { Order } from '../types';
 
+const STATUS_TR: Record<string, string> = {
+    created: 'Oluşturuldu',
+    offer_sent: 'Teklif Gönderildi',
+    offer_accepted: 'Teklif Onaylandı',
+    offer_cancelled: 'Teklif İptal',
+    design_pending: 'Tasarım Bekleniyor',
+    design_approved: 'Tasarım Onaylandı',
+    supply_completed: 'Tedarik Tamamlandı',
+    production_planned: 'Üretim Planlandı',
+    production_started: 'Üretim Başladı',
+    production_completed: 'Üretim Tamamlandı',
+    invoice_added: 'Fatura Eklendi',
+    shipping_completed: 'Sevkiyat Tamamlandı',
+    order_completed: 'Sipariş Tamamlandı',
+    order_cancelled: 'Sipariş İptal',
+};
+
+const ROLE_COLOR_MAP: Record<string, string> = {
+    'Satış': 'bg-sky-100 border-sky-200',
+    'Tasarımcı': 'bg-fuchsia-100 border-fuchsia-200',
+    'Matbaa': 'bg-amber-100 border-amber-200',
+    'Fabrika Müdürü': 'bg-emerald-100 border-emerald-200',
+    'Muhasebe': 'bg-rose-100 border-rose-200',
+    'Sevkiyat': 'bg-indigo-100 border-indigo-200',
+    'Tedarik': 'bg-teal-100 border-teal-200',
+};
+
+const DEPARTMENTS: { title: string; roles: string[] }[] = [
+    { title: 'Satış', roles: ['Satış'] },
+    { title: 'Tasarım', roles: ['Tasarımcı'] },
+    { title: 'Tedarik', roles: ['Tedarik', 'Matbaa'] },
+    { title: 'Üretim', roles: ['Fabrika Müdürü'] },
+    { title: 'Muhasebe', roles: ['Muhasebe'] },
+    { title: 'Sevkiyat', roles: ['Sevkiyat'] },
+];
+
 export default function Approvals() {
-    const { orders, updateStatus } = useOrders();
+    const { orders, updateStatus, updateOrder } = useOrders() as any;
+    const { users } = useUsers();
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [showModal, setShowModal] = useState(false);
+    const [dragOrderId, setDragOrderId] = useState<string | null>(null);
 
     // Filter orders
     const pendingApprovals = orders.filter(o => o.status === 'shipping_completed');
     const completedHistory = orders.filter(o => o.status === 'order_completed' || o.status === 'cancelled');
+    const [page, setPage] = useState(1);
+    const pageSize = 10;
+    const totalPages = Math.ceil(orders.length / pageSize) || 1;
+    const start = (page - 1) * pageSize;
+    const recentOrders = orders.slice(start, start + pageSize);
+
+    const ROLE_STATUS_MAP: Record<string, Order['status']> = {
+        'Tasarımcı': 'design_pending',
+        'Satış': 'offer_sent',
+        'Matbaa': 'production_planned',
+        'Fabrika Müdürü': 'production_planned',
+        'Muhasebe': 'invoice_added',
+        'Sevkiyat': 'shipping_completed',
+    };
+
+    const handleAssignToUser = async (orderId: string, user: { id: string; fullName: string; roleName: string }) => {
+        const newStatus = ROLE_STATUS_MAP[user.roleName] || undefined;
+        await updateOrder(orderId, {
+            status: newStatus || undefined,
+            assignedUserId: user.id,
+            assignedUserName: user.fullName,
+            assignedRoleName: user.roleName,
+        } as any);
+    };
 
     const handleCompleteOrder = async (orderId: string) => {
         if (confirm('Bu sipariş tamamen tamamlandı olarak işaretlensin mi?')) {
@@ -37,19 +100,97 @@ export default function Approvals() {
     };
 
     const getStatusBadge = (status: string) => {
+        const label = STATUS_TR[status] || status;
         switch (status) {
             case 'order_completed':
-                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 flex items-center gap-1 w-fit"><CheckCircle2 size={12} /> Tamamlandı</span>;
+                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 flex items-center gap-1 w-fit"><CheckCircle2 size={12} /> {label}</span>;
             case 'cancelled':
             case 'order_cancelled':
-                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 flex items-center gap-1 w-fit"><XCircle size={12} /> İptal Edildi</span>;
+                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 flex items-center gap-1 w-fit"><XCircle size={12} /> {label}</span>;
             default:
-                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{status}</span>;
+                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{label}</span>;
         }
     };
 
     return (
         <div className="space-y-8">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800">Atama İçin Kişiler</h2>
+                </div>
+                <div className="p-4">
+                    <div className="flex flex-wrap items-stretch gap-3">
+                        {users
+                            .slice()
+                            .sort((a, b) => {
+                                return a.fullName.localeCompare(b.fullName, 'tr');
+                            })
+                            .map(u => (
+                                <div
+                                    key={u.id}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const orderId = dragOrderId || e.dataTransfer.getData('text/plain');
+                                        if (orderId) handleAssignToUser(orderId, { id: u.id, fullName: u.fullName, roleName: u.roleName });
+                                        setDragOrderId(null);
+                                    }}
+                                    className={`p-3 border rounded-lg transition-colors cursor-pointer w-48 ${ROLE_COLOR_MAP[u.roleName] || 'bg-slate-50 border-slate-200'}`}
+                                    title={u.roleName}
+                                >
+                                    <div className="font-medium text-slate-800 truncate">{u.fullName}</div>
+                                    <div className="text-xs text-slate-600 truncate">{u.roleName}</div>
+                                </div>
+                            ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Last 10 orders draggable list */}
+            <div className="space-y-3">
+                <h2 className="text-lg font-bold text-slate-800">Siparişler</h2>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="divide-y divide-slate-200">
+                        {recentOrders.map((order) => (
+                            <div
+                                key={order.id}
+                                draggable
+                                onDragStart={(e) => {
+                                    setDragOrderId(order.id);
+                                    e.dataTransfer.setData('text/plain', order.id);
+                                }}
+                                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-grab"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <span className="font-mono text-xs text-slate-500">#{order.id.slice(0,8)}</span>
+                                    <span className="font-medium text-slate-800">{order.customerName}</span>
+                                    <span className="text-xs text-slate-500">{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
+                                </div>
+                                <div className="text-xs">{STATUS_TR[order.status] || order.status}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center justify-end gap-2 p-3 border-t border-slate-200">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page === 1}
+                            className="px-3 py-1.5 text-sm rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                            ← Önceki
+                        </button>
+                        <span className="text-xs text-slate-600">
+                            Sayfa {page} / {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page === totalPages}
+                            className="px-3 py-1.5 text-sm rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                        >
+                            Sonraki →
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div className="flex justify-between items-center">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">Onaylar</h1>

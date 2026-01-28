@@ -24,6 +24,13 @@ export interface Product {
         hasLid: boolean;
         hasWindow: boolean;
         extras: string;
+        gofre: boolean;
+        gofreDetails?: {
+            count: number;
+            notes: string;
+        };
+        foodGrade: boolean;
+        colors: string[];
     };
     // New fields
     details?: string;
@@ -34,8 +41,24 @@ export interface Product {
     };
     lidDetails?: {
         material: string;
-        color: string;
+        color: string; // Keeping for backward compatibility or general color
+        paint: string; // "Boya"
         notes: string;
+        hasGofre: boolean;
+        gofreDetails?: {
+            count: number;
+            notes: string;
+        };
+        hasWindow: boolean;
+        windowDimensions?: {
+            width: number;
+            height: number;
+        };
+        dimensions?: {
+            length: number;
+            width: number;
+            depth: number;
+        };
     };
     images?: {
         customer: string[]; // Base64 strings, max 2
@@ -82,6 +105,9 @@ export interface Order {
     vatTotal: number;
     grandTotal: number;
     status: OrderStatus;
+    assignedUserId?: string;
+    assignedUserName?: string;
+    assignedRoleName?: string;
     procurementStatus?: string; // Specific status for procurement flow
     productionStatus?: string; // Specific status for production flow
     procurementDate?: string; // When procurement was completed
@@ -108,6 +134,9 @@ export interface StockItem {
     product: string;
     quantity: number;
     unit: string;
+    category?: 'procurement' | 'finished';
+    productId?: string;
+    notes?: string;
     createdAt: string;
 }
 
