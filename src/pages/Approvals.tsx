@@ -5,26 +5,7 @@ import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package } f
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { Order } from '../types';
-
-const STATUS_TR: Record<string, string> = {
-    created: 'Oluşturuldu',
-    offer_sent: 'Teklif Oluşturuldu',
-    offer_accepted: 'Teklif Kabul Edildi',
-    offer_cancelled: 'Teklif İptal Edildi',
-    design_waiting: 'Tasarım Bekleniyor',
-    design_approved: 'Tasarım Onaylandı',
-    supply_waiting: 'Tedarik Madde Bekleniyor',
-    supply_completed: 'Tedarik Tamamlandı',
-    production_planned: 'Üretim Planlamasında',
-    production_started: 'Üretim Başladı',
-    production_completed: 'Üretim Tamamlandı',
-    invoice_waiting: 'Fatura - İrsaliye Bekleniyor',
-    invoice_added: 'Fatura - İrsaliye Eklendi',
-    shipping_waiting: 'Sevkiyat Bekleniyor',
-    shipping_completed: 'Sevkiyat Bitti',
-    order_completed: 'Sipariş Tamamlandı',
-    order_cancelled: 'Sipariş İptal Edildi',
-};
+import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 
 const ROLE_COLOR_MAP: Record<string, string> = {
     'Satış': 'bg-sky-100 border-sky-200',
@@ -172,7 +153,7 @@ export default function Approvals() {
                                     <span className="font-medium text-slate-800">{order.customerName}</span>
                                     <span className="text-xs text-slate-500">{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
                                 </div>
-                                <div className="text-xs">{STATUS_TR[order.status] || order.status}</div>
+                                <div className="text-xs">{ORDER_STATUS_MAP[order.status]?.label || order.status}</div>
                             </div>
                         ))}
                     </div>
@@ -370,7 +351,7 @@ export default function Approvals() {
                                 <h3 className="text-xl font-bold text-slate-800">Sipariş Detayı</h3>
                                 <p className="text-sm text-slate-500">#{selectedOrder.id}</p>
                             </div>
-                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-600">
+                            <button onClick={closeModal} className="text-slate-400 hover:text-slate-600" title="Kapat" aria-label="Kapat">
                                 <XCircle size={24} />
                             </button>
                         </div>
