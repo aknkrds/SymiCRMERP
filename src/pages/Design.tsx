@@ -13,7 +13,7 @@ export default function Design() {
     const { products } = useProducts();
     
     // Filter orders waiting for design
-    const designOrders = orders.filter(o => o.status === 'design_pending');
+    const designOrders = orders.filter(o => o.status === 'offer_accepted' || o.status === 'design_waiting');
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);

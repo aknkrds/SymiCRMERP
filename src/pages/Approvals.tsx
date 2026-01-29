@@ -8,19 +8,22 @@ import type { Order } from '../types';
 
 const STATUS_TR: Record<string, string> = {
     created: 'Oluşturuldu',
-    offer_sent: 'Teklif Gönderildi',
-    offer_accepted: 'Teklif Onaylandı',
-    offer_cancelled: 'Teklif İptal',
-    design_pending: 'Tasarım Bekleniyor',
+    offer_sent: 'Teklif Oluşturuldu',
+    offer_accepted: 'Teklif Kabul Edildi',
+    offer_cancelled: 'Teklif İptal Edildi',
+    design_waiting: 'Tasarım Bekleniyor',
     design_approved: 'Tasarım Onaylandı',
+    supply_waiting: 'Tedarik Madde Bekleniyor',
     supply_completed: 'Tedarik Tamamlandı',
-    production_planned: 'Üretim Planlandı',
+    production_planned: 'Üretim Planlamasında',
     production_started: 'Üretim Başladı',
     production_completed: 'Üretim Tamamlandı',
-    invoice_added: 'Fatura Eklendi',
-    shipping_completed: 'Sevkiyat Tamamlandı',
+    invoice_waiting: 'Fatura - İrsaliye Bekleniyor',
+    invoice_added: 'Fatura - İrsaliye Eklendi',
+    shipping_waiting: 'Sevkiyat Bekleniyor',
+    shipping_completed: 'Sevkiyat Bitti',
     order_completed: 'Sipariş Tamamlandı',
-    order_cancelled: 'Sipariş İptal',
+    order_cancelled: 'Sipariş İptal Edildi',
 };
 
 const ROLE_COLOR_MAP: Record<string, string> = {
@@ -59,12 +62,13 @@ export default function Approvals() {
     const recentOrders = orders.slice(start, start + pageSize);
 
     const ROLE_STATUS_MAP: Record<string, Order['status']> = {
-        'Tasarımcı': 'design_pending',
         'Satış': 'offer_sent',
-        'Matbaa': 'production_planned',
+        'Tasarımcı': 'design_waiting',
+        'Tedarik': 'supply_waiting',
+        'Matbaa': 'supply_waiting',
         'Fabrika Müdürü': 'production_planned',
-        'Muhasebe': 'invoice_added',
-        'Sevkiyat': 'shipping_completed',
+        'Muhasebe': 'invoice_waiting',
+        'Sevkiyat': 'shipping_waiting',
     };
 
     const handleAssignToUser = async (orderId: string, user: { id: string; fullName: string; roleName: string }) => {
@@ -100,15 +104,17 @@ export default function Approvals() {
     };
 
     const getStatusBadge = (status: string) => {
-        const label = STATUS_TR[status] || status;
+        const label = ORDER_STATUS_MAP[status]?.label || status;
+        const color = ORDER_STATUS_MAP[status]?.color || 'bg-slate-100 text-slate-600';
+        
         switch (status) {
             case 'order_completed':
-                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 flex items-center gap-1 w-fit"><CheckCircle2 size={12} /> {label}</span>;
+                return <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 w-fit ${color}`}><CheckCircle2 size={12} /> {label}</span>;
             case 'cancelled':
             case 'order_cancelled':
-                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 flex items-center gap-1 w-fit"><XCircle size={12} /> {label}</span>;
+                return <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 w-fit ${color}`}><XCircle size={12} /> {label}</span>;
             default:
-                return <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">{label}</span>;
+                return <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>{label}</span>;
         }
     };
 

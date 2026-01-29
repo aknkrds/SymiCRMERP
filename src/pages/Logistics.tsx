@@ -24,7 +24,7 @@ export default function Logistics() {
     });
 
     // Filter orders that have invoice added (waiting for shipping)
-    const logisticsOrders = orders.filter(o => o.status === 'invoice_added');
+    const logisticsOrders = orders.filter(o => o.status === 'invoice_added' || o.status === 'shipping_waiting');
 
     const handleOpenModal = (order: Order) => {
         setSelectedOrder(order);

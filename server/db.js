@@ -214,6 +214,21 @@ const initDb = () => {
         db.prepare("ALTER TABLE orders ADD COLUMN waybillUrl TEXT").run();
     }
 
+    // Add notifications table if it doesn't exist
+    db.prepare(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        roleId TEXT,
+        title TEXT,
+        message TEXT,
+        type TEXT,
+        relatedId TEXT,
+        isRead INTEGER DEFAULT 0,
+        createdAt TEXT
+      )
+    `).run();
+
     // Add shipment columns
     const hasPackagingType = tableInfo.some(col => col.name === 'packagingType');
     if (!hasPackagingType) {

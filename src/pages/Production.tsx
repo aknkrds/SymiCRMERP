@@ -8,6 +8,7 @@ import {
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Modal } from '../components/ui/Modal';
+import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData } from '../types';
 
 const API_URL = '/api';
@@ -196,6 +197,7 @@ export default function Production() {
     // Filtered Lists
     const productionOrders = orders.filter(o => 
         ['production_planned', 'production_started'].includes(o.status) ||
+        o.status === 'supply_completed' ||
         o.procurementStatus === 'shipped_to_production'
     );
 
@@ -590,13 +592,8 @@ export default function Production() {
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-600">
-                                                {order.status === 'created' ? 'Oluşturuldu' :
-                                                 order.status === 'offer_sent' ? 'Teklif Gönderildi' :
-                                                 order.status === 'offer_accepted' ? 'Teklif Onaylandı' :
-                                                 order.status === 'design_pending' ? 'Tasarım Bekliyor' :
-                                                 order.status === 'design_approved' ? 'Tasarım Onaylandı' :
-                                                 order.status}
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-200 text-slate-600'}`}>
+                                                {ORDER_STATUS_MAP[order.status]?.label || order.status}
                                             </span>
                                         </td>
                                     </tr>

@@ -17,7 +17,7 @@ export default function Dashboard() {
         },
         {
             label: 'Aktif Üretim',
-            value: orders.filter(o => o.status === 'in_production').length,
+            value: orders.filter(o => o.status === 'production_started').length,
             icon: TrendingUp,
             color: 'text-amber-600',
             bg: 'bg-amber-100',
@@ -31,7 +31,7 @@ export default function Dashboard() {
         },
         {
             label: 'Teslim Edilen',
-            value: orders.filter(o => o.status === 'shipped').length,
+            value: orders.filter(o => o.status === 'shipping_completed').length,
             icon: CheckCircle2,
             color: 'text-emerald-600',
             bg: 'bg-emerald-100',

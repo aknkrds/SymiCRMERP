@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import db from './db.js';
 import { execSync } from 'child_process';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -341,9 +342,13 @@ app.post('/api/seed-data', (req, res) => {
 
       // 3. Generate Orders (15)
       const statuses = [
-        'Sipariş Alındı', 'Onay Bekliyor', 'Grafik Tasarım', 
-        'Müşteri Onayı', 'Üretim Planlama', 'Üretimde', 
-        'Kalite Kontrol', 'Sevkiyata Hazır', 'Sevk Edildi'
+        'created', 'offer_sent', 'offer_accepted', 
+        'design_waiting', 'design_approved', 
+        'supply_waiting', 'supply_completed',
+        'production_planned', 'production_started', 'production_completed',
+        'invoice_waiting', 'invoice_added',
+        'shipping_waiting', 'shipping_completed',
+        'order_completed'
       ];
 
       const insertOrder = db.prepare(`
@@ -365,10 +370,10 @@ app.post('/api/seed-data', (req, res) => {
         let procurement = 'Beklemede';
         let production = 'Beklemede';
         
-        if (['Üretimde', 'Kalite Kontrol', 'Sevkiyata Hazır', 'Sevk Edildi'].includes(status)) {
+        if (['production_started', 'production_completed', 'shipping_completed', 'order_completed'].includes(status)) {
           procurement = 'Tamamlandı';
-          production = status === 'Üretimde' ? 'Devam Ediyor' : 'Tamamlandı';
-        } else if (status === 'Üretim Planlama') {
+          production = status === 'production_started' ? 'Devam Ediyor' : 'Tamamlandı';
+        } else if (status === 'production_planned') {
           procurement = 'Devam Ediyor';
         }
 
@@ -406,6 +411,76 @@ app.post('/api/seed-data', (req, res) => {
     res.json({ success: true, message: 'Test verileri başarıyla oluşturuldu.' });
   } catch (error) {
     console.error('Seed data error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- NOTIFICATIONS ---
+
+const createNotification = ({ userId, roleId, title, message, type, relatedId }) => {
+  try {
+    const id = crypto.randomUUID();
+    const stmt = db.prepare(`
+      INSERT INTO notifications (id, userId, roleId, title, message, type, relatedId, isRead, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `);
+    stmt.run(id, userId || null, roleId || null, title, message, type || 'info', relatedId || null, new Date().toISOString());
+    return id;
+  } catch (error) {
+    console.error('Failed to create notification:', error);
+    return null;
+  }
+};
+
+app.get('/api/notifications', (req, res) => {
+  try {
+    const { userId, roleId } = req.query;
+    
+    let query = 'SELECT * FROM notifications WHERE isRead = 0 AND (';
+    const params = [];
+    
+    // Logic: User sees notifications for their ID OR their Role OR global (both null? maybe not)
+    // Actually, let's keep it simple: 
+    // IF userId provided -> match userId
+    // IF roleId provided -> match roleId
+    
+    const conditions = [];
+    if (userId) {
+      conditions.push('userId = ?');
+      params.push(userId);
+    }
+    if (roleId) {
+      conditions.push('roleId = ?');
+      params.push(roleId);
+    }
+    
+    if (conditions.length === 0) {
+      return res.json([]);
+    }
+    
+    query += conditions.join(' OR ') + ') ORDER BY createdAt DESC';
+    
+    const stmt = db.prepare(query);
+    const notifications = stmt.all(...params);
+    res.json(notifications);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/notifications/mark-read', (req, res) => {
+  try {
+    const { ids } = req.body; // Array of IDs
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.json({ success: true });
+    }
+    
+    const placeholders = ids.map(() => '?').join(',');
+    const stmt = db.prepare(`UPDATE notifications SET isRead = 1 WHERE id IN (${placeholders})`);
+    stmt.run(...ids);
+    
+    res.json({ success: true });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -684,6 +759,101 @@ app.patch('/api/orders/:id', (req, res) => {
     const updates = req.body;
     const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     
+    // Notification Logic for Assignment
+    if (updates.assignedUserId && updates.assignedUserId !== current.assignedUserId) {
+      createNotification({
+        userId: updates.assignedUserId,
+        title: 'Yeni İş Ataması',
+        message: `Sipariş #${id.slice(0,8)} (${current.customerName}) size atandı.`,
+        type: 'task',
+        relatedId: id
+      });
+    } else if (updates.assignedRoleName && updates.assignedRoleName !== current.assignedRoleName) {
+       // Try to find role ID
+       const role = db.prepare('SELECT id FROM roles WHERE name = ?').get(updates.assignedRoleName);
+       if (role) {
+         createNotification({
+            roleId: role.id,
+            title: 'Departman İş Ataması',
+            message: `Sipariş #${id.slice(0,8)} (${current.customerName}) departmanınıza atandı.`,
+            type: 'task',
+            relatedId: id
+         });
+       }
+    }
+
+    // Automatic Notification based on Status Change (Workflow Handoffs)
+    if (updates.status && updates.status !== current.status) {
+        let targetRoleName = '';
+        let notifTitle = '';
+        let notifMessage = '';
+
+        switch (updates.status) {
+            case 'offer_accepted':
+                targetRoleName = 'Tasarımcı';
+                notifTitle = 'Yeni Tasarım İş Emri';
+                notifMessage = `Sipariş #${id.slice(0,8)} için tasarım onayı bekleniyor.`;
+                break;
+            case 'design_approved':
+                targetRoleName = 'Tedarik'; // Or 'Matbaa' depending on setup, user said 'Tedarik'
+                notifTitle = 'Hammadde Tedarik Talebi';
+                notifMessage = `Sipariş #${id.slice(0,8)} için malzeme tedariği bekleniyor.`;
+                break;
+            case 'supply_completed':
+                targetRoleName = 'Fabrika Müdürü'; // Assuming Production Manager
+                notifTitle = 'Üretim Planlama Talebi';
+                notifMessage = `Sipariş #${id.slice(0,8)} için hammadde hazır, üretim planlanmalı.`;
+                break;
+            case 'production_completed':
+                targetRoleName = 'Muhasebe';
+                notifTitle = 'Fatura/İrsaliye Talebi';
+                notifMessage = `Sipariş #${id.slice(0,8)} üretimi tamamlandı, evrak bekleniyor.`;
+                break;
+            case 'invoice_added':
+                targetRoleName = 'Sevkiyat';
+                notifTitle = 'Sevkiyat Talebi';
+                notifMessage = `Sipariş #${id.slice(0,8)} evrakları hazır, sevkiyat bekleniyor.`;
+                break;
+            case 'shipping_completed':
+                targetRoleName = 'Admin'; // Or specific role for GM
+                notifTitle = 'Sipariş Tamamlama Onayı';
+                notifMessage = `Sipariş #${id.slice(0,8)} sevk edildi, kapatma onayı bekleniyor.`;
+                break;
+        }
+
+        if (targetRoleName) {
+            // Find Role ID
+            // Special case for 'Admin' if it's not a role in DB but a specific user? 
+            // Usually 'Admin' is a role or we send to all admins.
+            // Let's assume 'Admin' role exists or we map to it.
+            // If 'Admin' is not found, maybe check for 'Yönetici' or similar.
+            let role = db.prepare('SELECT id FROM roles WHERE name = ?').get(targetRoleName);
+            
+            // Fallback for Supply if named differently (e.g. 'Matbaa' mentioned in Approvals.tsx)
+            if (!role && targetRoleName === 'Tedarik') {
+                 role = db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
+            }
+            // Fallback for Production if named differently
+            if (!role && targetRoleName === 'Fabrika Müdürü') {
+                 role = db.prepare('SELECT id FROM roles WHERE name = ?').get('Üretim');
+            }
+
+            if (role) {
+                createNotification({
+                    roleId: role.id,
+                    title: notifTitle,
+                    message: notifMessage,
+                    type: 'task',
+                    relatedId: id
+                });
+            } else if (targetRoleName === 'Admin') {
+                // If no role found, maybe send to all admin users?
+                // For now, let's skip if no specific role.
+                // Or hardcode to a specific role if we know it.
+            }
+        }
+    }
+
     if (updates.items) {
       updates.items = JSON.stringify(updates.items);
     }

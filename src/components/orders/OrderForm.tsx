@@ -2,9 +2,10 @@ import { useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CheckCircle, ArrowRight } from 'lucide-react';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProducts } from '../../hooks/useProducts';
+import { useAuth } from '../../context/AuthContext';
 import type { OrderFormData } from '../../types';
 import { cn } from '../../lib/utils';
 
@@ -27,13 +28,16 @@ const orderSchema = z.object({
         'offer_sent', 
         'offer_accepted', 
         'offer_cancelled',
-        'design_pending', 
+        'design_waiting', 
         'design_approved',
+        'supply_waiting',
         'supply_completed',
         'production_planned',
         'production_started',
         'production_completed',
+        'invoice_waiting',
         'invoice_added',
+        'shipping_waiting',
         'shipping_completed',
         'order_completed',
         'order_cancelled'
@@ -41,7 +45,7 @@ const orderSchema = z.object({
 });
 
 interface OrderFormProps {
-    initialData?: any; // strict typing is hard with complex nested forms sometimes
+    initialData?: any; 
     onSubmit: (data: OrderFormData) => void;
     onCancel: () => void;
 }
@@ -49,6 +53,7 @@ interface OrderFormProps {
 export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
     const { customers } = useCustomers();
     const { products } = useProducts();
+    const { user } = useAuth();
 
     const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<OrderFormData>({
         resolver: zodResolver(orderSchema) as any,
@@ -65,6 +70,45 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
         control,
         name: 'items',
     });
+
+    const watchedStatus = watch('status');
+
+    // Workflow Transition Logic
+    const getNextStep = () => {
+        if (!user) return null;
+        const role = user.role?.name || '';
+        
+        // Define Handover Logic
+        if (watchedStatus === 'offer_accepted' && role === 'Tasarımcı') {
+            return { label: 'Tasarım İşini Üstlen', nextStatus: 'design_waiting' };
+        }
+        if (watchedStatus === 'design_approved' && (role === 'Tedarik' || role === 'Matbaa')) {
+            return { label: 'Tedarik İşini Üstlen', nextStatus: 'supply_waiting' };
+        }
+        if (watchedStatus === 'supply_completed' && (role === 'Fabrika Müdürü' || role === 'Üretim')) {
+            return { label: 'Üretim Planlamasını Başlat', nextStatus: 'production_planned' };
+        }
+        if (watchedStatus === 'production_completed' && role === 'Muhasebe') {
+            return { label: 'Fatura/İrsaliye İşlemlerini Başlat', nextStatus: 'invoice_waiting' };
+        }
+        if (watchedStatus === 'invoice_added' && role === 'Sevkiyat') {
+             return { label: 'Sevkiyat Hazırlığına Başla', nextStatus: 'shipping_waiting' };
+        }
+        if (watchedStatus === 'shipping_completed' && role === 'Admin') { // Assuming Admin role name
+             return { label: 'Siparişi Tamamla', nextStatus: 'order_completed' };
+        }
+        return null;
+    };
+
+    const nextStep = getNextStep();
+
+    const handleWorkflowAction = () => {
+        if (nextStep) {
+            setValue('status', nextStep.nextStatus as any);
+            // Submit immediately to save the state change
+            handleSubmit(onSubmit as any)();
+        }
+    };
 
     // Watch items to calculate totals interactively
     const watchedItems = watch('items');
@@ -112,6 +156,28 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
 
     return (
         <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+            {nextStep && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex items-center justify-between shadow-sm animate-pulse">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-100 rounded-full text-indigo-600">
+                            <CheckCircle size={24} />
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-indigo-900">Bekleyen İşlem</h4>
+                            <p className="text-sm text-indigo-700">Bu sipariş için onayınız/işlem başlatmanız bekleniyor.</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleWorkflowAction}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
+                    >
+                        {nextStep.label}
+                        <ArrowRight size={18} />
+                    </button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">Müşteri</label>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Eye, FileDown } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import type { Order, OrderFormData } from '../types';
@@ -7,6 +7,7 @@ import { OrderForm } from '../components/orders/OrderForm';
 import { generateQuotePDF } from '../lib/pdf';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import { useLocation } from 'react-router-dom';
 
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 
@@ -16,6 +17,19 @@ export default function Orders() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
+    const location = useLocation();
+
+    useEffect(() => {
+        if (location.state?.openOrderId && orders.length > 0) {
+            const order = orders.find(o => o.id === location.state.openOrderId);
+            if (order) {
+                setEditingOrder(order);
+                setIsModalOpen(true);
+                // Clear state to avoid reopening if user closes and stays on page
+                window.history.replaceState({}, document.title);
+            }
+        }
+    }, [location.state, orders]);
 
     const filteredOrders = orders.filter(o =>
         o.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||

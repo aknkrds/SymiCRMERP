@@ -12,8 +12,8 @@ export default function Accounting() {
     const [uploading, setUploading] = useState<{id: string, type: 'invoice' | 'waybill'} | null>(null);
 
     // Filter orders
-    const pendingOrders = orders.filter(o => o.status === 'production_completed');
-    const completedOrders = orders.filter(o => o.status === 'invoice_added' || o.status === 'shipped');
+    const pendingOrders = orders.filter(o => o.status === 'production_completed' || o.status === 'invoice_waiting');
+    const completedOrders = orders.filter(o => o.status === 'invoice_added' || o.status === 'shipping_completed');
 
     const handleFileUpload = async (orderId: string, e: React.ChangeEvent<HTMLInputElement>, type: 'invoice' | 'waybill') => {
         if (!e.target.files || !e.target.files[0]) return;

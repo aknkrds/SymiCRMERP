@@ -28,7 +28,7 @@ export default function Procurement() {
     const { stockItems, addStockItem, deleteStockItem } = useStock();
     
     // Filter orders that are design approved (waiting for procurement)
-    const procurementOrders = orders.filter(o => o.status === 'design_approved');
+    const procurementOrders = orders.filter(o => o.status === 'design_approved' || o.status === 'supply_waiting');
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
