@@ -59,7 +59,26 @@ export function DepartmentTasks() {
     const targetStatuses = getRoleStatuses(userRoleName);
     
     // Filter orders
-    const pendingOrders = orders.filter(order => targetStatuses.includes(order.status));
+    const pendingOrders = orders.filter(order => {
+        // 1. Check if status matches the user's role responsibilities
+        const isStatusRelevant = targetStatuses.includes(order.status);
+        
+        // 2. Check if explicitly assigned to the user
+        const isAssignedToUser = user?.id && order.assignedUserId === user.id;
+        
+        // 3. Check if assigned to the user's role (alternative to status mapping)
+        const isAssignedToRole = user?.role?.name && order.assignedRoleName === user.role.name;
+
+        // Order must be active (not completed or cancelled) to appear in "Pending" list
+        // unless the status itself is 'completed' but still relevant (like shipping_completed for final approval)
+        const isCompleted = order.status === 'order_completed' || order.status === 'order_cancelled' || order.status === 'cancelled';
+        
+        // Exception: If the user needs to see completed items (e.g. for final check), let getRoleStatuses handle it.
+        // But generally, if it's assigned to me, and it's cancelled, I probably shouldn't see it as "Pending work".
+        if (isCompleted) return false;
+
+        return isStatusRelevant || isAssignedToUser || isAssignedToRole;
+    });
 
     // If role has no specific tasks defined, maybe hide? 
     // Or show 0. User said "o departmanın elindeki işler".
@@ -95,6 +114,8 @@ export function DepartmentTasks() {
                         <button 
                             onClick={() => setIsOpen(false)}
                             className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-50"
+                            title="Kapat"
+                            aria-label="Kapat"
                         >
                             <X size={16} />
                         </button>
