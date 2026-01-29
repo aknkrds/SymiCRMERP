@@ -9,7 +9,7 @@ interface UserItem {
   isActive: number;
 }
 
-export function useUsers() {
+export function useUsers(options: { includeAdmins?: boolean } = {}) {
   const [users, setUsers] = useState<UserItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,17 +18,20 @@ export function useUsers() {
       .then(res => res.json())
       .then((data: UserItem[]) => {
         const active = Array.isArray(data) ? data.filter(u => u.isActive) : [];
-        const filtered = active.filter(u => 
-          u.username !== 'admin' && 
-          u.roleName !== 'Admin' && 
-          u.fullName !== 'System Admin' &&
-          u.roleName !== 'Genel Müdür'
-        );
+        const filtered = active.filter(u => {
+          if (options.includeAdmins) return true;
+          return (
+            u.username !== 'admin' && 
+            u.roleName !== 'Admin' && 
+            u.fullName !== 'System Admin' &&
+            u.roleName !== 'Genel Müdür'
+          );
+        });
         setUsers(filtered);
       })
       .catch(err => console.error('Error fetching users:', err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [options.includeAdmins]);
 
   return { users, loading };
 }

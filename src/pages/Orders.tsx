@@ -105,7 +105,14 @@ export default function Orders() {
                                 </tr>
                             ) : (
                                 filteredOrders.map((order) => (
-                                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                                    <tr 
+                                        key={order.id} 
+                                        className={`transition-colors border-b last:border-0 ${
+                                            order.status === 'created' 
+                                                ? 'bg-white hover:bg-slate-50' 
+                                                : (ORDER_STATUS_MAP[order.status]?.color ? `bg-${ORDER_STATUS_MAP[order.status].color.match(/bg-([a-z]+)-/)?.[1] || 'slate'}-50 hover:bg-${ORDER_STATUS_MAP[order.status].color.match(/bg-([a-z]+)-/)?.[1] || 'slate'}-100` : 'bg-white hover:bg-slate-50')
+                                        }`}
+                                    >
                                         <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
                                         <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
                                         <td className="px-6 py-4">
@@ -118,7 +125,7 @@ export default function Orders() {
                                             <select
                                                 value={order.status}
                                                 onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                                className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none appearance-none ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'}`}
+                                                className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none appearance-none ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'} bg-opacity-100`}
                                             >
                                                 {Object.entries(ORDER_STATUS_MAP).map(([key, val]) => (
                                                     <option key={key} value={key}>{val.label}</option>
@@ -129,14 +136,14 @@ export default function Orders() {
                                             <div className="flex justify-end gap-2">
                                                 <button
                                                     onClick={() => generateQuotePDF(order)}
-                                                    className="p-2 text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-600 hover:bg-white hover:text-blue-600 rounded-lg transition-colors bg-white/50"
                                                     title="PDF İndir"
                                                 >
                                                     <FileDown size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => { setEditingOrder(order); setIsModalOpen(true); }}
-                                                    className="p-2 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-600 hover:bg-white hover:text-indigo-600 rounded-lg transition-colors bg-white/50"
                                                     title="Düzenle"
                                                 >
                                                     <Eye size={18} />

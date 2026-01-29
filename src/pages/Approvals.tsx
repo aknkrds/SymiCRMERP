@@ -1,11 +1,20 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useUsers } from '../hooks/useUsers';
-import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package } from 'lucide-react';
-import { format } from 'date-fns';
+import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package, DollarSign, ChevronDown } from 'lucide-react';
+import { format, subMonths, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import type { Order } from '../types';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
+import {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer
+} from 'recharts';
 
 const ROLE_COLOR_MAP: Record<string, string> = {
     'Satış': 'bg-sky-100 border-sky-200',
@@ -32,10 +41,43 @@ export default function Approvals() {
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [dragOrderId, setDragOrderId] = useState<string | null>(null);
+    const [assignDropdownOpen, setAssignDropdownOpen] = useState<string | null>(null);
 
     // Filter orders
     const pendingApprovals = orders.filter(o => o.status === 'shipping_completed');
     const completedHistory = orders.filter(o => o.status === 'order_completed' || o.status === 'cancelled');
+
+    const revenueData = useMemo(() => {
+        // Last 6 months
+        const data: Record<string, { name: string, total: number }> = {};
+        const today = new Date();
+        
+        for (let i = 5; i >= 0; i--) {
+            const d = subMonths(today, i);
+            const key = format(d, 'yyyy-MM');
+            data[key] = {
+                name: format(d, 'MMM', { locale: tr }),
+                total: 0
+            };
+        }
+
+        orders.forEach(order => {
+            const date = parseISO(order.createdAt);
+            const key = format(date, 'yyyy-MM');
+            if (data[key]) {
+                // Determine value based on currency (rough approximation)
+                let amount = order.grandTotal;
+                if (order.currency === 'USD') amount *= 30;
+                if (order.currency === 'EUR') amount *= 33;
+                if (order.currency === 'GBP') amount *= 38;
+                
+                data[key].total += amount;
+            }
+        });
+
+        return Object.values(data);
+    }, [orders]);
+
     const [page, setPage] = useState(1);
     const pageSize = 10;
     const totalPages = Math.ceil(orders.length / pageSize) || 1;
@@ -101,6 +143,59 @@ export default function Approvals() {
 
     return (
         <div className="space-y-8">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800">Onaylar ve Finans</h1>
+                    <p className="text-slate-500 text-sm mt-1">Finansal veriler ve sipariş onay süreçleri</p>
+                </div>
+            </div>
+
+            {/* Revenue Chart */}
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" />
+                    Tahmini Ciro (Son 6 Ay)
+                </h3>
+                <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={revenueData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis 
+                                dataKey="name" 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{fill: '#64748b', fontSize: 12}}
+                                dy={10}
+                            />
+                            <YAxis 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{fill: '#64748b', fontSize: 12}}
+                                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                            />
+                            <Tooltip 
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                formatter={(value: number) => [`₺${value.toLocaleString()}`, 'Tutar']}
+                            />
+                            <Area 
+                                type="monotone" 
+                                dataKey="total" 
+                                stroke="#10b981" 
+                                strokeWidth={3}
+                                fillOpacity={1} 
+                                fill="url(#colorTotal)" 
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-4 border-b border-slate-200">
                     <h2 className="text-lg font-bold text-slate-800">Atama İçin Kişiler</h2>
@@ -146,14 +241,50 @@ export default function Approvals() {
                                     setDragOrderId(order.id);
                                     e.dataTransfer.setData('text/plain', order.id);
                                 }}
-                                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-grab"
+                                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-grab relative"
                             >
                                 <div className="flex items-center gap-4">
                                     <span className="font-mono text-xs text-slate-500">#{order.id.slice(0,8)}</span>
                                     <span className="font-medium text-slate-800">{order.customerName}</span>
                                     <span className="text-xs text-slate-500">{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
                                 </div>
-                                <div className="text-xs">{ORDER_STATUS_MAP[order.status]?.label || order.status}</div>
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setAssignDropdownOpen(assignDropdownOpen === order.id ? null : order.id)}
+                                        className="flex items-center gap-2 text-xs hover:bg-slate-200 px-2 py-1 rounded transition-colors"
+                                    >
+                                        {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                        <ChevronDown size={14} className="text-slate-400" />
+                                    </button>
+                                    
+                                    {assignDropdownOpen === order.id && (
+                                        <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50 max-h-80 overflow-y-auto">
+                                            <div className="p-2 sticky top-0 bg-white border-b border-slate-100 font-semibold text-xs text-slate-500">
+                                                Atama Yapılacak Kişi Seçin
+                                            </div>
+                                            {users
+                                                .slice()
+                                                .sort((a, b) => a.fullName.localeCompare(b.fullName, 'tr'))
+                                                .map(u => (
+                                                    <button
+                                                        key={u.id}
+                                                        onClick={() => {
+                                                            handleAssignToUser(order.id, { id: u.id, fullName: u.fullName, roleName: u.roleName });
+                                                            setAssignDropdownOpen(null);
+                                                        }}
+                                                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between group"
+                                                    >
+                                                        <div>
+                                                            <div className="text-sm font-medium text-slate-800">{u.fullName}</div>
+                                                            <div className="text-xs text-slate-500">{u.roleName}</div>
+                                                        </div>
+                                                        <div className={`w-2 h-2 rounded-full ${ROLE_COLOR_MAP[u.roleName]?.split(' ')[0] || 'bg-slate-200'}`} />
+                                                    </button>
+                                                ))
+                                            }
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>

@@ -106,6 +106,12 @@ export function Sidebar() {
                     <LogOut size={20} />
                     {isOpen && <span>Çıkış Yap</span>}
                 </button>
+                
+                {isOpen && (
+                    <div className="px-3 py-2 mt-4 text-xs text-slate-600 text-center border-t border-slate-800 pt-4">
+                        Symi CRM v.0.9
+                    </div>
+                )}
             </div>
         </aside>
     );

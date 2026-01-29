@@ -17,6 +17,5 @@ export const ORDER_STATUS_MAP: Record<string, { label: string, color: string }> 
     order_completed: { label: 'Sipariş Tamamlandı', color: 'bg-green-200 text-green-900' },
     order_cancelled: { label: 'Sipariş İptal Edildi', color: 'bg-red-100 text-red-800' },
     // Legacy/Fallback statuses
-    in_production: { label: 'Üretim Devam Ediyor', color: 'bg-amber-100 text-amber-800' },
     shipped: { label: 'Teslim Edildi', color: 'bg-emerald-100 text-emerald-800' },
 };

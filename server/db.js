@@ -97,20 +97,51 @@ const initDb = () => {
     )
   `);
 
+  // Messages
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      threadId TEXT NOT NULL,
+      senderId TEXT NOT NULL,
+      senderName TEXT NOT NULL,
+      recipientId TEXT NOT NULL,
+      recipientName TEXT NOT NULL,
+      subject TEXT,
+      content TEXT NOT NULL,
+      relatedOrderId TEXT,
+      isRead INTEGER DEFAULT 0, -- 0: false, 1: true
+      createdAt TEXT NOT NULL
+    )
+  `);
+
   // Shifts
   db.exec(`
     CREATE TABLE IF NOT EXISTS shifts (
       id TEXT PRIMARY KEY,
       machineId TEXT NOT NULL,
-      operator TEXT NOT NULL,
+      operatorName TEXT NOT NULL,
       startTime TEXT NOT NULL,
       endTime TEXT,
       producedQuantity REAL DEFAULT 0,
-      targetQuantity REAL DEFAULT 0,
-      orderId TEXT,
-      waste REAL DEFAULT 0,
+      scrapQuantity REAL DEFAULT 0,
       notes TEXT,
-      status TEXT DEFAULT 'active',
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Messages
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      threadId TEXT NOT NULL,
+      senderId TEXT NOT NULL,
+      senderName TEXT NOT NULL,
+      recipientId TEXT NOT NULL,
+      recipientName TEXT NOT NULL,
+      subject TEXT,
+      content TEXT NOT NULL,
+      relatedOrderId TEXT,
+      isRead INTEGER DEFAULT 0, -- 0: false, 1: true
       createdAt TEXT NOT NULL
     )
   `);

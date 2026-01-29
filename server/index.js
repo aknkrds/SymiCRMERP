@@ -92,6 +92,109 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
   }
 });
 
+// --- MESSAGING ENDPOINTS ---
+
+// Get messages for a specific user (sent and received)
+app.get('/api/messages', (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    const messages = db.prepare(`
+      SELECT * FROM messages 
+      WHERE senderId = ? OR recipientId = ?
+      ORDER BY createdAt DESC
+    `).all(userId, userId);
+    
+    // Convert isRead to boolean
+    const formattedMessages = messages.map(m => ({
+      ...m,
+      isRead: !!m.isRead
+    }));
+    
+    res.json(formattedMessages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get ALL messages (Admin only)
+app.get('/api/admin/messages', (req, res) => {
+  try {
+    const messages = db.prepare('SELECT * FROM messages ORDER BY createdAt DESC').all();
+    const formattedMessages = messages.map(m => ({
+      ...m,
+      isRead: !!m.isRead
+    }));
+    res.json(formattedMessages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Send a message
+app.post('/api/messages', (req, res) => {
+  try {
+    const { 
+      threadId, 
+      senderId, 
+      senderName, 
+      recipientId, 
+      recipientName, 
+      subject, 
+      content, 
+      relatedOrderId 
+    } = req.body;
+
+    if (!senderId || !recipientId || !content) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const id = crypto.randomUUID();
+    const finalThreadId = threadId || id;
+    const createdAt = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO messages (
+        id, threadId, senderId, senderName, recipientId, recipientName, 
+        subject, content, relatedOrderId, isRead, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+    `);
+
+    stmt.run(
+      id, finalThreadId, senderId, senderName, recipientId, recipientName,
+      subject, content, relatedOrderId, createdAt
+    );
+
+    res.json({ id, threadId: finalThreadId, createdAt });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark message as read
+app.put('/api/messages/:id/read', (req, res) => {
+  try {
+    const { id } = req.params;
+    db.prepare('UPDATE messages SET isRead = 1 WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete message (Admin only)
+app.delete('/api/admin/messages/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- BACKUP & RESTORE ---
 const ensureDir = (p) => {
   if (!fs.existsSync(p)) {
@@ -1258,6 +1361,98 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // match one above, send back React's index.html file.
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
+// --- MESSAGES ENDPOINTS ---
+
+// Get messages for a user (sent or received)
+app.get('/api/messages', (req, res) => {
+    try {
+        const { userId } = req.query;
+        if (!userId) return res.status(400).json({ error: 'User ID required' });
+        
+        // Return all messages where user is sender or recipient
+        // Order by createdAt desc
+        const messages = db.prepare(`
+            SELECT * FROM messages 
+            WHERE senderId = ? OR recipientId = ?
+            ORDER BY createdAt DESC
+        `).all(userId, userId);
+        
+        // Convert isRead to boolean
+        const formattedMessages = messages.map(m => ({
+            ...m,
+            isRead: !!m.isRead
+        }));
+        
+        res.json(formattedMessages);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get ALL messages (Admin only)
+app.get('/api/admin/messages', (req, res) => {
+    try {
+        const messages = db.prepare('SELECT * FROM messages ORDER BY createdAt DESC').all();
+        const formattedMessages = messages.map(m => ({
+            ...m,
+            isRead: !!m.isRead
+        }));
+        res.json(formattedMessages);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Send a new message
+app.post('/api/messages', (req, res) => {
+    try {
+        const { senderId, senderName, recipientId, recipientName, subject, content, relatedOrderId, threadId } = req.body;
+        
+        if (!senderId || !recipientId || !content) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        
+        const id = crypto.randomUUID();
+        const newThreadId = threadId || crypto.randomUUID(); // Use existing or create new
+        const createdAt = new Date().toISOString();
+        
+        const stmt = db.prepare(`
+            INSERT INTO messages (id, threadId, senderId, senderName, recipientId, recipientName, subject, content, relatedOrderId, isRead, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        `);
+        
+        stmt.run(id, newThreadId, senderId, senderName, recipientId, recipientName, subject || '', content, relatedOrderId || null, createdAt);
+        
+        res.status(201).json({ id, threadId: newThreadId, createdAt });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Mark message as read
+app.put('/api/messages/:id/read', (req, res) => {
+    try {
+        const { id } = req.params;
+        const stmt = db.prepare('UPDATE messages SET isRead = 1 WHERE id = ?');
+        stmt.run(id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete message (Admin only)
+app.delete('/api/admin/messages/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const stmt = db.prepare('DELETE FROM messages WHERE id = ?');
+        stmt.run(id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.listen(PORT, () => {

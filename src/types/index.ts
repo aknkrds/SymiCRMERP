@@ -1,3 +1,18 @@
+// Types definition
+export interface Message {
+    id: string;
+    threadId: string;
+    senderId: string;
+    senderName: string;
+    recipientId: string;
+    recipientName: string;
+    subject?: string;
+    content: string;
+    relatedOrderId?: string;
+    isRead: boolean;
+    createdAt: string;
+}
+
 export interface Customer {
     id: string;
     companyName: string;

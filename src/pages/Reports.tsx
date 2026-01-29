@@ -1,19 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { 
     Calendar, DollarSign, Package, FileText, Filter, 
     BarChart2, PieChart, TrendingUp, AlertCircle, CheckCircle2,
-    Trash2, Factory
+    Trash2, Factory, MessageCircle, X
 } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
+import { useMessages } from '../hooks/useMessages';
+import { useAuth } from '../context/AuthContext';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
-import type { Shift, Order } from '../types';
+import type { Shift, Order, Message } from '../types';
 
 export default function Reports() {
     const { orders } = useOrders();
+    const { fetchAllMessages, deleteMessage } = useMessages();
+    const { user } = useAuth();
+    
     const [shifts, setShifts] = useState<Shift[]>([]);
-    const [activeTab, setActiveTab] = useState<'monthly' | 'monthly-price' | 'detailed' | 'production'>('monthly');
+    const [messages, setMessages] = useState<Message[]>([]);
+    const [activeTab, setActiveTab] = useState<'monthly' | 'monthly-price' | 'detailed' | 'production' | 'messages'>('monthly');
+    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
     
     // States for filters
     const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -28,6 +35,23 @@ export default function Reports() {
     const [showCustomer, setShowCustomer] = useState(true);
     const [showProduct, setShowProduct] = useState(true);
 
+    // Group messages by thread (Moved to top level to follow Rules of Hooks)
+    const messageThreads = useMemo(() => {
+        const grouped: Record<string, Message[]> = {};
+        messages.forEach(m => {
+            if (!grouped[m.threadId]) {
+                grouped[m.threadId] = [];
+            }
+            grouped[m.threadId].push(m);
+        });
+        // Sort by latest message
+        return Object.entries(grouped).sort(([, a], [, b]) => {
+            const lastA = new Date(a[0].createdAt).getTime();
+            const lastB = new Date(b[0].createdAt).getTime();
+            return lastB - lastA;
+        });
+    }, [messages]);
+
     useEffect(() => {
         fetch('/api/shifts')
             .then(res => res.json())
@@ -36,6 +60,15 @@ export default function Reports() {
             })
             .catch(console.error);
     }, []);
+
+    // Fetch messages when tab is active
+    useEffect(() => {
+        if (activeTab === 'messages') {
+            fetchAllMessages()
+                .then(setMessages)
+                .catch(console.error);
+        }
+    }, [activeTab]);
 
     // Filter Helpers
     const getOrdersInMonth = () => {
@@ -72,6 +105,119 @@ export default function Reports() {
         });
     };
 
+    const renderMessagesReport = () => {
+        const handleDelete = async (e: React.MouseEvent, id: string) => {
+            e.stopPropagation();
+            if (window.confirm('Bu mesajı silmek istediğinize emin misiniz?')) {
+                try {
+                    await deleteMessage(id);
+                    setMessages(prev => prev.filter(m => m.id !== id));
+                } catch (error) {
+                    console.error('Failed to delete message:', error);
+                    alert('Mesaj silinirken bir hata oluştu.');
+                }
+            }
+        };
+
+        return (
+            <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+                        <h3 className="font-semibold text-slate-800">Tüm Mesajlaşmalar</h3>
+                    </div>
+                    <div className="divide-y divide-slate-200">
+                        {messageThreads.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500">
+                                Kayıtlı mesaj bulunamadı.
+                            </div>
+                        ) : (
+                            messageThreads.map(([threadId, msgs]) => {
+                                const lastMsg = msgs[0];
+                                const participants = Array.from(new Set(msgs.flatMap(m => [m.senderName, m.recipientName]))).join(', ');
+                                
+                                return (
+                                    <div 
+                                        key={threadId}
+                                        onClick={() => setSelectedThreadId(threadId)}
+                                        className="p-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <div className="font-medium text-slate-900">{participants}</div>
+                                            <div className="text-xs text-slate-500">
+                                                {format(new Date(lastMsg.createdAt), 'dd MMM yyyy HH:mm', { locale: tr })}
+                                            </div>
+                                        </div>
+                                        <div className="text-sm text-slate-600 font-medium mb-1">
+                                            {lastMsg.subject || '(Konusuz)'}
+                                        </div>
+                                        <div className="text-sm text-slate-500 line-clamp-1">
+                                            {lastMsg.content}
+                                        </div>
+                                        <div className="mt-2 text-xs text-slate-400">
+                                            Toplam {msgs.length} mesaj
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {/* Message Detail Popup */}
+                {selectedThreadId && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[600px] flex flex-col overflow-hidden">
+                            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                                <h3 className="font-bold text-slate-800">Mesaj Detayları</h3>
+                                <button 
+                                    onClick={() => setSelectedThreadId(null)}
+                                    className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-colors"
+                                    title="Kapat"
+                                    aria-label="Kapat"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+                                {messages
+                                    .filter(m => m.threadId === selectedThreadId)
+                                    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                                    .map((msg) => (
+                                        <div key={msg.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group">
+                                            <button
+                                                onClick={(e) => handleDelete(e, msg.id)}
+                                                className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                                                title="Mesajı Sil"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                            <div className="flex justify-between items-start mb-2 pr-8">
+                                                <div>
+                                                    <span className="font-semibold text-indigo-600">{msg.senderName}</span>
+                                                    <span className="text-slate-400 mx-2">→</span>
+                                                    <span className="font-semibold text-slate-700">{msg.recipientName}</span>
+                                                </div>
+                                                <span className="text-xs text-slate-400">
+                                                    {format(new Date(msg.createdAt), 'dd MMM HH:mm', { locale: tr })}
+                                                </span>
+                                            </div>
+                                            {msg.subject && <div className="font-medium text-sm text-slate-800 mb-2">{msg.subject}</div>}
+                                            <div className="text-sm text-slate-600 whitespace-pre-wrap">{msg.content}</div>
+                                            {msg.relatedOrderId && (
+                                                <div className="mt-2 inline-block px-2 py-1 bg-slate-100 text-slate-500 text-xs rounded border border-slate-200">
+                                                    Sipariş: #{msg.relatedOrderId.slice(0, 8)}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     // Render Functions
     const renderMonthlyReport = (withPrices: boolean) => {
         const monthOrders = getOrdersInMonth();
@@ -92,6 +238,8 @@ export default function Reports() {
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
                         className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                        title="Ay Seçimi"
+                        aria-label="Ay Seçimi"
                     />
                 </div>
 
@@ -208,6 +356,8 @@ export default function Reports() {
                             value={dateRange.start}
                             onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                             className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                            title="Başlangıç Tarihi"
+                            aria-label="Başlangıç Tarihi"
                         />
                     </div>
                     <div>
@@ -217,6 +367,8 @@ export default function Reports() {
                             value={dateRange.end}
                             onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                             className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                            title="Bitiş Tarihi"
+                            aria-label="Bitiş Tarihi"
                         />
                     </div>
                     
@@ -336,6 +488,7 @@ export default function Reports() {
                             value={dateRange.start}
                             onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                             className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                            title="Başlangıç Tarihi"
                         />
                     </div>
                     <div>
@@ -345,6 +498,7 @@ export default function Reports() {
                             value={dateRange.end}
                             onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                             className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                            title="Bitiş Tarihi"
                         />
                     </div>
                 </div>
@@ -445,6 +599,16 @@ export default function Reports() {
                 >
                     Üretim Raporu
                 </button>
+                {user?.roleName === 'Admin' && (
+                    <button
+                        onClick={() => setActiveTab('messages')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                            activeTab === 'messages' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        Mesajlar
+                    </button>
+                )}
             </div>
 
             <div className="min-h-[400px]">
@@ -452,6 +616,7 @@ export default function Reports() {
                 {activeTab === 'monthly-price' && renderMonthlyReport(true)}
                 {activeTab === 'detailed' && renderDetailedReport()}
                 {activeTab === 'production' && renderProductionReport()}
+                {activeTab === 'messages' && renderMessagesReport()}
             </div>
         </div>
     );
