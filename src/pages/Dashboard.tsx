@@ -4,8 +4,6 @@ import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import {
-    AreaChart,
-    Area,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -15,8 +13,7 @@ import {
     Pie,
     Cell,
     BarChart,
-    Bar,
-    Legend
+    Bar
 } from 'recharts';
 import { useMemo } from 'react';
 
@@ -127,18 +124,18 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 
                 {/* Status Distribution */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Activity className="w-5 h-5 text-blue-500" />
                         Sipariş Durumları
                     </h3>
-                    <div className="h-96">
+                    <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 40 }}>
+                            <PieChart margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                                 <Pie
                                     data={statusData}
                                     cx="50%"
-                                    cy="45%"
+                                    cy="50%"
                                     innerRadius={60}
                                     outerRadius={100}
                                     fill="#8884d8"
@@ -150,14 +147,22 @@ export default function Dashboard() {
                                     ))}
                                 </Pie>
                                 <Tooltip />
-                                <Legend 
-                                    verticalAlign="bottom" 
-                                    height={40} 
-                                    iconType="circle" 
-                                    wrapperStyle={{ paddingTop: '20px', paddingBottom: '10px' }}
-                                />
                             </PieChart>
                         </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Custom Legend */}
+                    <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-3">
+                        {statusData.map((entry, index) => (
+                            <div key={index} className="flex items-center gap-2 text-sm">
+                                <div 
+                                    className="w-3 h-3 rounded-full flex-shrink-0" 
+                                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                />
+                                <span className="text-slate-600 font-medium">{entry.name}</span>
+                                <span className="text-slate-400 text-xs">({entry.value})</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
 
