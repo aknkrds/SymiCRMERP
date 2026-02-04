@@ -110,7 +110,7 @@ export function Sidebar() {
                 
                 {isOpen && (
                     <div className="px-3 py-2 mt-4 text-xs text-slate-600 text-center border-t border-slate-800 pt-4">
-                        Symi CRM v.0.9
+                        Symi CRM v9.0.1
                     </div>
                 )}
             </div>
