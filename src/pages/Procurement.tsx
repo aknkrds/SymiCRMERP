@@ -32,7 +32,8 @@ export default function Procurement() {
     const procurementOrders = orders.filter(o => 
         o.status === 'supply_design_process' || 
         o.status === 'design_approved' || 
-        o.status === 'supply_waiting'
+        o.status === 'supply_waiting' ||
+        o.status === 'offer_accepted'
     );
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);

@@ -34,10 +34,10 @@ export function DepartmentTasks() {
             case 'Satış':
                 return ['created', 'offer_sent', 'offer_cancelled'];
             case 'Tasarımcı':
-                return ['design_waiting'];
+                return ['design_waiting', 'supply_design_process', 'offer_accepted'];
             case 'Tedarik':
             case 'Matbaa':
-                return ['supply_waiting'];
+                return ['supply_waiting', 'supply_design_process', 'offer_accepted'];
             case 'Fabrika Müdürü':
             case 'Üretim':
                 return ['production_planned', 'production_started'];
