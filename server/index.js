@@ -625,6 +625,36 @@ app.post('/api/planning/weekly', (req, res) => {
   }
 });
 
+app.put('/api/planning/weekly/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { planData } = req.body;
+    
+    const stmt = db.prepare(`
+      UPDATE weekly_plans 
+      SET planData = ?
+      WHERE id = ?
+    `);
+    
+    stmt.run(JSON.stringify(planData), id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Plan update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/planning/weekly/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const stmt = db.prepare('DELETE FROM weekly_plans WHERE id = ?');
+    stmt.run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- STOCK ITEMS ---
 
 app.get('/api/stock-items', (req, res) => {

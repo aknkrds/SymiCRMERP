@@ -67,6 +67,7 @@ export default function Planning() {
   const [selectedDay, setSelectedDay] = useState<{name: string, key: string} | null>(null);
   const [historyPlans, setHistoryPlans] = useState<WeeklyPlan[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
 
   // New states for adding orders
   const [planData, setPlanData] = useState<Record<string, PlanItem[]>>({});
@@ -74,6 +75,38 @@ export default function Planning() {
   const [selectedCell, setSelectedCell] = useState<{rowKey: string, machine: string} | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Fetch current week's plan on mount
+  useEffect(() => {
+    const fetchCurrentPlan = async () => {
+        try {
+            const res = await fetch('/api/planning/weekly');
+            const plans = await res.json();
+            
+            // Calculate current week start
+            const curr = new Date();
+            const first = curr.getDate() - curr.getDay() + 1;
+            const firstDay = new Date(curr.setDate(first));
+            firstDay.setHours(0, 0, 0, 0);
+            
+            // Find plan matching this week
+            const currentPlan = plans.find((p: WeeklyPlan) => {
+                const planStart = new Date(p.weekStartDate);
+                planStart.setHours(0, 0, 0, 0);
+                // Check if dates are close enough (ignoring time)
+                return Math.abs(planStart.getTime() - firstDay.getTime()) < 24 * 60 * 60 * 1000;
+            });
+
+            if (currentPlan) {
+                setPlanData(currentPlan.planData);
+                setCurrentPlanId(currentPlan.id);
+            }
+        } catch (error) {
+            console.error('Error fetching initial plan:', error);
+        }
+    };
+    fetchCurrentPlan();
+  }, []);
 
   // Fetch history when modal opens
   useEffect(() => {
@@ -92,9 +125,7 @@ export default function Planning() {
     }
   }, [isHistoryModalOpen]);
 
-  const handleSaveAndClear = async () => {
-    if (!confirm('Haftalık plan kaydedilip temizlenecek. Onaylıyor musunuz?')) return;
-
+  const handleSave = async () => {
     // Calculate start and end of current week (assuming currentWeek is within the week)
     const curr = new Date(currentWeek);
     const first = curr.getDate() - curr.getDay() + 1; // First day is the day of the month - the day of the week
@@ -104,8 +135,16 @@ export default function Planning() {
     const lastDay = new Date(curr.setDate(last));
 
     try {
-        const response = await fetch('/api/planning/weekly', {
-            method: 'POST',
+        let url = '/api/planning/weekly';
+        let method = 'POST';
+        
+        if (currentPlanId) {
+            url = `/api/planning/weekly/${currentPlanId}`;
+            method = 'PUT';
+        }
+
+        const response = await fetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 weekStartDate: firstDay.toISOString(),
@@ -115,8 +154,10 @@ export default function Planning() {
         });
 
         if (response.ok) {
+            const resData = await response.json();
+            if (resData.id) setCurrentPlanId(resData.id); // Update ID if it was a new creation
             alert('Haftalık plan başarıyla kaydedildi.');
-            setPlanData({}); // Clear local state
+            // Do NOT clear planData
         } else {
             alert('Plan kaydedilirken bir hata oluştu.');
         }
@@ -228,11 +269,11 @@ export default function Planning() {
                     Geçmiş Haftalık Planlar
                 </button>
                 <button 
-                    onClick={handleSaveAndClear}
+                    onClick={handleSave}
                     className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
                 >
                     <Save size={20} />
-                    Haftalık Planı Kaydet ve Temizle
+                    Haftalık Planı Kaydet
                 </button>
             </div>
         </div>
@@ -442,9 +483,39 @@ export default function Planning() {
                                                 </p>
                                             </div>
                                         </div>
-                                        <button className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
-                                            Görüntüle
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    setPlanData(plan.planData);
+                                                    setCurrentPlanId(plan.id);
+                                                    setIsHistoryModalOpen(false);
+                                                }}
+                                                className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                                            >
+                                                Görüntüle
+                                            </button>
+                                            <button 
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if(!confirm('Bu planı silmek istediğinize emin misiniz?')) return;
+                                                    try {
+                                                        await fetch(`/api/planning/weekly/${plan.id}`, { method: 'DELETE' });
+                                                        setHistoryPlans(prev => prev.filter(p => p.id !== plan.id));
+                                                        if (currentPlanId === plan.id) {
+                                                            setCurrentPlanId(null);
+                                                            setPlanData({});
+                                                        }
+                                                    } catch(err) {
+                                                        console.error('Delete failed', err);
+                                                        alert('Silme işlemi başarısız oldu.');
+                                                    }
+                                                }}
+                                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                title="Planı Sil"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
