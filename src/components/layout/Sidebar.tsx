@@ -16,7 +16,7 @@ export function Sidebar() {
         { icon: FileText, label: 'Siparişler', to: '/orders', permission: 'orders' },
         { icon: Palette, label: 'Tasarım', to: '/design', permission: 'design' },
         { icon: ShoppingCart, label: 'Tedarik', to: '/procurement', permission: 'procurement' },
-        { icon: Calendar, label: 'Planlama', to: '/planning', permission: 'production' },
+        { icon: Calendar, label: 'Planlama', to: '/planning', permission: 'planning' },
         { icon: Factory, label: 'Üretim', to: '/production', permission: 'production' },
         { icon: Calculator, label: 'Muhasebe', to: '/accounting', permission: 'accounting' },
         { icon: Truck, label: 'Sevkiyat', to: '/logistics', permission: 'logistics' },
@@ -32,7 +32,7 @@ export function Sidebar() {
         )}>
             <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700">
                 {isOpen && <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Symi</h1>}
-                <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg">
+                <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg" title="Toggle Menu">
                     <Menu size={20} />
                 </button>
             </div>

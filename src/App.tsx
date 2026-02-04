@@ -73,7 +73,7 @@ function App() {
               </ProtectedRoute>
             } />
             <Route path="/planning" element={
-              <ProtectedRoute permission="production">
+              <ProtectedRoute permission="planning">
                 <Planning />
               </ProtectedRoute>
             } />

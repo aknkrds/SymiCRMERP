@@ -67,6 +67,7 @@ const Settings = () => {
     { id: 'recipes', label: 'Reçeteler' },
     { id: 'orders', label: 'Siparişler' },
     { id: 'design', label: 'Tasarım' },
+    { id: 'planning', label: 'Planlama' },
     { id: 'procurement', label: 'Tedarik' },
     { id: 'production', label: 'Üretim' },
     { id: 'logistics', label: 'Sevkiyat' },

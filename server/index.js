@@ -1366,6 +1366,11 @@ app.patch('/api/users/:id', (req, res) => {
     const { id } = req.params;
     const updates = req.body;
     
+    // Remove fields that strictly shouldn't be updated or don't exist in the table
+    delete updates.roleName; // Derived field from join
+    delete updates.id; // Primary key
+    delete updates.createdAt; // Creation timestamp
+    
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
     
