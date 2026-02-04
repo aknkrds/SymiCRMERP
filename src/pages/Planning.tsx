@@ -303,7 +303,6 @@ export default function Planning() {
             </div>
         </div>
 
-
         {/* Add Order Modal */}
         <Modal
             isOpen={isAddModalOpen}
@@ -474,3 +473,6 @@ export default function Planning() {
                 </div>
             </div>
         )}
+    </div>
+  );
+}
