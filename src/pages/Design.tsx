@@ -15,8 +15,7 @@ export default function Design() {
     
     // Filter orders waiting for design
     const designOrders = orders.filter(o => 
-        (o.status === 'supply_design_process' || o.status === 'design_waiting' || o.status === 'offer_accepted') && 
-        o.designStatus !== 'completed'
+        o.status === 'supply_design_process' || o.status === 'design_waiting' || o.status === 'offer_accepted'
     );
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
