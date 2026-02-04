@@ -72,6 +72,7 @@ export default function Planning() {
   // New states for adding orders
   const [planData, setPlanData] = useState<Record<string, PlanItem[]>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{rowKey: string, machine: string} | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -125,7 +126,7 @@ export default function Planning() {
     }
   }, [isHistoryModalOpen]);
 
-  const handleSave = async () => {
+  const handleSave = async (shouldClear = false) => {
     // Calculate start and end of current week (assuming currentWeek is within the week)
     const curr = new Date(currentWeek);
     const first = curr.getDate() - curr.getDay() + 1; // First day is the day of the month - the day of the week
@@ -157,14 +158,37 @@ export default function Planning() {
             const resData = await response.json();
             if (resData.id) setCurrentPlanId(resData.id); // Update ID if it was a new creation
             alert('Haftalık plan başarıyla kaydedildi.');
-            // Do NOT clear planData
+            
+            if (shouldClear) {
+                setPlanData({});
+                // Note: We might want to keep currentPlanId if we want to update the SAME plan to be empty,
+                // but usually "clearing the table" means starting fresh or just emptying the view.
+                // If we want to save the empty state, we just did (if planData was empty).
+                // But here we save THEN clear. So the saved version has data, and the view is now empty.
+                // If the user hits save again, it will update the plan to be empty.
+            }
+            return true;
         } else {
             alert('Plan kaydedilirken bir hata oluştu.');
+            return false;
         }
     } catch (error) {
         console.error('Error saving plan:', error);
         alert('Plan kaydedilirken bir hata oluştu.');
+        return false;
     }
+  };
+
+  const handleSaveAndClear = async () => {
+    const success = await handleSave(true);
+    if (success) {
+        setIsClearModalOpen(false);
+    }
+  };
+
+  const handleClearOnly = () => {
+    setPlanData({});
+    setIsClearModalOpen(false);
   };
 
   const handleDayClick = (dayName: string, rowKey: string) => {
@@ -269,11 +293,18 @@ export default function Planning() {
                     Geçmiş Haftalık Planlar
                 </button>
                 <button 
-                    onClick={handleSave}
+                    onClick={() => handleSave(false)}
                     className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
                 >
                     <Save size={20} />
                     Haftalık Planı Kaydet
+                </button>
+                <button 
+                    onClick={() => setIsClearModalOpen(true)}
+                    className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors shadow-sm font-medium"
+                >
+                    <Trash2 size={20} />
+                    Tabloyu Temizle
                 </button>
             </div>
         </div>
@@ -441,6 +472,51 @@ export default function Planning() {
                         className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Seçilenleri Ekle ({selectedOrderIds.length})
+                    </button>
+                </div>
+            </div>
+        </Modal>
+
+        {/* Clear Confirmation Modal */}
+        <Modal
+            isOpen={isClearModalOpen}
+            onClose={() => setIsClearModalOpen(false)}
+            title="Tabloyu Temizle"
+            size="md"
+        >
+            <div className="space-y-6">
+                <div className="text-center space-y-2">
+                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+                        <Trash2 size={24} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">Bilgileri kaydettiniz mi?</h3>
+                    <p className="text-slate-500">
+                        Tablodaki tüm veriler temizlenecek. Kaydetmeden temizlerseniz verileriniz kaybolabilir.
+                    </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                    <button
+                        onClick={handleSaveAndClear}
+                        className="w-full py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                        <Save size={18} />
+                        Kaydet ve Temizle
+                    </button>
+                    
+                    <button
+                        onClick={handleClearOnly}
+                        className="w-full py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                        <Trash2 size={18} />
+                        Temizle (Kaydetmeden)
+                    </button>
+
+                    <button
+                        onClick={() => setIsClearModalOpen(false)}
+                        className="w-full py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                    >
+                        İptal
                     </button>
                 </div>
             </div>
