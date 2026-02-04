@@ -15,7 +15,8 @@ const PROCUREMENT_STATUSES = {
     supplied: 'Hammadde Tedarik Edildi',
     printing_started: 'Matbaa Baskısı Yapılıyor',
     printing_completed: 'Matbaa Baskısı Yapıldı',
-    shipped_to_production: 'Üretim Sevkiyatı Yapıldı'
+    shipped_to_production: 'Üretim Sevkiyatı Yapıldı',
+    completed: 'Tedarik Tamamlandı'
 };
 
 const STOCK_UNITS = [
@@ -28,13 +29,18 @@ export default function Procurement() {
     const { stockItems, addStockItem, deleteStockItem } = useStock();
     
     // Filter orders that are design approved (waiting for procurement)
-    const procurementOrders = orders.filter(o => o.status === 'design_approved' || o.status === 'supply_waiting');
+    const procurementOrders = orders.filter(o => 
+        o.status === 'supply_design_process' || 
+        o.status === 'design_approved' || 
+        o.status === 'supply_waiting'
+    );
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
     
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+    const [productJobDetails, setProductJobDetails] = useState<any>(null);
 
     const [isAddStockModalOpen, setIsAddStockModalOpen] = useState(false);
     const [newStockItem, setNewStockItem] = useState<StockItemFormData>({
@@ -54,10 +60,19 @@ export default function Procurement() {
         setIsOrderModalOpen(true);
     };
 
-    const handleViewProduct = (productId: string) => {
+    const handleViewProduct = (productId: string, order?: Order) => {
         const product = products.find(p => p.id === productId);
         if (product) {
             setSelectedProduct(product);
+            if (order) {
+                setProductJobDetails({
+                    jobSize: order.jobSize,
+                    boxSize: order.boxSize,
+                    efficiency: order.efficiency
+                });
+            } else {
+                setProductJobDetails(null);
+            }
             setIsProductModalOpen(true);
         }
     };
@@ -66,8 +81,8 @@ export default function Procurement() {
         // Update procurement status
         await updateOrder(orderId, { procurementStatus: status } as any);
 
-        // If status is "shipped_to_production", update main status to "production_planned"
-        if (status === 'shipped_to_production') {
+        // If status is "shipped_to_production" or "completed", update main status to "production_planned"
+        if (status === 'shipped_to_production' || status === 'completed') {
             await updateStatus(orderId, 'production_planned');
         }
     };
@@ -183,6 +198,17 @@ export default function Procurement() {
                                                     <Network size={16} />
                                                     Tedarik
                                                 </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm('Tedarik işlemleri tamamlandı olarak işaretlensin mi? Bu işlem siparişi üretime aktaracaktır.')) {
+                                                            handleProcurementStatusChange(order.id, 'completed');
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-2 px-3 py-1.5 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
+                                                >
+                                                    <CheckCircle2 size={16} />
+                                                    Tamamlandı
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -277,6 +303,27 @@ export default function Procurement() {
                             </div>
                         </div>
 
+                        {/* Job Details Section */}
+                        {(selectedOrder.jobSize || selectedOrder.boxSize || selectedOrder.efficiency) && (
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <h3 className="font-medium text-blue-800 mb-3 border-b border-blue-200 pb-2">İş Bilgileri (Tasarım)</h3>
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                    <div>
+                                        <label className="block text-xs font-medium text-blue-500 mb-1">İşin Ebadı</label>
+                                        <p className="font-medium text-blue-900">{selectedOrder.jobSize || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-blue-500 mb-1">Kutu Boyutu</label>
+                                        <p className="font-medium text-blue-900">{selectedOrder.boxSize || '-'}</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-blue-500 mb-1">Verim</label>
+                                        <p className="font-medium text-blue-900">{selectedOrder.efficiency || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <h3 className="font-medium text-slate-800 mb-3 border-b border-slate-200 pb-2">Ürünler</h3>
                             <div className="space-y-3">
@@ -288,7 +335,7 @@ export default function Procurement() {
                                         </div>
                                         {item.productId && (
                                             <button
-                                                onClick={() => handleViewProduct(item.productId!)}
+                                                onClick={() => handleViewProduct(item.productId!, selectedOrder)}
                                                 className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 bg-white rounded border border-indigo-100 shadow-sm"
                                             >
                                                 <Eye size={14} />
@@ -309,7 +356,7 @@ export default function Procurement() {
                 onClose={() => setIsProductModalOpen(false)}
                 title="Ürün Detayı"
             >
-                {selectedProduct && <ProductDetail product={selectedProduct} />}
+                {selectedProduct && <ProductDetail product={selectedProduct} jobDetails={productJobDetails} onClose={() => setIsProductModalOpen(false)} />}
             </Modal>
 
             {/* Procurement Stock Selection Modal */}

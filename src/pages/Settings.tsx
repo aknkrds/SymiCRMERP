@@ -15,10 +15,12 @@ import {
   Upload,
   Database,
   AlertTriangle,
-  Wand2
+  Wand2,
+  Box
 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
+import ProductMoldSettings from '../components/settings/ProductMoldSettings';
 
 interface Role {
   id: string;
@@ -37,7 +39,7 @@ interface User {
 }
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup'>('users');
+  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup' | 'molds'>('users');
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -347,6 +349,17 @@ const Settings = () => {
             Roller ve İzinler
           </button>
           <button
+            onClick={() => setActiveTab('molds')}
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+              activeTab === 'molds'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Box size={18} />
+            Ürün Kalıpları
+          </button>
+          <button
             onClick={() => setActiveTab('backup')}
             className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
               activeTab === 'backup'
@@ -517,6 +530,8 @@ const Settings = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'molds' && <ProductMoldSettings />}
 
           {activeTab === 'backup' && (
             <div className="space-y-6">

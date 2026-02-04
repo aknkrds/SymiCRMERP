@@ -588,6 +588,41 @@ app.post('/api/notifications/mark-read', (req, res) => {
   }
 });
 
+// --- PLANNING ---
+
+app.get('/api/planning/weekly', (req, res) => {
+  try {
+    const stmt = db.prepare('SELECT * FROM weekly_plans ORDER BY weekStartDate DESC');
+    const plans = stmt.all();
+    const parsedPlans = plans.map(p => ({
+      ...p,
+      planData: JSON.parse(p.planData)
+    }));
+    res.json(parsedPlans);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/planning/weekly', (req, res) => {
+  try {
+    const { weekStartDate, weekEndDate, planData } = req.body;
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    
+    const stmt = db.prepare(`
+      INSERT INTO weekly_plans (id, weekStartDate, weekEndDate, planData, createdAt)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(id, weekStartDate, weekEndDate, JSON.stringify(planData), createdAt);
+    res.json({ success: true, id });
+  } catch (error) {
+    console.error('Plan saving error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- STOCK ITEMS ---
 
 app.get('/api/stock-items', (req, res) => {
@@ -691,6 +726,7 @@ const parseProduct = (product) => {
     windowDetails: product.windowDetails ? JSON.parse(product.windowDetails) : undefined,
     lidDetails: product.lidDetails ? JSON.parse(product.lidDetails) : undefined,
     images: product.images ? JSON.parse(product.images) : undefined,
+    inks: product.inks ? JSON.parse(product.inks) : undefined,
   };
 };
 
@@ -708,31 +744,45 @@ app.get('/api/products', (req, res) => {
 app.post('/api/products', (req, res) => {
   try {
     const { 
-      id, code, description, dimensions, features, 
-      details, windowDetails, lidDetails, images, createdAt 
+      id, name, productType, boxShape, dimensions, features, 
+      details, windowDetails, lidDetails, images, inks, createdAt 
     } = req.body;
+
+    // Generate Auto Increment Code
+    const products = db.prepare("SELECT code FROM products WHERE code LIKE 'GMP%'").all();
+    let maxNum = 0;
+    for (const p of products) {
+      const numPart = parseInt(p.code.replace('GMP', ''), 10);
+      if (!isNaN(numPart) && numPart > maxNum) {
+        maxNum = numPart;
+      }
+    }
+    const newCode = `GMP${String(maxNum + 1).padStart(2, '0')}`;
 
     const stmt = db.prepare(`
       INSERT INTO products (
-        id, code, description, dimensions, features, 
-        details, windowDetails, lidDetails, images, createdAt
+        id, code, name, productType, boxShape, dimensions, features, 
+        details, windowDetails, lidDetails, images, inks, createdAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       id, 
-      code, 
-      description, 
+      newCode, 
+      name,
+      productType,
+      boxShape, 
       JSON.stringify(dimensions), 
       JSON.stringify(features), 
       details, 
       windowDetails ? JSON.stringify(windowDetails) : null, 
       lidDetails ? JSON.stringify(lidDetails) : null, 
       images ? JSON.stringify(images) : null, 
+      inks ? JSON.stringify(inks) : null,
       createdAt
     );
-    res.status(201).json(req.body);
+    res.status(201).json({ ...req.body, code: newCode });
   } catch (error) {
     console.error('POST /products error:', error);
     res.status(500).json({ error: error.message });
@@ -745,7 +795,7 @@ app.patch('/api/products/:id', (req, res) => {
     const updates = req.body;
     
     // JSON fields handling
-    const jsonFields = ['dimensions', 'features', 'windowDetails', 'lidDetails', 'images'];
+    const jsonFields = ['dimensions', 'features', 'windowDetails', 'lidDetails', 'images', 'inks'];
     jsonFields.forEach(field => {
       if (updates[field]) {
         updates[field] = JSON.stringify(updates[field]);
@@ -821,16 +871,18 @@ app.post('/api/orders', (req, res) => {
     const { 
       id, customerId, customerName, items, currency, 
       subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
-      assignedUserId, assignedUserName, assignedRoleName
+      assignedUserId, assignedUserName, assignedRoleName,
+      paymentMethod, maturityDays
     } = req.body;
 
     const stmt = db.prepare(`
       INSERT INTO orders (
         id, customerId, customerName, items, currency, 
         subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
-        assignedUserId, assignedUserName, assignedRoleName
+        assignedUserId, assignedUserName, assignedRoleName,
+        paymentMethod, maturityDays
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -848,7 +900,9 @@ app.post('/api/orders', (req, res) => {
       createdAt,
       assignedUserId || null,
       assignedUserName || null,
-      assignedRoleName || null
+      assignedRoleName || null,
+      paymentMethod || null,
+      maturityDays || null
     );
     res.status(201).json(req.body);
   } catch (error) {
@@ -893,9 +947,37 @@ app.patch('/api/orders/:id', (req, res) => {
 
         switch (updates.status) {
             case 'offer_accepted':
+                // Legacy support if needed, but we now move to supply_design_process
                 targetRoleName = 'Tasarımcı';
                 notifTitle = 'Yeni Tasarım İş Emri';
                 notifMessage = `Sipariş #${id.slice(0,8)} için tasarım onayı bekleniyor.`;
+                break;
+            case 'supply_design_process':
+                // Notify Designer
+                const designRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Tasarımcı');
+                if (designRole) {
+                    createNotification({
+                    roleId: designRole.id,
+                    title: 'Yeni Tasarım İş Emri',
+                    message: `Sipariş #${id.slice(0,8)} için işlem bekleniyor.`,
+                    type: 'task',
+                    relatedId: id
+                    });
+                }
+                
+                // Notify Procurement
+                let supplyRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Tedarik');
+                if (!supplyRole) supplyRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
+                
+                if (supplyRole) {
+                    createNotification({
+                    roleId: supplyRole.id,
+                    title: 'Yeni Tedarik İş Emri',
+                    message: `Sipariş #${id.slice(0,8)} için işlem bekleniyor.`,
+                    type: 'task',
+                    relatedId: id
+                    });
+                }
                 break;
             case 'design_approved':
                 targetRoleName = 'Tedarik'; // Or 'Matbaa' depending on setup, user said 'Tedarik'
@@ -1349,6 +1431,125 @@ app.delete('/api/roles/:id', (req, res) => {
   }
 });
 
+// --- PRODUCT MOLDS ---
+
+// Varsayılan kalıp ölçüleri (kullanıcının verdiği tüm ölçüler)
+const DEFAULT_MOLDS = [
+  // Perçinli Kare
+  ...['55x55','75x75','85x85','90x90','100x100','120x120','155x155','190x190','215x215','235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kare', dimensions: d })),
+  // Perçinli Oval
+  ...['60x70','83x103','143x232','200x300'].map(d => ({ productType: 'percinli', boxShape: 'Oval', dimensions: d })),
+  // Perçinli Sekizgen
+  ...['85x110','220x220','190x275'].map(d => ({ productType: 'percinli', boxShape: 'Sekizgen', dimensions: d })),
+  // Perçinli Dikdörtgen
+  ...['45x65','80x120','80x140','90x150','100x75','100x130','110x150','115x190','135x190','140x240','155x195','170x260','180x225','180x240','215x235','200x300'].map(d => ({ productType: 'percinli', boxShape: 'Dikdörtgen', dimensions: d })),
+  // Perçinli Yuvarlak (etiket: Ø)
+  ...[42, 52, 55, 65, 69, 73, 82, 85, 90, 99, 105, 108, 120, 140, 153, 160, 175, 190, 200, 215, 240, 265].map(d => ({ productType: 'percinli', boxShape: 'Yuvarlak', dimensions: String(d), label: `Ø${d}` })),
+  // Perçinli Kalpli
+  ...['90x90','90x90x25','205x190x40','235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kalpli', dimensions: d })),
+  // Perçinli Tepsi
+  { productType: 'percinli', boxShape: 'Tepsi', dimensions: '304x234', label: '304x234' },
+  { productType: 'percinli', boxShape: 'Tepsi', dimensions: '357x272', label: '357x272' },
+  { productType: 'percinli', boxShape: 'Tepsi', dimensions: '362x245', label: '362x245 (Dalgalı)' },
+  { productType: 'percinli', boxShape: 'Tepsi', dimensions: '315x215', label: '315x215' },
+  { productType: 'percinli', boxShape: 'Tepsi', dimensions: '400x400', label: 'Ø400' },
+  // Perçinli Konik
+  ...['130x165x160','130x165x140','90x120x105'].map(d => ({ productType: 'percinli', boxShape: 'Konik', dimensions: d })),
+  // Sıvama Standart
+  ...['90x90x30 - Kalp Şekilli','205x190x40 - Kalp Şekilli','75x205x25','65x205x25 - Fermuarlı','105x205x25 - Fermuarlı','135x200x25 - Fermuarlı','175x215x45','90x80x15','90x80x30','100x100x30','105x105x40','97x58x20','94x58x20','95x120x22','69x45','85x40','99x30','105x40 - Expanded','132x45 - Expanded','O115 - Bardak Altlığı'].map(d => ({ productType: 'sivama', boxShape: 'Standart', dimensions: d })),
+];
+
+// Varsayılan kalıpları veritabanına ekleyen endpoint (kayıt varsa atlar)
+app.post('/api/molds/seed-defaults', (req, res) => {
+  try {
+    const existsStmt = db.prepare('SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1');
+    const insertStmt = db.prepare(`
+      INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    let inserted = 0;
+    let skipped = 0;
+    const now = new Date().toISOString();
+    DEFAULT_MOLDS.forEach(m => {
+      const has = existsStmt.get(m.productType, m.boxShape, m.dimensions);
+      if (has) {
+        skipped++;
+        return;
+      }
+      insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
+      inserted++;
+    });
+    res.json({ success: true, inserted, skipped });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/molds', (req, res) => {
+  try {
+    const { productType, boxShape } = req.query;
+    let query = 'SELECT * FROM product_molds';
+    const params = [];
+    const conditions = [];
+    
+    if (productType) {
+      conditions.push('productType = ?');
+      params.push(productType);
+    }
+    if (boxShape) {
+      conditions.push('boxShape = ?');
+      params.push(boxShape);
+    }
+    
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ' ORDER BY createdAt DESC';
+    
+    const stmt = db.prepare(query);
+    const molds = stmt.all(...params);
+    res.json(molds);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/molds', (req, res) => {
+  try {
+    const { id, productType, boxShape, dimensions, label } = req.body;
+    
+    const stmt = db.prepare(`
+      INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      id || crypto.randomUUID(),
+      productType,
+      boxShape,
+      dimensions,
+      label || null,
+      new Date().toISOString()
+    );
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/molds/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const stmt = db.prepare('DELETE FROM product_molds WHERE id = ?');
+    stmt.run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // API 404 handler
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'API endpoint not found' });
@@ -1361,98 +1562,6 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // match one above, send back React's index.html file.
 app.get(/^(?!\/api).*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
-// --- MESSAGES ENDPOINTS ---
-
-// Get messages for a user (sent or received)
-app.get('/api/messages', (req, res) => {
-    try {
-        const { userId } = req.query;
-        if (!userId) return res.status(400).json({ error: 'User ID required' });
-        
-        // Return all messages where user is sender or recipient
-        // Order by createdAt desc
-        const messages = db.prepare(`
-            SELECT * FROM messages 
-            WHERE senderId = ? OR recipientId = ?
-            ORDER BY createdAt DESC
-        `).all(userId, userId);
-        
-        // Convert isRead to boolean
-        const formattedMessages = messages.map(m => ({
-            ...m,
-            isRead: !!m.isRead
-        }));
-        
-        res.json(formattedMessages);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get ALL messages (Admin only)
-app.get('/api/admin/messages', (req, res) => {
-    try {
-        const messages = db.prepare('SELECT * FROM messages ORDER BY createdAt DESC').all();
-        const formattedMessages = messages.map(m => ({
-            ...m,
-            isRead: !!m.isRead
-        }));
-        res.json(formattedMessages);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Send a new message
-app.post('/api/messages', (req, res) => {
-    try {
-        const { senderId, senderName, recipientId, recipientName, subject, content, relatedOrderId, threadId } = req.body;
-        
-        if (!senderId || !recipientId || !content) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
-        
-        const id = crypto.randomUUID();
-        const newThreadId = threadId || crypto.randomUUID(); // Use existing or create new
-        const createdAt = new Date().toISOString();
-        
-        const stmt = db.prepare(`
-            INSERT INTO messages (id, threadId, senderId, senderName, recipientId, recipientName, subject, content, relatedOrderId, isRead, createdAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-        `);
-        
-        stmt.run(id, newThreadId, senderId, senderName, recipientId, recipientName, subject || '', content, relatedOrderId || null, createdAt);
-        
-        res.status(201).json({ id, threadId: newThreadId, createdAt });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Mark message as read
-app.put('/api/messages/:id/read', (req, res) => {
-    try {
-        const { id } = req.params;
-        const stmt = db.prepare('UPDATE messages SET isRead = 1 WHERE id = ?');
-        stmt.run(id);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Delete message (Admin only)
-app.delete('/api/admin/messages/:id', (req, res) => {
-    try {
-        const { id } = req.params;
-        const stmt = db.prepare('DELETE FROM messages WHERE id = ?');
-        stmt.run(id);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
 });
 
 app.listen(PORT, () => {

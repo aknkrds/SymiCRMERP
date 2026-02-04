@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Package, FileText, Settings, Menu, Palette, ShoppingCart, Factory, Calculator, Truck, CheckCircle, LogOut, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Users, Package, FileText, Settings, Menu, Palette, ShoppingCart, Factory, Calculator, Truck, CheckCircle, LogOut, BarChart2, Calendar } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
@@ -16,6 +16,7 @@ export function Sidebar() {
         { icon: FileText, label: 'Siparişler', to: '/orders', permission: 'orders' },
         { icon: Palette, label: 'Tasarım', to: '/design', permission: 'design' },
         { icon: ShoppingCart, label: 'Tedarik', to: '/procurement', permission: 'procurement' },
+        { icon: Calendar, label: 'Planlama', to: '/planning', permission: 'production' },
         { icon: Factory, label: 'Üretim', to: '/production', permission: 'production' },
         { icon: Calculator, label: 'Muhasebe', to: '/accounting', permission: 'accounting' },
         { icon: Truck, label: 'Sevkiyat', to: '/logistics', permission: 'logistics' },

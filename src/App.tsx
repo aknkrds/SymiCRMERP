@@ -7,6 +7,7 @@ import Orders from './pages/Orders';
 import Design from './pages/Design';
 import Procurement from './pages/Procurement';
 import Production from './pages/Production';
+import Planning from './pages/Planning';
 import Accounting from './pages/Accounting';
 import Logistics from './pages/Logistics';
 import Approvals from './pages/Approvals';
@@ -69,6 +70,11 @@ function App() {
             <Route path="/procurement" element={
               <ProtectedRoute permission="procurement">
                 <Procurement />
+              </ProtectedRoute>
+            } />
+            <Route path="/planning" element={
+              <ProtectedRoute permission="production">
+                <Planning />
               </ProtectedRoute>
             } />
             <Route path="/production" element={

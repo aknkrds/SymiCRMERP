@@ -4,11 +4,37 @@ import { X } from 'lucide-react';
 interface ProductDetailProps {
     product: Product;
     onClose: () => void;
+    jobDetails?: {
+        jobSize?: string;
+        boxSize?: string;
+        efficiency?: string;
+    };
 }
 
-export function ProductDetail({ product, onClose }: ProductDetailProps) {
+export function ProductDetail({ product, onClose, jobDetails }: ProductDetailProps) {
     return (
         <div className="space-y-6">
+            {/* Job Details (if available) */}
+            {jobDetails && (jobDetails.jobSize || jobDetails.boxSize || jobDetails.efficiency) && (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 className="font-medium text-blue-800 mb-2 border-b border-blue-200 pb-2">İş Bilgileri (Tasarım)</h4>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span className="block text-xs font-medium text-blue-500 mb-1">İşin Ebadı</span>
+                            <span className="font-medium text-blue-900">{jobDetails.jobSize || '-'}</span>
+                        </div>
+                        <div>
+                            <span className="block text-xs font-medium text-blue-500 mb-1">Kutu Boyutu</span>
+                            <span className="font-medium text-blue-900">{jobDetails.boxSize || '-'}</span>
+                        </div>
+                        <div>
+                            <span className="block text-xs font-medium text-blue-500 mb-1">Verim</span>
+                            <span className="font-medium text-blue-900">{jobDetails.efficiency || '-'}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Basic Info */}
                 <div className="space-y-4">
@@ -17,49 +43,91 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                         <p className="text-lg font-semibold text-slate-800">{product.code}</p>
                     </div>
                     <div>
-                        <h4 className="text-sm font-medium text-slate-500">Açıklama</h4>
-                        <p className="text-slate-800">{product.description}</p>
+                        <h4 className="text-sm font-medium text-slate-500">Ürün Adı</h4>
+                        <p className="text-slate-800">{product.name || product.description}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <h4 className="text-sm font-medium text-slate-500">Ürün Tipi</h4>
+                            <p className="text-slate-800 capitalize">{product.productType || '-'}</p>
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-medium text-slate-500">Kutu Şekli</h4>
+                            <p className="text-slate-800">{product.boxShape || '-'}</p>
+                        </div>
                     </div>
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Boyutlar (mm)</h4>
                         <p className="text-slate-800">
-                            {product.dimensions.length} x {product.dimensions.width} x {product.dimensions.depth}
+                            {product.dimensions?.length || 0} x {product.dimensions?.width || 0} x {product.dimensions?.depth || 0}
                         </p>
                     </div>
                 </div>
 
-                {/* Features & Details */}
+                {/* Features & Inks */}
                 <div className="space-y-4">
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Özellikler</h4>
                         <div className="flex flex-wrap gap-2 mt-1">
-                            {product.features.hasLid && (
+                            {product.features?.hasLid && (
                                 <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
                             )}
-                            {product.features.hasWindow && (
+                            {product.features?.hasWindow && (
                                 <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
                             )}
-                            {product.features.gofre && (
+                            {product.features?.gofre && (
                                 <span className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full">Gofre</span>
                             )}
-                            {product.features.foodGrade && (
-                                <span className="px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">Gıda İşlemi</span>
-                            )}
-                            {product.features.extras && (
+                            {product.features?.extras && (
                                 <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full">{product.features.extras}</span>
                             )}
                         </div>
                     </div>
 
-                    {product.features.colors && product.features.colors.length > 0 && (
+                    {/* Inks Section */}
+                    {product.inks && (
                         <div>
-                            <h4 className="text-sm font-medium text-slate-500">Renkler</h4>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                                {product.features.colors.map((color, idx) => (
-                                    <span key={idx} className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-100">
-                                        {color}
-                                    </span>
-                                ))}
+                            <h4 className="text-sm font-medium text-slate-500">Mürekkepler & Baskı</h4>
+                            <div className="space-y-2 mt-1">
+                                <div className="flex flex-wrap gap-2">
+                                    {product.inks.cmyk && <span className="px-2 py-1 bg-cyan-50 text-cyan-700 text-xs rounded-full">CMYK</span>}
+                                    {product.inks.white && <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full">Beyaz</span>}
+                                    {product.inks.mold && <span className="px-2 py-1 bg-orange-50 text-orange-700 text-xs rounded-full">Kalıp</span>}
+                                </div>
+                                
+                                {product.inks.pantones && product.inks.pantones.length > 0 && (
+                                    <div className="text-sm">
+                                        <span className="text-slate-500">Pantone: </span>
+                                        <span className="text-slate-800">{product.inks.pantones.join(', ')}</span>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                    {product.inks.goldLak?.has && (
+                                        <>
+                                            <span className="text-slate-500">Gold Lak:</span>
+                                            <span className="text-slate-800">{product.inks.goldLak.code || 'Var'}</span>
+                                        </>
+                                    )}
+                                    {product.inks.emaye?.has && (
+                                        <>
+                                            <span className="text-slate-500">Emaye:</span>
+                                            <span className="text-slate-800">{product.inks.emaye.code || 'Var'}</span>
+                                        </>
+                                    )}
+                                    {product.inks.astar?.has && (
+                                        <>
+                                            <span className="text-slate-500">Astar:</span>
+                                            <span className="text-slate-800">{product.inks.astar.code || 'Var'}</span>
+                                        </>
+                                    )}
+                                    {product.inks.silverLak?.has && (
+                                        <>
+                                            <span className="text-slate-500">Silver Lak:</span>
+                                            <span className="text-slate-800">{product.inks.silverLak.code || 'Var'}</span>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -75,7 +143,7 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
 
             {/* Specific Details (Window/Lid/Gofre) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
-                {product.features.hasWindow && product.windowDetails && (
+                {product.features?.hasWindow && product.windowDetails && (
                     <div className="bg-slate-50 p-4 rounded-lg">
                         <h5 className="font-medium text-slate-800 mb-2">Pencere Detayları</h5>
                         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -87,7 +155,7 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                     </div>
                 )}
                 
-                {product.features.gofre && product.features.gofreDetails && (
+                {product.features?.gofre && product.features?.gofreDetails && (
                     <div className="bg-slate-50 p-4 rounded-lg">
                         <h5 className="font-medium text-slate-800 mb-2">Gofre Detayları</h5>
                         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -99,7 +167,7 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                     </div>
                 )}
                 
-                {product.features.hasLid && product.lidDetails && (
+                {product.features?.hasLid && product.lidDetails && (
                     <div className="bg-slate-50 p-4 rounded-lg md:col-span-2">
                         <h5 className="font-medium text-slate-800 mb-2 flex items-center gap-2">
                             Kapak Detayları

@@ -28,8 +28,11 @@ const initDb = () => {
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       code TEXT NOT NULL,
-      description TEXT,
-      dimensions TEXT NOT NULL, -- JSON
+      name TEXT, -- Replaces description
+      productType TEXT, -- percinli, sivama
+      boxShape TEXT, -- Kare, Oval, etc.
+      dimensions TEXT, -- JSON
+      inks TEXT, -- JSON (new structure)
       features TEXT NOT NULL, -- JSON
       details TEXT,
       windowDetails TEXT, -- JSON
@@ -38,6 +41,35 @@ const initDb = () => {
       createdAt TEXT NOT NULL
     )
   `);
+
+  // Product Molds (Kalıp Ölçüleri)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS product_molds (
+      id TEXT PRIMARY KEY,
+      productType TEXT NOT NULL,
+      boxShape TEXT NOT NULL,
+      dimensions TEXT NOT NULL,
+      label TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Weekly Plans
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS weekly_plans (
+      id TEXT PRIMARY KEY,
+      weekStartDate TEXT NOT NULL,
+      weekEndDate TEXT NOT NULL,
+      planData TEXT NOT NULL, -- JSON
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Product Migrations
+  try { db.exec('ALTER TABLE products ADD COLUMN name TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE products ADD COLUMN productType TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE products ADD COLUMN boxShape TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE products ADD COLUMN inks TEXT'); } catch (e) {}
 
   // Orders
   db.exec(`
@@ -53,10 +85,32 @@ const initDb = () => {
       status TEXT NOT NULL,
       designImages TEXT, -- JSON array of strings
       deadline TEXT,
+      paymentMethod TEXT,
+      maturityDays INTEGER,
+      jobSize TEXT, -- İşin ebadı
+      boxSize TEXT, -- Kutu boyutu
+      efficiency TEXT, -- Verim
       createdAt TEXT NOT NULL,
       FOREIGN KEY (customerId) REFERENCES customers (id)
     )
   `);
+
+  // Add new columns to orders table if they don't exist (Migration)
+  try {
+    db.exec('ALTER TABLE orders ADD COLUMN paymentMethod TEXT');
+  } catch (error) {
+    // Column likely already exists
+  }
+
+  try {
+    db.exec('ALTER TABLE orders ADD COLUMN maturityDays INTEGER');
+  } catch (error) {
+    // Column likely already exists
+  }
+  // Add design job info columns if they don't exist
+  try { db.exec('ALTER TABLE orders ADD COLUMN jobSize TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN boxSize TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN efficiency TEXT'); } catch (error) {}
 
   // Stock Items
   db.exec(`
@@ -225,6 +279,12 @@ const initDb = () => {
     const hasProductionStatus = tableInfo.some(col => col.name === 'productionStatus');
     if (!hasProductionStatus) {
         db.prepare("ALTER TABLE orders ADD COLUMN productionStatus TEXT").run();
+    }
+
+    // Add designStatus column if it doesn't exist
+    const hasDesignStatus = tableInfo.some(col => col.name === 'designStatus');
+    if (!hasDesignStatus) {
+        db.prepare("ALTER TABLE orders ADD COLUMN designStatus TEXT").run();
     }
 
     // Add procurementDate column if it doesn't exist

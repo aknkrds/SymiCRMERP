@@ -28,13 +28,30 @@ export type CustomerFormData = Omit<Customer, 'id' | 'createdAt'>;
 
 export interface Product {
     id: string;
-    code: string;
-    description: string;
-    dimensions: {
+    code: string; // GMP01, etc.
+    name: string; // Product Name (formerly description)
+    productType: 'percinli' | 'sivama';
+    boxShape?: string;
+    
+    // Legacy dimensions kept for compatibility if needed, but we might rely on dynamic fields later
+    dimensions?: {
         length: number;
         width: number;
         depth: number;
     };
+
+    // New Inks structure replacing 'colors'
+    inks: {
+        cmyk: boolean;
+        white: boolean;
+        pantones: string[]; // Array of codes
+        goldLak: { has: boolean; code?: string };
+        emaye: { has: boolean; code?: string };
+        astar: { has: boolean; code?: string };
+        silverLak: { has: boolean; code?: string };
+        mold: boolean; // Kalıp
+    };
+
     features: {
         hasLid: boolean;
         hasWindow: boolean;
@@ -44,10 +61,9 @@ export interface Product {
             count: number;
             notes: string;
         };
-        foodGrade: boolean;
-        colors: string[];
+        // foodGrade removed
     };
-    // New fields
+    
     details?: string;
     windowDetails?: {
         width: number;
@@ -56,8 +72,7 @@ export interface Product {
     };
     lidDetails?: {
         material: string;
-        color: string; // Keeping for backward compatibility or general color
-        paint: string; // "Boya"
+        paint: string;
         notes: string;
         hasGofre: boolean;
         gofreDetails?: {
@@ -76,19 +91,22 @@ export interface Product {
         };
     };
     images?: {
-        customer: string[]; // Base64 strings, max 2
-        design: string[];   // Base64 strings, max 2
+        customer: string[]; // Base64 or URL
+        // design removed
     };
     createdAt: string;
 }
 
-export type ProductFormData = Omit<Product, 'id' | 'createdAt'>;
+export type ProductFormData = Omit<Product, 'id' | 'createdAt'> & {
+    code?: string;
+};
 
 export type OrderStatus = 
     | 'created' 
     | 'offer_sent' 
     | 'offer_accepted' 
     | 'offer_cancelled'
+    | 'supply_design_process'
     | 'design_pending' 
     | 'design_approved' 
     | 'supply_completed'
@@ -120,9 +138,14 @@ export interface Order {
     vatTotal: number;
     grandTotal: number;
     status: OrderStatus;
+    // Tasarım departmanı iş bilgileri
+    jobSize?: string;       // İşin ebadı
+    boxSize?: string;       // Kutu boyutu
+    efficiency?: string;    // Verim
     assignedUserId?: string;
     assignedUserName?: string;
     assignedRoleName?: string;
+    designStatus?: string; // Specific status for design flow
     procurementStatus?: string; // Specific status for procurement flow
     productionStatus?: string; // Specific status for production flow
     procurementDate?: string; // When procurement was completed
@@ -137,6 +160,8 @@ export interface Order {
     trailerPlate?: string;
     additionalDocUrl?: string;
     deadline?: string;
+    paymentMethod?: 'havale_eft' | 'cek' | 'cari_hesap';
+    maturityDays?: number;
     createdAt: string;
 }
 

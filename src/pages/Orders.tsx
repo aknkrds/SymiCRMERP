@@ -51,7 +51,11 @@ export default function Orders() {
     };
 
     const handleStatusChange = (id: string, newStatus: string) => {
-        updateStatus(id, newStatus as Order['status']);
+        if (newStatus === 'offer_accepted') {
+            updateStatus(id, 'supply_design_process' as Order['status']);
+        } else {
+            updateStatus(id, newStatus as Order['status']);
+        }
     };
 
     return (

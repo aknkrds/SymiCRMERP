@@ -14,6 +14,8 @@ const orderSchema = z.object({
     customerName: z.string(),
     currency: z.string().default('TRY'),
     deadline: z.string().optional(),
+    paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap']).optional(),
+    maturityDays: z.coerce.number().optional(),
     items: z.array(z.object({
         id: z.string(),
         productId: z.string().min(1, 'Ürün seçimi zorunludur'),
@@ -28,20 +30,18 @@ const orderSchema = z.object({
         'offer_sent', 
         'offer_accepted', 
         'offer_cancelled',
-        'design_waiting', 
+        'supply_design_process',
+        'design_pending', 
         'design_approved',
-        'supply_waiting',
         'supply_completed',
         'production_planned',
         'production_started',
         'production_completed',
-        'invoice_waiting',
         'invoice_added',
-        'shipping_waiting',
         'shipping_completed',
         'order_completed',
         'order_cancelled'
-    ]).default('created'),
+    ]).default('offer_sent'),
 });
 
 interface OrderFormProps {
@@ -61,7 +61,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
             customerId: '',
             customerName: '',
             currency: 'TRY',
-            status: 'created',
+            status: 'offer_sent',
             items: [],
         },
     });
@@ -72,6 +72,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
     });
 
     const watchedStatus = watch('status');
+    const watchedPaymentMethod = watch('paymentMethod');
 
     // Workflow Transition Logic
     const getNextStep = () => {
@@ -216,6 +217,31 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                         <option value="EUR">EUR - Euro</option>
                     </select>
                 </div>
+
+                <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700">Ödeme Şekli</label>
+                    <select
+                        {...register('paymentMethod')}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    >
+                        <option value="">Seçiniz</option>
+                        <option value="havale_eft">Havale-EFT</option>
+                        <option value="cek">Çek</option>
+                        <option value="cari_hesap">Cari Hesap</option>
+                    </select>
+                </div>
+
+                {(watchedPaymentMethod === 'cek' || watchedPaymentMethod === 'cari_hesap') && (
+                    <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-700">Vade Gün</label>
+                        <input
+                            type="number"
+                            {...register('maturityDays')}
+                            placeholder="Örn: 45"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                )}
             </div>
 
             <div className="space-y-2">

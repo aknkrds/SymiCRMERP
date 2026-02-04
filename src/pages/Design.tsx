@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
-import { Eye, Plus, X, Upload } from 'lucide-react';
+import { Eye, Plus, X, Upload, PencilLine, Info, CheckCircle2 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { ProductDetail } from '../components/products/ProductDetail';
 import type { Order, Product } from '../types';
+import { ProductForm } from '../components/products/ProductForm';
 
 export default function Design() {
     const { orders, updateStatus, updateOrder } = useOrders();
-    const { products } = useProducts();
+    const { products, updateProduct } = useProducts();
     
     // Filter orders waiting for design
-    const designOrders = orders.filter(o => o.status === 'offer_accepted' || o.status === 'design_waiting');
+    const designOrders = orders.filter(o => 
+        (o.status === 'supply_design_process' || o.status === 'design_waiting' || o.status === 'offer_accepted') && 
+        o.designStatus !== 'completed'
+    );
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
@@ -25,6 +29,30 @@ export default function Design() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Product Info Entry (Edit) modal
+    const [infoOrder, setInfoOrder] = useState<Order | null>(null);
+    const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+    const [infoSelectedItemId, setInfoSelectedItemId] = useState<string | null>(null);
+    const currentInfoProduct = (() => {
+        if (!infoOrder || !infoSelectedItemId) return null;
+        const item = infoOrder.items.find(i => i.productId === infoSelectedItemId);
+        if (!item) return null;
+        return products.find(p => p.id === item.productId) || null;
+    })();
+
+    // Job Info Entry modal
+    const [jobOrder, setJobOrder] = useState<Order | null>(null);
+    const [isJobModalOpen, setIsJobModalOpen] = useState(false);
+    const [jobSize, setJobSize] = useState('');
+    const [boxSize, setBoxSize] = useState('');
+    const [efficiency, setEfficiency] = useState('');
+
+    const handleCompleteDesign = async (orderId: string) => {
+        if (confirm('Tasarım işlemleri tamamlandı olarak işaretlensin mi?')) {
+            await updateOrder(orderId, { designStatus: 'completed' } as any);
+        }
+    };
 
     const handleViewOrder = (order: Order) => {
         setSelectedOrder(order);
@@ -43,6 +71,44 @@ export default function Design() {
         setUploadOrder(order);
         setUploadedImages(order.designImages || []);
         setIsUploadModalOpen(true);
+    };
+
+    const handleOpenInfo = (order: Order) => {
+        setInfoOrder(order);
+        const firstItem = order.items[0];
+        setInfoSelectedItemId(firstItem?.productId || null);
+        setIsInfoModalOpen(true);
+    };
+
+    const handleSaveProductInfo = async (data: any) => {
+        if (!infoOrder || !currentInfoProduct) return;
+        await updateProduct(currentInfoProduct.id, data);
+        // Reflect name change to order items (for display)
+        const updatedItems = infoOrder.items.map(i => 
+            i.productId === currentInfoProduct.id ? { ...i, productName: data.name || i.productName } : i
+        );
+        await updateOrder(infoOrder.id, { items: updatedItems } as any);
+        setIsInfoModalOpen(false);
+        setInfoOrder(null);
+        setInfoSelectedItemId(null);
+    };
+
+    const handleOpenJob = (order: Order) => {
+        setJobOrder(order);
+        setJobSize(order.jobSize || '');
+        setBoxSize(order.boxSize || '');
+        setEfficiency(order.efficiency || '');
+        setIsJobModalOpen(true);
+    };
+
+    const handleSaveJob = async () => {
+        if (!jobOrder) return;
+        await updateOrder(jobOrder.id, { jobSize, boxSize, efficiency } as any);
+        setIsJobModalOpen(false);
+        setJobOrder(null);
+        setJobSize('');
+        setBoxSize('');
+        setEfficiency('');
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -101,13 +167,11 @@ export default function Design() {
             return;
         }
 
-        // Update order with images
+        // Update order with images and set designStatus to completed
         await updateOrder(uploadOrder.id, {
-            designImages: uploadedImages
+            designImages: uploadedImages,
+            designStatus: 'completed'
         } as any);
-
-        // Update status to design_approved
-        await updateStatus(uploadOrder.id, 'design_approved');
 
         setIsUploadModalOpen(false);
         setUploadOrder(null);
@@ -162,6 +226,13 @@ export default function Design() {
                                                     <Eye size={16} />
                                                     Görüntüle
                                                 </button>
+                                            <button
+                                                onClick={() => handleOpenInfo(order)}
+                                                className="flex items-center gap-2 px-3 py-1.5 text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors text-xs font-medium"
+                                            >
+                                                <PencilLine size={16} />
+                                                Bilgi Girişi
+                                            </button>
                                                 <button
                                                     onClick={() => handleOpenUpload(order)}
                                                     className="flex items-center gap-2 px-3 py-1.5 text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-xs font-medium"
@@ -169,6 +240,20 @@ export default function Design() {
                                                     <Upload size={16} />
                                                     Tasarım Ekle
                                                 </button>
+                                            <button
+                                                onClick={() => handleOpenJob(order)}
+                                                className="flex items-center gap-2 px-3 py-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
+                                            >
+                                                <Info size={16} />
+                                                İş Bilgi Girişi
+                                            </button>
+                                            <button
+                                                onClick={() => handleCompleteDesign(order.id)}
+                                                className="flex items-center gap-2 px-3 py-1.5 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
+                                            >
+                                                <CheckCircle2 size={16} />
+                                                İşlem Tamamlandı
+                                            </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -248,6 +333,40 @@ export default function Design() {
                 )}
             </Modal>
 
+            {/* Product Info Entry Modal */}
+            <Modal
+                isOpen={isInfoModalOpen}
+                onClose={() => setIsInfoModalOpen(false)}
+                title="Ürün Bilgi Girişi / Düzenleme"
+            >
+                {infoOrder && (
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-xs text-slate-500">Sipariş Ürünü Seç</label>
+                            <select
+                                value={infoSelectedItemId || ''}
+                                onChange={e => setInfoSelectedItemId(e.target.value)}
+                                className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                                {infoOrder.items.map(item => (
+                                    <option key={item.productId} value={item.productId}>
+                                        {item.productName}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        {currentInfoProduct && (
+                            <ProductForm
+                                initialData={currentInfoProduct}
+                                onSubmit={handleSaveProductInfo}
+                                onCancel={() => setIsInfoModalOpen(false)}
+                            />
+                        )}
+                    </div>
+                )}
+            </Modal>
+
             {/* Upload Design Modal */}
             <Modal
                 isOpen={isUploadModalOpen}
@@ -314,6 +433,60 @@ export default function Design() {
                             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Kaydet ve Onayla
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Job Info Entry Modal */}
+            <Modal
+                isOpen={isJobModalOpen}
+                onClose={() => setIsJobModalOpen(false)}
+                title="İş Bilgi Girişi"
+            >
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">İşin ebadı</label>
+                        <input
+                            type="text"
+                            value={jobSize}
+                            onChange={e => setJobSize(e.target.value)}
+                            placeholder="Örn: 500x700 mm"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Kutu boyutu</label>
+                        <input
+                            type="text"
+                            value={boxSize}
+                            onChange={e => setBoxSize(e.target.value)}
+                            placeholder="Örn: 90x90x25 mm"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Verim</label>
+                        <input
+                            type="text"
+                            value={efficiency}
+                            onChange={e => setEfficiency(e.target.value)}
+                            placeholder="Örn: 6 adet/baskı"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <button
+                            onClick={() => setIsJobModalOpen(false)}
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            İptal
+                        </button>
+                        <button
+                            onClick={handleSaveJob}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                            Kaydet
                         </button>
                     </div>
                 </div>
