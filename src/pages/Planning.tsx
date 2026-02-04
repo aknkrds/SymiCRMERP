@@ -4,7 +4,7 @@ import { useOrders } from '../hooks/useOrders';
 import { Modal } from '../components/ui/Modal';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 
 const MACHINES = [
   "DörtKöşe Bant-1",
@@ -249,19 +249,23 @@ export default function Planning() {
       if (!tableRef.current) return;
       
       try {
-          const canvas = await html2canvas(tableRef.current, {
-              scale: 2, // Higher quality
-              useCORS: true,
-              logging: false
+          // Using html-to-image instead of html2canvas to support modern CSS (oklch)
+          const dataUrl = await toPng(tableRef.current, { 
+              quality: 0.95,
+              backgroundColor: '#ffffff' // Ensure white background
           });
           
-          const imgData = canvas.toDataURL('image/png');
           const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape, mm, A4
           const pdfWidth = pdf.internal.pageSize.getWidth();
           const pdfHeight = pdf.internal.pageSize.getHeight();
           
-          const imgWidth = canvas.width;
-          const imgHeight = canvas.height;
+          // Create an image to get dimensions
+          const img = new Image();
+          img.src = dataUrl;
+          await new Promise((resolve) => { img.onload = resolve; });
+          
+          const imgWidth = img.width;
+          const imgHeight = img.height;
           
           // Calculate ratio to fit width
           const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95; // 95% to leave margin
@@ -269,7 +273,7 @@ export default function Planning() {
           const imgX = (pdfWidth - imgWidth * ratio) / 2;
           const imgY = 10; // Top margin
           
-          pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+          pdf.addImage(dataUrl, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
           pdf.save('haftalik-plan.pdf');
       } catch (err) {
           console.error('PDF export failed:', err);
