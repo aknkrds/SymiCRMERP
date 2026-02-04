@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, Save, History, X, Trash2, Check, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Calendar, Save, History, X, Trash2, Check, Search, Printer, Download } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import { Modal } from '../components/ui/Modal';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const MACHINES = [
   "DörtKöşe Bant-1",
@@ -76,6 +78,48 @@ export default function Planning() {
   const [selectedCell, setSelectedCell] = useState<{rowKey: string, machine: string} | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // Helper to save plan to backend (Auto-save)
+  const savePlanToBackend = async (newData: Record<string, PlanItem[]>, idToUpdate: string | null = null) => {
+      const curr = new Date(currentWeek);
+      const first = curr.getDate() - curr.getDay() + 1;
+      const last = first + 6;
+      const firstDay = new Date(curr.setDate(first));
+      const lastDay = new Date(curr.setDate(last));
+      
+      try {
+          // If we have an ID, update it. If not, create new.
+          let url = '/api/planning/weekly';
+          let method = 'POST';
+          
+          const targetId = idToUpdate || currentPlanId;
+          
+          if (targetId) {
+              url = `/api/planning/weekly/${targetId}`;
+              method = 'PUT';
+          }
+
+          const response = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  weekStartDate: firstDay.toISOString(),
+                  weekEndDate: lastDay.toISOString(),
+                  planData: newData
+              })
+          });
+
+          if (response.ok) {
+              const resData = await response.json();
+              if (resData.id && !targetId) {
+                  setCurrentPlanId(resData.id);
+              }
+          }
+      } catch (error) {
+          console.error('Auto-save error:', error);
+      }
+  };
 
   // Fetch current week's plan on mount
   useEffect(() => {
@@ -91,14 +135,18 @@ export default function Planning() {
             firstDay.setHours(0, 0, 0, 0);
             
             // Find plan matching this week
-            const currentPlan = plans.find((p: WeeklyPlan) => {
+            // Sort by ID (assuming newer IDs are higher) or createdAt if available to get the LATEST plan
+            // Since ID is random string maybe, we rely on the order returned or check createdAt if possible.
+            // Let's assume the last one in the list matching the date is the newest.
+            const matchingPlans = plans.filter((p: WeeklyPlan) => {
                 const planStart = new Date(p.weekStartDate);
                 planStart.setHours(0, 0, 0, 0);
-                // Check if dates are close enough (ignoring time)
                 return Math.abs(planStart.getTime() - firstDay.getTime()) < 24 * 60 * 60 * 1000;
             });
 
-            if (currentPlan) {
+            if (matchingPlans.length > 0) {
+                // Get the last one (assuming implicit chronological order or simply treating last as latest)
+                const currentPlan = matchingPlans[matchingPlans.length - 1];
                 setPlanData(currentPlan.planData);
                 setCurrentPlanId(currentPlan.id);
             }
@@ -180,15 +228,53 @@ export default function Planning() {
   };
 
   const handleSaveAndClear = async () => {
-    const success = await handleSave(true);
+    // Option A: Save current (Archive) then start new (Clear UI)
+    const success = await handleSave(false);
     if (success) {
+        // Detach from current ID to start a fresh plan
+        setCurrentPlanId(null);
+        setPlanData({});
         setIsClearModalOpen(false);
     }
   };
 
   const handleClearOnly = () => {
+    // Option B: Wipe current plan data in DB (Clear permanently)
+    savePlanToBackend({}, currentPlanId);
     setPlanData({});
     setIsClearModalOpen(false);
+  };
+
+  const handlePrint = async () => {
+      if (!tableRef.current) return;
+      
+      try {
+          const canvas = await html2canvas(tableRef.current, {
+              scale: 2, // Higher quality
+              useCORS: true,
+              logging: false
+          });
+          
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape, mm, A4
+          const pdfWidth = pdf.internal.pageSize.getWidth();
+          const pdfHeight = pdf.internal.pageSize.getHeight();
+          
+          const imgWidth = canvas.width;
+          const imgHeight = canvas.height;
+          
+          // Calculate ratio to fit width
+          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95; // 95% to leave margin
+          
+          const imgX = (pdfWidth - imgWidth * ratio) / 2;
+          const imgY = 10; // Top margin
+          
+          pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+          pdf.save('haftalik-plan.pdf');
+      } catch (err) {
+          console.error('PDF export failed:', err);
+          alert('PDF oluşturulurken bir hata oluştu.');
+      }
   };
 
   const handleDayClick = (dayName: string, rowKey: string) => {
@@ -237,10 +323,14 @@ export default function Planning() {
           };
       }).filter(Boolean) as PlanItem[];
 
-      setPlanData(prev => ({
-          ...prev,
-          [cellKey]: [...(prev[cellKey] || []), ...newItems]
-      }));
+      setPlanData(prev => {
+          const newData = {
+              ...prev,
+              [cellKey]: [...(prev[cellKey] || []), ...newItems]
+          };
+          savePlanToBackend(newData); // Auto-save
+          return newData;
+      });
 
       setIsAddModalOpen(false);
   };
@@ -249,7 +339,9 @@ export default function Planning() {
       setPlanData(prev => {
           const newList = [...(prev[cellKey] || [])];
           newList.splice(index, 1);
-          return { ...prev, [cellKey]: newList };
+          const newData = { ...prev, [cellKey]: newList };
+          savePlanToBackend(newData); // Auto-save
+          return newData;
       });
   };
 
@@ -286,6 +378,13 @@ export default function Planning() {
             
             <div className="flex items-center gap-3">
                 <button 
+                    onClick={handlePrint}
+                    className="flex items-center gap-2 bg-white text-slate-600 border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium"
+                >
+                    <Download size={20} />
+                    Tabloyu Yazdır (PDF)
+                </button>
+                <button 
                     onClick={() => setIsHistoryModalOpen(true)}
                     className="flex items-center gap-2 bg-white text-slate-600 border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium"
                 >
@@ -309,9 +408,9 @@ export default function Planning() {
             </div>
         </div>
 
-        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" ref={tableRef}>
             <div className="overflow-auto flex-1">
-                <table className="w-full border-collapse min-w-[1500px]">
+                <table className="w-full border-collapse min-w-[1500px]" id="planning-table">
                     <thead className="sticky top-0 z-20 shadow-sm">
                         <tr>
                             <th className="p-3 border-b border-r border-slate-200 bg-slate-50 text-left text-sm font-bold text-slate-700 sticky left-0 z-30 w-32 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
@@ -560,6 +659,17 @@ export default function Planning() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    setPlanData(plan.planData);
+                                                    setCurrentPlanId(plan.id);
+                                                    setIsHistoryModalOpen(false);
+                                                }}
+                                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                                                title="Yazdır / Görüntüle"
+                                            >
+                                                <Printer size={18} />
+                                            </button>
                                             <button 
                                                 onClick={() => {
                                                     setPlanData(plan.planData);
