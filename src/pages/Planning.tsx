@@ -255,10 +255,6 @@ export default function Planning() {
               backgroundColor: '#ffffff' // Ensure white background
           });
           
-          const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape, mm, A4
-          const pdfWidth = pdf.internal.pageSize.getWidth();
-          const pdfHeight = pdf.internal.pageSize.getHeight();
-          
           // Create an image to get dimensions
           const img = new Image();
           img.src = dataUrl;
@@ -267,13 +263,36 @@ export default function Planning() {
           const imgWidth = img.width;
           const imgHeight = img.height;
           
+          // A4 Landscape dimensions (mm)
+          const pdfWidth = 297;
+          const pdfHeight = 210;
+          
+          const pdf = new jsPDF({
+              orientation: 'landscape',
+              unit: 'mm',
+              format: 'a4'
+          });
+          
           // Calculate ratio to fit width
-          const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight) * 0.95; // 95% to leave margin
+          // We want to fit the table width to the PDF width with some margin
+          const margin = 10;
+          const availableWidth = pdfWidth - (margin * 2);
+          const availableHeight = pdfHeight - (margin * 2);
           
-          const imgX = (pdfWidth - imgWidth * ratio) / 2;
-          const imgY = 10; // Top margin
+          const widthRatio = availableWidth / imgWidth;
+          const heightRatio = availableHeight / imgHeight;
           
-          pdf.addImage(dataUrl, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+          // Use the smaller ratio to ensure it fits both dimensions
+          const ratio = Math.min(widthRatio, heightRatio);
+          
+          const finalWidth = imgWidth * ratio;
+          const finalHeight = imgHeight * ratio;
+          
+          // Center the image
+          const imgX = (pdfWidth - finalWidth) / 2;
+          const imgY = (pdfHeight - finalHeight) / 2;
+          
+          pdf.addImage(dataUrl, 'PNG', imgX, imgY, finalWidth, finalHeight);
           pdf.save('haftalik-plan.pdf');
       } catch (err) {
           console.error('PDF export failed:', err);
@@ -412,9 +431,9 @@ export default function Planning() {
             </div>
         </div>
 
-        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" ref={tableRef}>
+        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
             <div className="overflow-auto flex-1">
-                <table className="w-full border-collapse min-w-[1500px]" id="planning-table">
+                <table className="w-full border-collapse min-w-[1500px]" id="planning-table" ref={tableRef}>
                     <thead className="sticky top-0 z-20 shadow-sm">
                         <tr>
                             <th className="p-3 border-b border-r border-slate-200 bg-slate-50 text-left text-sm font-bold text-slate-700 sticky left-0 z-30 w-32 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
