@@ -323,7 +323,7 @@ app.post('/api/reset-data', (req, res) => {
       'products',
       'customers',
       'machines',
-      'personnel',
+      // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
       'weekly_plans'
     ];
 
@@ -336,7 +336,7 @@ app.post('/api/reset-data', (req, res) => {
         for (const table of tablesToClear) {
           db.prepare(`DELETE FROM ${table}`).run();
         }
-        // NOTE: product_molds table is EXPLICITLY EXCLUDED from deletion to preserve mold definitions.
+        // NOTE: product_molds, users, roles, and personnel tables are EXPLICITLY EXCLUDED from deletion.
       } finally {
         // Re-enable Foreign Key constraints
         db.prepare('PRAGMA foreign_keys = ON').run();
