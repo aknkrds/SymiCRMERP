@@ -53,17 +53,21 @@ export default function ProductMoldSettings() {
     const handleSeed = async () => {
         if (!window.confirm('Mevcut varsayılan ölçülerin tümü veritabanına eklenecek. Devam edilsin mi?')) return;
         setSeeding(true);
-        let count = 0;
-        for (const mold of DEFAULT_MOLDS) {
-            // Simple check to avoid exact duplicates (client side check might be incomplete but better than nothing)
-            // But actually useMolds addMold doesn't check duplication.
-            // Let's just add them.
-            await addMold(mold);
-            count++;
+        try {
+            const res = await fetch('/api/molds/seed-defaults', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`${data.inserted} adet ölçü eklendi. (${data.skipped} adet zaten mevcuttu)`);
+                window.location.reload();
+            } else {
+                alert('Hata: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Seed error:', error);
+            alert('Bir hata oluştu.');
+        } finally {
+            setSeeding(false);
         }
-        setSeeding(false);
-        alert(`${count} adet ölçü eklendi.`);
-        window.location.reload(); // Refresh to see changes
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

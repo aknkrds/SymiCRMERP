@@ -323,7 +323,8 @@ app.post('/api/reset-data', (req, res) => {
       'products',
       'customers',
       'machines',
-      'personnel'
+      'personnel',
+      'weekly_plans'
     ];
 
     // Execute deletions in a transaction with FK checks disabled
@@ -335,6 +336,7 @@ app.post('/api/reset-data', (req, res) => {
         for (const table of tablesToClear) {
           db.prepare(`DELETE FROM ${table}`).run();
         }
+        // NOTE: product_molds table is EXPLICITLY EXCLUDED from deletion to preserve mold definitions.
       } finally {
         // Re-enable Foreign Key constraints
         db.prepare('PRAGMA foreign_keys = ON').run();
@@ -1458,6 +1460,36 @@ const DEFAULT_MOLDS = [
   // Sıvama Standart
   ...['90x90x30 - Kalp Şekilli','205x190x40 - Kalp Şekilli','75x205x25','65x205x25 - Fermuarlı','105x205x25 - Fermuarlı','135x200x25 - Fermuarlı','175x215x45','90x80x15','90x80x30','100x100x30','105x105x40','97x58x20','94x58x20','95x120x22','69x45','85x40','99x30','105x40 - Expanded','132x45 - Expanded','O115 - Bardak Altlığı'].map(d => ({ productType: 'sivama', boxShape: 'Standart', dimensions: d })),
 ];
+
+// Ensure default molds exist (Seed if missing)
+try {
+  console.log('Checking default molds...');
+  const existsStmt = db.prepare('SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1');
+  const insertStmt = db.prepare(`
+    INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const now = new Date().toISOString();
+  
+  const seedTransaction = db.transaction((molds) => {
+    let inserted = 0;
+    for (const m of molds) {
+      if (!existsStmt.get(m.productType, m.boxShape, m.dimensions)) {
+        insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
+        inserted++;
+      }
+    }
+    if (inserted > 0) {
+      console.log(`Seeded ${inserted} missing default molds.`);
+    } else {
+      console.log('All default molds already exist.');
+    }
+  });
+  
+  seedTransaction(DEFAULT_MOLDS);
+} catch (error) {
+  console.error('Auto-seed molds error:', error);
+}
 
 // Varsayılan kalıpları veritabanına ekleyen endpoint (kayıt varsa atlar)
 app.post('/api/molds/seed-defaults', (req, res) => {
