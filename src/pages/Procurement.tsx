@@ -304,27 +304,6 @@ export default function Procurement() {
                             </div>
                         </div>
 
-                        {/* Job Details Section */}
-                        {(selectedOrder.jobSize || selectedOrder.boxSize || selectedOrder.efficiency) && (
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                <h3 className="font-medium text-blue-800 mb-3 border-b border-blue-200 pb-2">İş Bilgileri (Tasarım)</h3>
-                                <div className="grid grid-cols-3 gap-4 text-sm">
-                                    <div>
-                                        <label className="block text-xs font-medium text-blue-500 mb-1">İşin Ebadı</label>
-                                        <p className="font-medium text-blue-900">{selectedOrder.jobSize || '-'}</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-blue-500 mb-1">Kutu Boyutu</label>
-                                        <p className="font-medium text-blue-900">{selectedOrder.boxSize || '-'}</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-blue-500 mb-1">Verim</label>
-                                        <p className="font-medium text-blue-900">{selectedOrder.efficiency || '-'}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         <div>
                             <h3 className="font-medium text-slate-800 mb-3 border-b border-slate-200 pb-2">Ürünler</h3>
                             <div className="space-y-3">
@@ -369,78 +348,48 @@ export default function Procurement() {
                 <div className="space-y-6">
                     <div className="bg-amber-50 p-4 rounded-lg text-sm text-amber-800">
                         <p className="font-medium mb-1">Malzeme Seçimi</p>
-                        <p>Lütfen bu sipariş için kullanılacak stok malzemelerini seçiniz. Kaydet butonuna bastığınızda sipariş durumu "Matbaa Baskısı Yapılıyor" olarak güncellenecektir.</p>
+                        <p>Bu sipariş için kullanılacak stok malzemelerini aşağıdan seçiniz.</p>
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
-                        <table className="w-full text-left text-sm text-slate-600">
-                            <thead className="bg-slate-50 text-slate-800 font-semibold sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-2 w-10">
-                                        <input 
-                                            type="checkbox" 
-                                            className="rounded border-slate-300"
-                                            checked={stockItems.length > 0 && selectedStockItems.length === stockItems.length}
-                                            onChange={(e) => {
-                                                if (e.target.checked) {
-                                                    setSelectedStockItems(stockItems.map(i => i.id));
-                                                } else {
-                                                    setSelectedStockItems([]);
-                                                }
-                                            }}
-                                        />
-                                    </th>
-                                    <th className="px-4 py-2">Stok No</th>
-                                    <th className="px-4 py-2">Ürün</th>
-                                    <th className="px-4 py-2">Miktar</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200">
-                                {stockItems.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
-                                            Stok kaydı bulunmuyor.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    stockItems.map((item) => (
-                                        <tr 
-                                            key={item.id} 
-                                            className={`hover:bg-slate-50 transition-colors cursor-pointer ${selectedStockItems.includes(item.id) ? 'bg-indigo-50' : ''}`}
-                                            onClick={() => toggleStockItemSelection(item.id)}
-                                        >
-                                            <td className="px-4 py-2">
-                                                <input 
-                                                    type="checkbox" 
-                                                    checked={selectedStockItems.includes(item.id)}
-                                                    onChange={() => {}} // Handled by tr click
-                                                    className="rounded border-slate-300"
-                                                />
-                                            </td>
-                                            <td className="px-4 py-2 font-mono text-xs">{item.stockNumber}</td>
-                                            <td className="px-4 py-2">{item.product}</td>
-                                            <td className="px-4 py-2 text-emerald-600">
-                                                {item.quantity} {item.unit}
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {stockItems.length === 0 ? (
+                            <p className="text-sm text-slate-500 text-center py-4">Stok kaydı bulunmuyor.</p>
+                        ) : (
+                            stockItems.map(item => (
+                                <div 
+                                    key={item.id}
+                                    onClick={() => toggleStockItemSelection(item.id)}
+                                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                        selectedStockItems.includes(item.id)
+                                            ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500'
+                                            : 'bg-white border-slate-200 hover:border-indigo-300'
+                                    }`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="font-medium text-sm text-slate-900">{item.product}</p>
+                                            <p className="text-xs text-slate-500">{item.company} • {item.stockNumber}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-medium text-sm text-emerald-600">{item.quantity} {item.unit}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
-                    
-                    <div className="flex justify-end gap-3">
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                         <button
                             onClick={() => setIsProcurementModalOpen(false)}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm font-medium"
                         >
                             İptal
                         </button>
                         <button
                             onClick={handleSaveProcurement}
-                            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
                         >
-                            <CheckCircle2 size={18} />
                             Kaydet ve Başlat
                         </button>
                     </div>
@@ -454,58 +403,58 @@ export default function Procurement() {
                 title="Yeni Stok Ekle"
             >
                 <form onSubmit={handleAddStock} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Stok Numarası</label>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Stok No</label>
                         <input
-                            type="text"
                             required
+                            type="text"
                             value={newStockItem.stockNumber}
                             onChange={e => setNewStockItem({...newStockItem, stockNumber: e.target.value})}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            placeholder="örn: STK-001"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Örn: STK-2024-001"
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Firma</label>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Firma</label>
                         <input
-                            type="text"
                             required
+                            type="text"
                             value={newStockItem.company}
                             onChange={e => setNewStockItem({...newStockItem, company: e.target.value})}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                             placeholder="Tedarikçi firma adı"
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Ürün</label>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">Ürün</label>
                         <input
-                            type="text"
                             required
+                            type="text"
                             value={newStockItem.product}
                             onChange={e => setNewStockItem({...newStockItem, product: e.target.value})}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                            placeholder="Ürün adı"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Malzeme adı"
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Miktar</label>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">Miktar</label>
                             <input
-                                type="number"
                                 required
+                                type="number"
                                 min="0"
                                 step="0.01"
                                 value={newStockItem.quantity}
                                 onChange={e => setNewStockItem({...newStockItem, quantity: parseFloat(e.target.value)})}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Birim</label>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">Birim</label>
                             <select
                                 value={newStockItem.unit}
                                 onChange={e => setNewStockItem({...newStockItem, unit: e.target.value})}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                             >
                                 {STOCK_UNITS.map(unit => (
                                     <option key={unit} value={unit}>{unit}</option>
@@ -513,17 +462,17 @@ export default function Procurement() {
                             </select>
                         </div>
                     </div>
-                    <div className="flex justify-end gap-3 mt-6">
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                         <button
                             type="button"
                             onClick={() => setIsAddStockModalOpen(false)}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                         >
                             İptal
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
                         >
                             Kaydet
                         </button>
