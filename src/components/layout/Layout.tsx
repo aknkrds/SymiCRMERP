@@ -4,20 +4,27 @@ import { Notifications } from '../ui/Notifications';
 import { DepartmentTasks } from '../ui/DepartmentTasks';
 import { Messaging } from '../ui/Messaging';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
+import { useCompanySettings } from '../../hooks/useCompanySettings';
 
 export function Layout() {
+    const { settings } = useCompanySettings();
+
     return (
         <div className="flex h-screen bg-[var(--bg-main)]">
             <Sidebar />
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                 <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[var(--border-subtle)] h-16 flex items-center justify-between px-6 sm:px-8 shadow-sm transition-all duration-300">
                     <div className="flex items-center gap-2">
+                        {settings.logoUrl && (
+                            <img 
+                                src={settings.logoUrl} 
+                                alt="Logo" 
+                                className="h-8 w-auto object-contain max-w-[100px]"
+                            />
+                        )}
                         <h2 className="text-base sm:text-lg font-semibold text-slate-800 tracking-tight">
-                            Symi Satış ve Üretim Takip
+                            {settings.companyName}
                         </h2>
-                        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--accent-soft)] text-[var(--accent-strong)] border border-[var(--border-subtle)]">
-                            v.0.9.2
-                        </span>
                     </div>
                     <div className="flex items-center gap-3 sm:gap-4">
                         <ThemeSwitcher />
@@ -33,7 +40,7 @@ export function Layout() {
                     <footer className="mt-10 sm:mt-12 pt-5 sm:pt-6 border-t border-[var(--border-subtle)] text-center">
                         <p className="text-xs sm:text-sm text-slate-500">
                             Bu ürün fikri mülkiyet olarak korunmaktadır. Geliştirici{' '}
-                            <span className="font-semibold text-slate-700">Akın KARADAŞ</span> – iletişim:{' '}
+                            <span className="font-semibold text-slate-700">Akın KARADAŞ - Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti</span> – iletişim:{' '}
                             <span className="font-mono">+90 533 732 89 83</span>
                         </p>
                     </footer>

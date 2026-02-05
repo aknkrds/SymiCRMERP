@@ -19,10 +19,12 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
+import { useCompanySettings } from '../../hooks/useCompanySettings';
 
 export function Sidebar() {
     const [isOpen, setIsOpen] = React.useState(true);
     const { hasPermission, logout, user } = useAuth();
+    const { settings } = useCompanySettings();
     const navigate = useNavigate();
 
     const navItems = [
@@ -51,9 +53,17 @@ export function Sidebar() {
             <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/70">
                 {isOpen && (
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-indigo-400 via-fuchsia-400 to-rose-400 flex items-center justify-center text-sm font-extrabold shadow-md">
-                            S
-                        </div>
+                        {settings.logoUrl ? (
+                            <img 
+                                src={settings.logoUrl} 
+                                alt="Logo" 
+                                className="w-8 h-8 object-contain rounded-md bg-white/10"
+                            />
+                        ) : (
+                            <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-indigo-400 via-fuchsia-400 to-rose-400 flex items-center justify-center text-sm font-extrabold shadow-md">
+                                S
+                            </div>
+                        )}
                         <div className="leading-tight">
                             <p className="text-sm font-semibold tracking-tight">Symi CRM</p>
                             <p className="text-[10px] text-slate-400">Satış & Üretim Asistanı</p>
@@ -146,10 +156,10 @@ export function Sidebar() {
 
                 {isOpen && (
                     <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
-                        <p className="font-medium">Symi CRM v.0.9.2</p>
+                        <p className="font-medium">Symi CRM v.0.9.3</p>
                         <p className="text-[10px] mt-0.5 text-slate-500">
                             Tasarım & Geliştirme:{' '}
-                            <span className="font-semibold text-slate-200">Akın KARADAŞ</span>
+                            <span className="font-semibold text-slate-200">Akın KARADAŞ - Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti</span>
                         </p>
                     </div>
                 )}

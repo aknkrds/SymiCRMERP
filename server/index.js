@@ -195,6 +195,34 @@ app.delete('/api/admin/messages/:id', (req, res) => {
   }
 });
 
+// --- COMPANY SETTINGS ENDPOINTS ---
+
+app.get('/api/company-settings', (req, res) => {
+  try {
+    const settings = db.prepare('SELECT * FROM company_settings WHERE id = 1').get();
+    res.json(settings || {});
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/company-settings', (req, res) => {
+  try {
+    const { companyName, contactName, address, phone, mobile, logoUrl } = req.body;
+    const updatedAt = new Date().toISOString();
+    
+    db.prepare(`
+      UPDATE company_settings 
+      SET companyName = ?, contactName = ?, address = ?, phone = ?, mobile = ?, logoUrl = ?, updatedAt = ?
+      WHERE id = 1
+    `).run(companyName, contactName, address, phone, mobile, logoUrl, updatedAt);
+    
+    res.json({ success: true, updatedAt });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- BACKUP & RESTORE ---
 const ensureDir = (p) => {
   if (!fs.existsSync(p)) {

@@ -210,6 +210,29 @@ const initDb = () => {
     )
   `);
 
+  // Company Settings
+  db.exec(`
+      CREATE TABLE IF NOT EXISTS company_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        companyName TEXT DEFAULT 'Symi CRM',
+        contactName TEXT,
+        address TEXT,
+        phone TEXT,
+        mobile TEXT,
+        logoUrl TEXT,
+        updatedAt TEXT
+      )
+    `);
+
+  // Ensure default company settings exist
+  const existingSettings = db.prepare('SELECT id FROM company_settings WHERE id = 1').get();
+  if (!existingSettings) {
+    db.prepare(`
+      INSERT INTO company_settings (id, companyName, updatedAt) 
+      VALUES (1, 'Symi Satış ve Üretim Takip', ?)
+    `).run(new Date().toISOString());
+  }
+
   // Users
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -344,6 +367,13 @@ const initDb = () => {
     const hasAdditionalDocUrl = tableInfo.some(col => col.name === 'additionalDocUrl');
     if (!hasAdditionalDocUrl) {
         db.prepare("ALTER TABLE orders ADD COLUMN additionalDocUrl TEXT").run();
+    }
+
+    // Add logoUrl to company_settings if it doesn't exist
+    const companySettingsInfo = db.prepare("PRAGMA table_info(company_settings)").all();
+    const hasLogoUrl = companySettingsInfo.some(col => col.name === 'logoUrl');
+    if (!hasLogoUrl) {
+        db.prepare("ALTER TABLE company_settings ADD COLUMN logoUrl TEXT").run();
     }
     
     // Assignment columns

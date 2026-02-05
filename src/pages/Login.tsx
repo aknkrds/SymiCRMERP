@@ -140,11 +140,11 @@ const Login = () => {
 
         <div className="mt-12 pt-8 border-t border-slate-100 text-center">
             <p className="text-xs text-slate-400 leading-relaxed">
-                Lisans hakkı ve geliştirmesi Symi Tekstil Bilişim ve Software Ltd.Şti.<br/>
+                Lisans hakkı ve geliştirmesi Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti<br/>
                 Telefon: +90 533 732 89 83<br/>
                 Lisans satış ile ilgili bizimle iletişime geçebilirsiniz.
             </p>
-            <p className="text-[10px] text-slate-300 mt-2">v.0.9.2</p>
+            <p className="text-[10px] text-slate-300 mt-2">v.0.9.3</p>
         </div>
       </div>
     </div>

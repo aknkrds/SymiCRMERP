@@ -1,74 +1,50 @@
 @import "tailwindcss";
 
 @layer base {
-  /* Chrome, Safari, Edge, Opera */
-  input::-webkit-outer-spin-button,
-  input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  /* Firefox */
-  input[type="number"] {
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
-
   :root {
-    --bg-main: #f8fafc;
-    --bg-surface: #ffffff;
-    --border-subtle: #e2e8f0;
-    --accent: #6366f1;
-    --accent-soft: #e0e7ff;
-    --accent-strong: #4f46e5;
+    /* Default variables (Light/Klasik - Indigo) */
+    --bg-main: #f8fafc; /* slate-50 */
+    --bg-surface: #ffffff; /* white */
+    --border-subtle: #e2e8f0; /* slate-200 */
+    
+    --accent: #6366f1; /* indigo-500 */
+    --accent-strong: #4338ca; /* indigo-700 */
+    --accent-soft: #e0e7ff; /* indigo-100 */
   }
 
-  /* Şeker, pastel görünümlü varsayılan tema */
-  :root[data-theme='candy'] {
-    --bg-main: #fbf5ff;
-    --bg-surface: #ffffff;
-    --border-subtle: #f3e8ff;
-    --accent: #ec4899;
-    --accent-soft: #fdf2ff;
-    --accent-strong: #db2777;
+  [data-theme='candy'] {
+    --accent: #d946ef; /* fuchsia-500 */
+    --accent-strong: #a21caf; /* fuchsia-700 */
+    --accent-soft: #fae8ff; /* fuchsia-100 */
   }
 
-  /* Gün batımı tonları */
-  :root[data-theme='sunset'] {
-    --bg-main: #fff7ed;
-    --bg-surface: #ffffff;
-    --border-subtle: #fed7aa;
-    --accent: #f97316;
-    --accent-soft: #fffbeb;
-    --accent-strong: #ea580c;
+  [data-theme='sunset'] {
+    --accent: #f43f5e; /* rose-500 */
+    --accent-strong: #be123c; /* rose-700 */
+    --accent-soft: #ffe4e6; /* rose-100 */
   }
 
-  /* Orman / yeşil tema */
-  :root[data-theme='forest'] {
-    --bg-main: #f0fdf4;
-    --bg-surface: #ffffff;
-    --border-subtle: #bbf7d0;
-    --accent: #16a34a;
-    --accent-soft: #f0fdf4;
-    --accent-strong: #15803d;
+  [data-theme='forest'] {
+    --accent: #14b8a6; /* teal-500 */
+    --accent-strong: #0f766e; /* teal-700 */
+    --accent-soft: #ccfbf1; /* teal-100 */
   }
 }
 
 @layer utilities {
   .animate-fade-in-up {
-    animation: fadeInUp 0.5s ease-out forwards;
-    opacity: 0;
+    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
   
-  .delay-100 {
+  .animation-delay-100 {
     animation-delay: 100ms;
   }
   
-  .delay-200 {
+  .animation-delay-200 {
     animation-delay: 200ms;
   }
   
-  .delay-300 {
+  .animation-delay-300 {
     animation-delay: 300ms;
   }
 }
@@ -84,17 +60,21 @@
   }
 }
 
-  /* Klasik light/dark desteği (mevcut kullanım için) */
-  :root[data-theme='light'] {
-    --bg-main: #f8fafc;
-    --bg-surface: #ffffff;
-    --border-subtle: #e2e8f0;
-    --accent: #6366f1;
-    --accent-soft: #e0e7ff;
-    --accent-strong: #4f46e5;
-  }
+/* Custom scrollbar for better aesthetics */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
 
-  body {
-    background-color: var(--bg-main);
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

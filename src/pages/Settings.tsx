@@ -16,10 +16,12 @@ import {
   Database,
   AlertTriangle,
   Wand2,
-  Box
+  Box,
+  Building
 } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../context/AuthContext';
+import { useCompanySettings } from '../hooks/useCompanySettings';
 import ProductMoldSettings from '../components/settings/ProductMoldSettings';
 
 interface Role {
@@ -39,10 +41,18 @@ interface User {
 }
 
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup' | 'molds'>('users');
+  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup' | 'molds' | 'company'>('users');
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Company Settings Hook
+  const { settings: companySettings, updateSettings: updateCompanySettings, loading: companyLoading } = useCompanySettings();
+  const [companyForm, setCompanyForm] = useState(companySettings);
+
+  useEffect(() => {
+      setCompanyForm(companySettings);
+  }, [companySettings]);
 
   // Modals
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -339,6 +349,17 @@ const Settings = () => {
             Kullanıcılar
           </button>
           <button
+            onClick={() => setActiveTab('company')}
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+              activeTab === 'company'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Building size={18} />
+            Firma Bilgileri
+          </button>
+          <button
             onClick={() => setActiveTab('roles')}
             className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
               activeTab === 'roles'
@@ -374,6 +395,160 @@ const Settings = () => {
         </div>
 
         <div className="p-6">
+          {activeTab === 'company' && (
+            <div className="max-w-2xl animate-in fade-in duration-300">
+              <div className="mb-6 pb-6 border-b border-slate-100">
+                  <h3 className="text-lg font-semibold text-slate-800">Firma Bilgileri</h3>
+                  <p className="text-sm text-slate-500">Uygulama genelinde kullanılacak firma ve yetkili kişi bilgileri.</p>
+              </div>
+
+              <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                      await updateCompanySettings(companyForm);
+                      alert('Firma bilgileri başarıyla güncellendi.');
+                  } catch (error) {
+                      alert('Güncelleme sırasında bir hata oluştu.');
+                  }
+              }} className="space-y-6">
+                
+                {/* Logo Upload Section */}
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Firma Logosu</label>
+                    <div className="flex items-start gap-6">
+                        <div className="w-24 h-24 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden relative group">
+                            {companyForm.logoUrl ? (
+                                <>
+                                    <img src={companyForm.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
+                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setCompanyForm({...companyForm, logoUrl: ''})}
+                                            className="text-white p-1 hover:text-red-400"
+                                        >
+                                            <Trash2 size={20} />
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <Building className="text-slate-300" size={32} />
+                            )}
+                        </div>
+                        <div className="flex-1">
+                            <label className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors shadow-sm">
+                                <Upload size={16} />
+                                Logo Yükle
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+
+                                        const formData = new FormData();
+                                        formData.append('image', file);
+                                        // Use 'company' folder for organization
+                                        
+                                        try {
+                                            const res = await fetch('/api/upload?folder=company', {
+                                                method: 'POST',
+                                                body: formData
+                                            });
+                                            
+                                            if (!res.ok) throw new Error('Yükleme başarısız');
+                                            
+                                            const data = await res.json();
+                                            setCompanyForm({...companyForm, logoUrl: data.url});
+                                        } catch (error) {
+                                            console.error('Logo upload error:', error);
+                                            alert('Logo yüklenirken bir hata oluştu.');
+                                        }
+                                    }}
+                                />
+                            </label>
+                            <p className="text-xs text-slate-500 mt-2">
+                                PNG, JPG veya SVG formatında. Tavsiye edilen boyut: 200x200px.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid gap-6">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Firma İsmi</label>
+                        <input
+                            type="text"
+                            value={companyForm.companyName}
+                            onChange={e => setCompanyForm({...companyForm, companyName: e.target.value})}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                            placeholder="Örn: Symi Tekstil"
+                            required
+                        />
+                        <p className="text-xs text-slate-500 mt-1">Bu isim uygulamanın sol üst köşesindeki başlık alanında görünecektir.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Yetkili Kişi Adı Soyadı</label>
+                            <input
+                                type="text"
+                                value={companyForm.contactName}
+                                onChange={e => setCompanyForm({...companyForm, contactName: e.target.value})}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                placeholder="Ad Soyad"
+                            />
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Yetkili Cep Telefonu</label>
+                            <input
+                                type="text"
+                                value={companyForm.mobile}
+                                onChange={e => setCompanyForm({...companyForm, mobile: e.target.value})}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                placeholder="05XX XXX XX XX"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Firma Sabit Telefon</label>
+                            <input
+                                type="text"
+                                value={companyForm.phone}
+                                onChange={e => setCompanyForm({...companyForm, phone: e.target.value})}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                placeholder="0212 XXX XX XX"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Firma Adresi</label>
+                        <textarea
+                            value={companyForm.address}
+                            onChange={e => setCompanyForm({...companyForm, address: e.target.value})}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] transition-all"
+                            placeholder="Açık adres..."
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end pt-4">
+                    <button
+                        type="submit"
+                        disabled={companyLoading}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                        <Save size={18} />
+                        {companyLoading ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
+                    </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           {activeTab === 'users' && (
             <div className="space-y-4">
               <div className="flex justify-end">
