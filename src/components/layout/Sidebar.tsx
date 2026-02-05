@@ -1,6 +1,22 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Package, FileText, Settings, Menu, Palette, ShoppingCart, Factory, Calculator, Truck, CheckCircle, LogOut, BarChart2, Calendar } from 'lucide-react';
+import {
+    LayoutDashboard,
+    Users,
+    Package,
+    FileText,
+    Settings,
+    Menu,
+    Palette,
+    ShoppingCart,
+    Factory,
+    Calculator,
+    Truck,
+    CheckCircle,
+    LogOut,
+    BarChart2,
+    Calendar,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
 
@@ -26,53 +42,71 @@ export function Sidebar() {
     ];
 
     return (
-        <aside className={cn(
-            "bg-slate-900 text-white transition-all duration-300 h-screen flex flex-col",
-            isOpen ? "w-64" : "w-20"
-        )}>
-            <div className="h-16 flex items-center justify-between px-4 border-b border-slate-700">
-                {isOpen && <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Symi</h1>}
-                <button onClick={() => setIsOpen(!isOpen)} className="p-2 hover:bg-slate-800 rounded-lg" title="Toggle Menu">
+        <aside
+            className={cn(
+                'bg-slate-900 text-white transition-all duration-300 h-screen flex flex-col shadow-xl shadow-slate-900/40',
+                isOpen ? 'w-64' : 'w-20'
+            )}
+        >
+            <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/70">
+                {isOpen && (
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-indigo-400 via-fuchsia-400 to-rose-400 flex items-center justify-center text-sm font-extrabold shadow-md">
+                            S
+                        </div>
+                        <div className="leading-tight">
+                            <p className="text-sm font-semibold tracking-tight">Symi CRM</p>
+                            <p className="text-[10px] text-slate-400">Satış & Üretim Asistanı</p>
+                        </div>
+                    </div>
+                )}
+                <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="p-2 hover:bg-slate-800/80 rounded-lg transition-colors"
+                    title="Menüyü daralt / genişlet"
+                >
                     <Menu size={20} />
                 </button>
             </div>
 
-            <div className="p-4 border-b border-slate-700">
+            <div className="p-4 border-b border-slate-800/70">
                 {isOpen ? (
                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] flex items-center justify-center font-bold shadow-md">
                             {user?.fullName?.charAt(0) || 'U'}
                         </div>
                         <div className="overflow-hidden">
                             <p className="text-sm font-medium truncate">{user?.fullName}</p>
-                            <p className="text-xs text-slate-400 truncate">{user?.roleName}</p>
+                            <p className="text-[11px] text-slate-400 truncate">{user?.roleName}</p>
                         </div>
                     </div>
                 ) : (
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold mx-auto">
-                         {user?.fullName?.charAt(0) || 'U'}
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[var(--accent)] to-[var(--accent-strong)] flex items-center justify-center font-bold mx-auto shadow-md">
+                        {user?.fullName?.charAt(0) || 'U'}
                     </div>
                 )}
             </div>
 
             <nav className="flex-1 py-4 overflow-y-auto">
-                <ul className="space-y-2 px-2">
-                    {navItems.map((item) => {
+                <ul className="space-y-1.5 px-2">
+                    {navItems.map(item => {
                         if (!hasPermission(item.permission)) return null;
-                        
+
                         return (
                             <li key={item.to}>
                                 <NavLink
                                     to={item.to}
-                                    className={({ isActive }) => cn(
-                                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group",
-                                        isActive
-                                            ? "bg-indigo-600 text-white"
-                                            : "text-slate-400 hover:text-white hover:bg-slate-800"
-                                    )}
+                                    className={({ isActive }) =>
+                                        cn(
+                                            'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group text-sm',
+                                            isActive
+                                                ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent)]/40'
+                                                : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                                        )
+                                    }
                                 >
-                                    <item.icon size={20} />
-                                    {isOpen && <span className="font-medium">{item.label}</span>}
+                                    <item.icon size={20} className="shrink-0" />
+                                    {isOpen && <span className="font-medium truncate">{item.label}</span>}
                                 </NavLink>
                             </li>
                         );
@@ -80,37 +114,43 @@ export function Sidebar() {
                 </ul>
             </nav>
 
-            <div className="p-4 border-t border-slate-700 space-y-2">
+            <div className="p-4 border-t border-slate-800/70 space-y-2">
                 {hasPermission('settings') && (
-                    <NavLink 
+                    <NavLink
                         to="/settings"
-                        className={({ isActive }) => cn(
-                            "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors",
-                            isActive
-                                ? "bg-indigo-600 text-white"
-                                : "text-slate-400 hover:text-white hover:bg-slate-800",
-                            !isOpen && "justify-center"
-                        )}
+                        className={({ isActive }) =>
+                            cn(
+                                'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-colors text-sm',
+                                isActive
+                                    ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent)]/40'
+                                    : 'text-slate-300 hover:text-white hover:bg-slate-800/80',
+                                !isOpen && 'justify-center'
+                            )
+                        }
                     >
                         <Settings size={20} />
                         {isOpen && <span>Ayarlar</span>}
                     </NavLink>
                 )}
-                
-                <button 
+
+                <button
                     onClick={logout}
                     className={cn(
-                        "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-slate-800 transition-colors",
-                        !isOpen && "justify-center"
+                        'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm text-red-300 hover:text-red-200 hover:bg-slate-800/80 transition-colors',
+                        !isOpen && 'justify-center'
                     )}
                 >
                     <LogOut size={20} />
                     {isOpen && <span>Çıkış Yap</span>}
                 </button>
-                
+
                 {isOpen && (
-                    <div className="px-3 py-2 mt-4 text-xs text-slate-600 text-center border-t border-slate-800 pt-4">
-                        Symi CRM v9.0.1
+                    <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
+                        <p className="font-medium">Symi CRM v9.0.1</p>
+                        <p className="text-[10px] mt-0.5 text-slate-500">
+                            Tasarım & Geliştirme:{' '}
+                            <span className="font-semibold text-slate-200">Akın KARADAŞ</span>
+                        </p>
                     </div>
                 )}
             </div>
