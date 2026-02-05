@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Customers from './pages/Customers';
 import Products from './pages/Products';
 import Orders from './pages/Orders';
@@ -38,83 +39,85 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          <Route element={<Layout />}>
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/customers" element={
-              <ProtectedRoute permission="orders">
-                <Customers />
-              </ProtectedRoute>
-            } />
-            <Route path="/products" element={
-              <ProtectedRoute permission="products">
-                <Products />
-              </ProtectedRoute>
-            } />
-            <Route path="/orders" element={
-              <ProtectedRoute permission="orders">
-                <Orders />
-              </ProtectedRoute>
-            } />
-            <Route path="/design" element={
-              <ProtectedRoute permission="design">
-                <Design />
-              </ProtectedRoute>
-            } />
-            <Route path="/procurement" element={
-              <ProtectedRoute permission="procurement">
-                <Procurement />
-              </ProtectedRoute>
-            } />
-            <Route path="/planning" element={
-              <ProtectedRoute permission="planning">
-                <Planning />
-              </ProtectedRoute>
-            } />
-            <Route path="/production" element={
-              <ProtectedRoute permission="production">
-                <Production />
-              </ProtectedRoute>
-            } />
-            <Route path="/accounting" element={
-              <ProtectedRoute permission="accounting">
-                <Accounting />
-              </ProtectedRoute>
-            } />
-            <Route path="/logistics" element={
-              <ProtectedRoute permission="logistics">
-                <Logistics />
-              </ProtectedRoute>
-            } />
-            <Route path="/approvals" element={
-              <ProtectedRoute permission="all_except_settings">
-                <Approvals />
-              </ProtectedRoute>
-            } />
-            <Route path="/stock" element={
-              <ProtectedRoute permission="all_except_settings">
-                <Stock />
-              </ProtectedRoute>
-            } />
-            <Route path="/reports" element={
-              <ProtectedRoute permission="all_except_settings">
-                <Reports />
-              </ProtectedRoute>
-            } />
-            <Route path="/settings" element={
-              <ProtectedRoute permission="settings">
-                <Settings />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
+        <ThemeProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            
+            <Route element={<Layout />}>
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/customers" element={
+                <ProtectedRoute permission="orders">
+                  <Customers />
+                </ProtectedRoute>
+              } />
+              <Route path="/products" element={
+                <ProtectedRoute permission="products">
+                  <Products />
+                </ProtectedRoute>
+              } />
+              <Route path="/orders" element={
+                <ProtectedRoute permission="orders">
+                  <Orders />
+                </ProtectedRoute>
+              } />
+              <Route path="/design" element={
+                <ProtectedRoute permission="design">
+                  <Design />
+                </ProtectedRoute>
+              } />
+              <Route path="/procurement" element={
+                <ProtectedRoute permission="procurement">
+                  <Procurement />
+                </ProtectedRoute>
+              } />
+              <Route path="/planning" element={
+                <ProtectedRoute permission="planning">
+                  <Planning />
+                </ProtectedRoute>
+              } />
+              <Route path="/production" element={
+                <ProtectedRoute permission="production">
+                  <Production />
+                </ProtectedRoute>
+              } />
+              <Route path="/accounting" element={
+                <ProtectedRoute permission="accounting">
+                  <Accounting />
+                </ProtectedRoute>
+              } />
+              <Route path="/logistics" element={
+                <ProtectedRoute permission="logistics">
+                  <Logistics />
+                </ProtectedRoute>
+              } />
+              <Route path="/approvals" element={
+                <ProtectedRoute permission="all_except_settings">
+                  <Approvals />
+                </ProtectedRoute>
+              } />
+              <Route path="/stock" element={
+                <ProtectedRoute permission="all_except_settings">
+                  <Stock />
+                </ProtectedRoute>
+              } />
+              <Route path="/reports" element={
+                <ProtectedRoute permission="all_except_settings">
+                  <Reports />
+                </ProtectedRoute>
+              } />
+              <Route path="/settings" element={
+                <ProtectedRoute permission="settings">
+                  <Settings />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>
   );
