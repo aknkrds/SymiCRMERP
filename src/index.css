@@ -49,9 +49,40 @@
     --bg-surface: #ffffff;
     --border-subtle: #bbf7d0;
     --accent: #16a34a;
-    --accent-soft: #ecfdf3;
+    --accent-soft: #f0fdf4;
     --accent-strong: #15803d;
   }
+}
+
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s ease-out forwards;
+    opacity: 0;
+  }
+  
+  .delay-100 {
+    animation-delay: 100ms;
+  }
+  
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+  
+  .delay-300 {
+    animation-delay: 300ms;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
   /* Klasik light/dark desteği (mevcut kullanım için) */
   :root[data-theme='light'] {

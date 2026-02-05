@@ -1,5 +1,6 @@
 import { useOrders } from '../hooks/useOrders';
-import { Package, TrendingUp, AlertCircle, CheckCircle2, DollarSign, Users, Activity } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Package, TrendingUp, AlertCircle, CheckCircle2, DollarSign, Users, Activity, Clock, Calendar } from 'lucide-react';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -21,6 +22,17 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 export default function Dashboard() {
     const { orders } = useOrders();
+    const { user } = useAuth();
+
+    const greeting = useMemo(() => {
+        const hour = new Date().getHours();
+        if (hour < 7) return 'İyi Geceler';
+        if (hour < 12) return 'Günaydın';
+        if (hour < 18) return 'Tünaydın';
+        return 'İyi Akşamlar';
+    }, []);
+
+    const today = format(new Date(), 'd MMMM yyyy, EEEE', { locale: tr });
 
     // --- Statistics Calculations ---
 
@@ -95,38 +107,47 @@ export default function Dashboard() {
     const recentOrders = orders.slice(0, 5);
 
     return (
-        <div className="space-y-6 pb-10">
-            <div className="flex justify-between items-center">
+        <div className="space-y-8 pb-10">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in-up">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Genel Bakış</h1>
-                    <p className="text-slate-500 text-sm mt-1">
-                        {format(new Date(), 'dd MMMM yyyy, EEEE', { locale: tr })}
-                    </p>
+                    <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+                        {greeting}, <span className="text-[var(--accent)]">{user?.fullName?.split(' ')[0] || 'Kullanıcı'}</span> 👋
+                    </h1>
+                    <p className="text-slate-500 mt-1">İşte bugünün özeti ve bekleyen işleriniz.</p>
+                </div>
+                <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-200/60 backdrop-blur-sm">
+                    <Calendar className="text-[var(--accent)]" size={18} />
+                    <span className="text-sm font-medium text-slate-600">{today}</span>
                 </div>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat, idx) => (
-                    <div key={idx} className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4 transition-transform hover:scale-[1.02]">
-                        <div className={`p-3 rounded-lg ${stat.bg} ${stat.color}`}>
-                            <stat.icon size={24} />
-                        </div>
+                    <div 
+                        key={idx} 
+                        className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 flex items-center justify-between hover:-translate-y-1 transition-all duration-300 animate-fade-in-up group"
+                        style={{ animationDelay: `${idx * 100}ms` }}
+                    >
                         <div>
-                            <p className="text-sm font-medium text-slate-500">{stat.label}</p>
-                            <h3 className="text-2xl font-bold text-slate-800">{stat.value}</h3>
+                            <p className="text-sm font-medium text-slate-500 mb-1 group-hover:text-[var(--accent)] transition-colors">{stat.label}</p>
+                            <h3 className="text-3xl font-bold text-slate-800">{stat.value}</h3>
+                        </div>
+                        <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} shadow-inner group-hover:scale-110 transition-transform duration-300`}>
+                            <stat.icon size={28} />
                         </div>
                     </div>
                 ))}
             </div>
 
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up delay-200">
                 
                 {/* Status Distribution */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 flex flex-col hover:shadow-xl transition-shadow duration-300">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Activity className="w-5 h-5 text-blue-500" />
+                        <Activity className="w-5 h-5 text-[var(--accent)]" />
                         Sipariş Durumları
                     </h3>
                     <div className="h-64 w-full">
@@ -167,7 +188,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Top Customers */}
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 hover:shadow-xl transition-shadow duration-300">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Users className="w-5 h-5 text-purple-500" />
                         En Çok Sipariş Veren Müşteriler (Top 5)
@@ -197,14 +218,14 @@ export default function Dashboard() {
             </div>
 
             {/* Orders List */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-200 flex justify-between items-center">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden animate-fade-in-up delay-300">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <h2 className="text-lg font-bold text-slate-800">Son İşlemler</h2>
-                    <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">Tümünü Gör</button>
+                    <button className="text-sm text-[var(--accent)] hover:text-[var(--accent-strong)] font-medium transition-colors">Tümünü Gör</button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                        <thead className="bg-slate-50/80 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
                                 <th className="px-6 py-4">Sipariş No</th>
                                 <th className="px-6 py-4">Müşteri</th>
