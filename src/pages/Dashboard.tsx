@@ -197,14 +197,14 @@ export default function Dashboard() {
             </div>
 
             {/* Orders List */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-200 flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-slate-800">Son İşlemler</h2>
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Son İşlemler</h2>
                     <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">Tümünü Gör</button>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                    <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                        <thead className="bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold border-b border-slate-200 dark:border-slate-700">
                             <tr>
                                 <th className="px-6 py-4">Sipariş No</th>
                                 <th className="px-6 py-4">Müşteri</th>
@@ -213,7 +213,7 @@ export default function Dashboard() {
                                 <th className="px-6 py-4">Durum</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-200">
+                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                             {recentOrders.length === 0 ? (
                                 <tr>
                                     <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
@@ -224,22 +224,22 @@ export default function Dashboard() {
                                 recentOrders.map((order) => (
                                     <tr 
                                         key={order.id} 
-                                        className={`transition-colors border-b last:border-0 ${
+                                        className={`transition-colors border-b last:border-0 dark:bg-slate-900 dark:hover:bg-slate-800 ${
                                             order.status === 'created' 
                                                 ? 'bg-white hover:bg-slate-50' 
                                                 : (ORDER_STATUS_MAP[order.status]?.color ? `bg-${ORDER_STATUS_MAP[order.status].color.match(/bg-([a-z]+)-/)?.[1] || 'slate'}-50 hover:bg-${ORDER_STATUS_MAP[order.status].color.match(/bg-([a-z]+)-/)?.[1] || 'slate'}-100` : 'bg-white hover:bg-slate-50')
                                         }`}
                                     >
-                                        <td className="px-6 py-4 font-mono text-xs text-slate-600">#{order.id.slice(0, 8)}</td>
-                                        <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
+                                        <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-300">#{order.id.slice(0, 8)}</td>
+                                        <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-100">{order.customerName}</td>
                                         <td className="px-6 py-4">
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
                                         </td>
-                                        <td className="px-6 py-4 font-semibold text-slate-700">
+                                        <td className="px-6 py-4 font-semibold text-slate-700 dark:text-slate-200">
                                             {order.grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {order.currency}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-800 border-slate-200'} bg-opacity-10 border-opacity-20`}>
+                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-800 border-slate-200'} bg-opacity-10 border-opacity-20 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-600`}>
                                                 {ORDER_STATUS_MAP[order.status]?.label || order.status}
                                             </span>
                                         </td>
