@@ -21,28 +21,24 @@ const isValidTheme = (value: string | null): value is ThemeId => {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [theme, setThemeState] = useState<ThemeId>('candy');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Kullanıcı değiştiğinde o kullanıcıya özel tema tercihini yükle
   useEffect(() => {
+    setIsLoaded(false);
     const key = `${THEME_STORAGE_PREFIX}${user?.id ?? 'guest'}`;
     const saved = localStorage.getItem(key);
     if (isValidTheme(saved)) {
       setThemeState(saved);
-      return;
     }
-
-    // Eski tekil theme kaydını (light/dark) geriye dönük destekle
-    const legacy = localStorage.getItem('theme');
-    if (legacy === 'dark') {
-      // Eski dark kaydı yeni sistemde "light" olarak kabul edilsin
-      setThemeState('light');
-    } else if (isValidTheme(legacy)) {
-      setThemeState(legacy);
-    }
+    setIsLoaded(true);
   }, [user?.id]);
 
   // Tema değiştiğinde hem DOM'a hem localStorage'a yaz
   useEffect(() => {
+    // Yükleme tamamlanmadan kaydetme işlemi yapma (Initial overwrite koruması)
+    if (!isLoaded) return;
+
     const root = document.documentElement;
 
     // Sadece data-theme ile çalışıyoruz, Tailwind'in .dark sınıfını kullanmıyoruz
@@ -51,7 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const key = `${THEME_STORAGE_PREFIX}${user?.id ?? 'guest'}`;
     localStorage.setItem(key, theme);
-  }, [theme, user?.id]);
+  }, [theme, user?.id, isLoaded]);
 
   const setTheme = (t: ThemeId) => setThemeState(t);
 

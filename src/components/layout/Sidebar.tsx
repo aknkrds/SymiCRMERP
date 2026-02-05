@@ -146,7 +146,7 @@ export function Sidebar() {
 
                 {isOpen && (
                     <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
-                        <p className="font-medium">Symi CRM v9.0.1</p>
+                        <p className="font-medium">Symi CRM v.0.9.2</p>
                         <p className="text-[10px] mt-0.5 text-slate-500">
                             Tasarım & Geliştirme:{' '}
                             <span className="font-semibold text-slate-200">Akın KARADAŞ</span>
