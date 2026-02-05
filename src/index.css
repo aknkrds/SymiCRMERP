@@ -12,4 +12,66 @@
   input[type="number"] {
     -moz-appearance: textfield;
   }
+
+  :root {
+    --bg-main: #f8fafc;
+    --bg-surface: #ffffff;
+    --border-subtle: #e2e8f0;
+    --accent: #6366f1;
+    --accent-soft: #e0e7ff;
+    --accent-strong: #4f46e5;
+  }
+
+  /* Şeker, pastel görünümlü varsayılan tema */
+  :root[data-theme='candy'] {
+    --bg-main: #fbf5ff;
+    --bg-surface: #ffffff;
+    --border-subtle: #f3e8ff;
+    --accent: #ec4899;
+    --accent-soft: #fdf2ff;
+    --accent-strong: #db2777;
+  }
+
+  /* Gün batımı tonları */
+  :root[data-theme='sunset'] {
+    --bg-main: #fff7ed;
+    --bg-surface: #ffffff;
+    --border-subtle: #fed7aa;
+    --accent: #f97316;
+    --accent-soft: #fffbeb;
+    --accent-strong: #ea580c;
+  }
+
+  /* Orman / yeşil tema */
+  :root[data-theme='forest'] {
+    --bg-main: #f0fdf4;
+    --bg-surface: #ffffff;
+    --border-subtle: #bbf7d0;
+    --accent: #16a34a;
+    --accent-soft: #ecfdf3;
+    --accent-strong: #15803d;
+  }
+
+  /* Klasik light/dark desteği (mevcut kullanım için) */
+  :root[data-theme='light'] {
+    --bg-main: #f8fafc;
+    --bg-surface: #ffffff;
+    --border-subtle: #e2e8f0;
+    --accent: #6366f1;
+    --accent-soft: #e0e7ff;
+    --accent-strong: #4f46e5;
+  }
+
+  :root[data-theme='dark'] {
+    --bg-main: #020617;
+    --bg-surface: #020617;
+    --border-subtle: #1f2933;
+    --accent: #38bdf8;
+    --accent-soft: #0b1220;
+    --accent-strong: #0ea5e9;
+  }
+
+  body {
+    background-color: var(--bg-main);
+  }
 }
