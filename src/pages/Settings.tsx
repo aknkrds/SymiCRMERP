@@ -778,7 +778,7 @@ const Settings = () => {
                 <p className="text-sm text-red-600 mb-4">
                   Sisteme girilen tüm operasyonel verileri (Siparişler, Müşteriler, Stok, Üretim vb.) ve yüklenen dosyaları siler.
                   <br />
-                  <strong>Silinmeyecekler:</strong> Sadece Kullanıcılar ve Roller.
+                  <strong>Silinmeyecekler:</strong> Kullanıcılar, Roller, Firma Bilgileri ve Firma Logosu.
                 </p>
                 <button
                   onClick={() => setShowResetModal(true)}

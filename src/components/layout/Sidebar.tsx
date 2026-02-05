@@ -53,17 +53,11 @@ export function Sidebar() {
             <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/70">
                 {isOpen && (
                     <div className="flex items-center gap-2">
-                        {settings.logoUrl ? (
-                            <img 
-                                src={settings.logoUrl} 
-                                alt="Logo" 
-                                className="w-8 h-8 object-contain rounded-md bg-white/10"
-                            />
-                        ) : (
-                            <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-indigo-400 via-fuchsia-400 to-rose-400 flex items-center justify-center text-sm font-extrabold shadow-md">
-                                S
-                            </div>
-                        )}
+                        <img 
+                            src="/symi.png" 
+                            alt="Symi CRM" 
+                            className="w-8 h-8 object-contain rounded-md bg-white/10"
+                        />
                         <div className="leading-tight">
                             <p className="text-sm font-semibold tracking-tight">Symi CRM</p>
                             <p className="text-[10px] text-slate-400">Satış & Üretim Asistanı</p>

@@ -353,6 +353,7 @@ app.post('/api/reset-data', (req, res) => {
       'machines',
       // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
       'weekly_plans'
+      // 'company_settings' // KORUNDU: Firma bilgileri silinmeyecek
     ];
 
     // Execute deletions in a transaction with FK checks disabled
@@ -364,7 +365,7 @@ app.post('/api/reset-data', (req, res) => {
         for (const table of tablesToClear) {
           db.prepare(`DELETE FROM ${table}`).run();
         }
-        // NOTE: product_molds, users, roles, and personnel tables are EXPLICITLY EXCLUDED from deletion.
+        // NOTE: product_molds, users, roles, personnel, and company_settings tables are EXPLICITLY EXCLUDED from deletion.
       } finally {
         // Re-enable Foreign Key constraints
         db.prepare('PRAGMA foreign_keys = ON').run();
@@ -377,15 +378,13 @@ app.post('/api/reset-data', (req, res) => {
     const imgDir = path.join(process.cwd(), 'server', 'img');
     const docDir = path.join(process.cwd(), 'server', 'doc');
 
-    const clearDirectory = (directory) => {
+    const clearDirectory = (directory, excludeList = []) => {
       if (fs.existsSync(directory)) {
         const files = fs.readdirSync(directory);
         for (const file of files) {
+          if (excludeList.includes(file)) continue; // Skip excluded files/folders
+
           const filePath = path.join(directory, file);
-          // Skip if it is a directory? No, user wants clean start. 
-          // But maybe we should keep 'tasarim' folder structure if it exists?
-          // User said "herşey sıfırlansın temizlensin" except admin/users/roles.
-          // So we delete everything inside img and doc.
           try {
             fs.rmSync(filePath, { recursive: true, force: true });
           } catch (e) {
@@ -395,7 +394,8 @@ app.post('/api/reset-data', (req, res) => {
       }
     };
 
-    clearDirectory(imgDir);
+    // 'company' folder must be preserved in imgDir
+    clearDirectory(imgDir, ['company']);
     clearDirectory(docDir);
 
     res.json({ success: true, message: 'Veriler ve dosyalar başarıyla sıfırlandı.' });
