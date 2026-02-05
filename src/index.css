@@ -63,56 +63,7 @@
     --accent-strong: #4f46e5;
   }
 
-  :root[data-theme='dark'] {
-    --bg-main: #020617;
-    --bg-surface: #020617;
-    --border-subtle: #1f2933;
-    --accent: #38bdf8;
-    --accent-soft: #0b1220;
-    --accent-strong: #0ea5e9;
-  }
-
   body {
     background-color: var(--bg-main);
-  }
-
-  /* Dark temada yaygın Tailwind sınıflarına yumuşak koyu tema override'ları */
-  :root[data-theme='dark'] body {
-    color: #e5e7eb;
-  }
-
-  :root[data-theme='dark'] .bg-white,
-  :root[data-theme='dark'] .bg-slate-50 {
-    background-color: #020617 !important;
-  }
-
-  :root[data-theme='dark'] .border-slate-100,
-  :root[data-theme='dark'] .border-slate-200,
-  :root[data-theme='dark'] .border-slate-300 {
-    border-color: #1f2937 !important;
-  }
-
-  :root[data-theme='dark'] .text-slate-800,
-  :root[data-theme='dark'] .text-slate-700,
-  :root[data-theme='dark'] .text-slate-600 {
-    color: #e5e7eb !important;
-  }
-
-  :root[data-theme='dark'] .text-slate-500,
-  :root[data-theme='dark'] .text-slate-400 {
-    color: #9ca3af !important;
-  }
-
-  :root[data-theme='dark'] input,
-  :root[data-theme='dark'] textarea,
-  :root[data-theme='dark'] select {
-    background-color: #020617;
-    color: #e5e7eb;
-    border-color: #374151;
-  }
-
-  :root[data-theme='dark'] input::placeholder,
-  :root[data-theme='dark'] textarea::placeholder {
-    color: #6b7280;
   }
 }

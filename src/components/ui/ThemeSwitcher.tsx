@@ -14,7 +14,6 @@ const THEME_OPTIONS: ThemeOption[] = [
   { id: 'sunset', label: 'Gün Batımı', previewClass: 'from-orange-400 to-rose-500' },
   { id: 'forest', label: 'Orman', previewClass: 'from-emerald-400 to-teal-500' },
   { id: 'light', label: 'Klasik', previewClass: 'from-sky-400 to-indigo-500' },
-  { id: 'dark', label: 'Gece', previewClass: 'from-slate-700 to-slate-900' },
 ];
 
 export function ThemeSwitcher() {
