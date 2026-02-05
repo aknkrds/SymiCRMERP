@@ -88,7 +88,62 @@ export default function Orders() {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {filteredOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Kayıtlı sipariş bulunamadı.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {filteredOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        </div>
+                                        <select
+                                            value={order.status}
+                                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                            aria-label="Sipariş durumu"
+                                            className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none appearance-none ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'} bg-opacity-100 max-w-[120px]`}
+                                        >
+                                            {Object.entries(ORDER_STATUS_MAP).map(([key, val]) => (
+                                                <option key={key} value={key}>{val.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    
+                                    <div className="flex justify-between text-sm text-slate-600">
+                                        <div>{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</div>
+                                        <div className="font-semibold text-slate-700">{order.grandTotal.toFixed(2)} {order.currency}</div>
+                                    </div>
+
+                                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                                        <button
+                                            onClick={() => generateQuotePDF(order)}
+                                            className="p-2 text-slate-600 bg-slate-50 rounded-lg"
+                                            title="PDF İndir"
+                                        >
+                                            <FileDown size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => { setEditingOrder(order); setIsModalOpen(true); }}
+                                            className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"
+                                            title="Düzenle"
+                                        >
+                                            <Eye size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>

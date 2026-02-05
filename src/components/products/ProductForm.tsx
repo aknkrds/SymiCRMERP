@@ -299,6 +299,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                             disabled
                             value={initialData?.code || "Otomatik Oluşturulacak (GMP...)"}
                             className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-lg text-slate-500 cursor-not-allowed"
+                            aria-label="Ürün Kodu"
                         />
                     </div>
                     <div className="space-y-1">
@@ -310,6 +311,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                                 errors.name ? "border-red-500" : "border-slate-300"
                             )}
                             placeholder="Örn: Yuvarlak Kutu"
+                            aria-label="Ürün Adı"
                         />
                         {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
                     </div>
@@ -330,6 +332,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                                         value={type.value}
                                         {...register('productType')}
                                         className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                                        aria-label={type.label}
                                     />
                                     <span className="text-sm text-slate-700">{type.label}</span>
                                 </label>
@@ -343,6 +346,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                             <select
                                 {...register('boxShape')}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                aria-label="Kutu Şekli"
                             >
                                 <option value="">Seçiniz...</option>
                                 {productType === 'percinli' && PERCINLI_SHAPES.map(shape => (
@@ -359,13 +363,14 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
 
                     {/* Perçinli + Kare -> Base Dimensions + Depth */}
                     {productType === 'percinli' && boxShape === 'Kare' && (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-700">Taban Ölçüsü (mm)</label>
                                 <select
                                     value={currentBaseDim}
                                     onChange={handleBaseDimChange}
                                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    aria-label="Taban Ölçüsü"
                                 >
                                     <option value="">Seçiniz...</option>
                                     {molds.filter(m => m.boxShape === 'Kare').sort(sortDimensions).map(m => (
@@ -381,6 +386,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                                         placeholder="0"
                                         {...register('dimensions.depth')}
                                         className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                        aria-label="Yükseklik"
                                     />
                                 </div>
                             )}
@@ -389,13 +395,14 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
 
                     {/* Perçinli + Oval -> Base Dimensions + Depth */}
                     {productType === 'percinli' && boxShape === 'Oval' && (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-700">Taban Ölçüsü (mm)</label>
                                 <select
                                     value={currentBaseDim}
                                     onChange={handleBaseDimChange}
                                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    aria-label="Taban Ölçüsü"
                                 >
                                     <option value="">Seçiniz...</option>
                                     {molds.filter(m => m.boxShape === 'Oval').sort(sortDimensions).map(m => (
@@ -411,6 +418,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                                         placeholder="0"
                                         {...register('dimensions.depth')}
                                         className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                        aria-label="Yükseklik"
                                     />
                                 </div>
                             )}
@@ -419,13 +427,14 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                     
                     {/* Perçinli + Sekizgen -> Base Dimensions + Depth */}
                     {productType === 'percinli' && boxShape === 'Sekizgen' && (
-                        <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-slate-700">Taban Ölçüsü (mm)</label>
                                 <select
                                     value={currentBaseDim}
                                     onChange={handleBaseDimChange}
                                     className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    aria-label="Taban Ölçüsü"
                                 >
                                     <option value="">Seçiniz...</option>
                                     {molds.filter(m => m.boxShape === 'Sekizgen').sort(sortDimensions).map(m => (
@@ -661,6 +670,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                             onChange={(e) => setNewPantone(e.target.value)}
                             placeholder="Kod (Örn: C0000)"
                             className="flex-1 px-3 py-1.5 border rounded text-sm outline-none focus:border-indigo-500"
+                            aria-label="Pantone Kodu"
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
@@ -682,7 +692,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                             {pantones.map((code, index) => (
                                 <div key={index} className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded text-sm border border-slate-200">
                                     <span>{code}</span>
-                                    <button type="button" onClick={() => removePantone(index)} className="text-slate-400 hover:text-red-500">
+                                    <button type="button" onClick={() => removePantone(index)} className="text-slate-400 hover:text-red-500" aria-label="Pantone Sil">
                                         <X size={14} />
                                     </button>
                                 </div>
@@ -926,6 +936,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                                     type="button"
                                     onClick={() => removeImage(index)}
                                     className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                    aria-label="Resmi Sil"
                                 >
                                     <X size={12} />
                                 </button>
@@ -935,7 +946,7 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                             <label className="w-24 h-24 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all">
                                 <Upload className="w-6 h-6 text-slate-400 mb-1" />
                                 <span className="text-[10px] text-slate-500">Yükle</span>
-                                <input type="file" className="hidden" accept="image/jpeg,image/png,application/pdf" onChange={handleImageUpload} />
+                                <input type="file" className="hidden" accept="image/jpeg,image/png,application/pdf" onChange={handleImageUpload} aria-label="Resim Yükle" />
                             </label>
                         )}
                     </div>
@@ -947,12 +958,14 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
                     type="button"
                     onClick={onCancel}
                     className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50"
+                    aria-label="İptal"
                 >
                     İptal
                 </button>
                 <button
                     type="submit"
                     className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                    aria-label="Kaydet"
                 >
                     Kaydet
                 </button>

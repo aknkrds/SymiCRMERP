@@ -79,7 +79,74 @@ export default function Products() {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {filteredProducts.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Kayıtlı ürün bulunamadı.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {filteredProducts.map((product) => (
+                                <div key={product.id} className="p-4 space-y-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+                                            <Package size={20} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start">
+                                                <div className="font-semibold text-slate-800 truncate">{product.code}</div>
+                                                <div className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                                    {product.dimensions.length}x{product.dimensions.width}x{product.dimensions.depth}
+                                                </div>
+                                            </div>
+                                            <div className="text-sm text-slate-600 mt-1 line-clamp-2">{product.description}</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        {product.features.hasLid && (
+                                            <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
+                                        )}
+                                        {product.features.hasWindow && (
+                                            <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
+                                        )}
+                                        {product.features.extras && (
+                                            <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full" title={product.features.extras}>+Ekstra</span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                                        <button
+                                            onClick={() => handleView(product)}
+                                            className="p-2 text-blue-600 bg-blue-50 rounded-lg"
+                                            title="Görüntüle"
+                                        >
+                                            <Eye size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleEdit(product)}
+                                            className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"
+                                            title="Düzenle"
+                                        >
+                                            <Edit2 size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(product.id)}
+                                            className="p-2 text-red-600 bg-red-50 rounded-lg"
+                                            title="Sil"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>

@@ -336,10 +336,11 @@ const Settings = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div className="flex border-b border-slate-200">
+        <div className="flex border-b border-slate-200 overflow-x-auto no-scrollbar">
           <button
+            type="button"
             onClick={() => setActiveTab('users')}
-            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'users'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-500 hover:text-slate-700'
@@ -349,8 +350,9 @@ const Settings = () => {
             Kullanıcılar
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('company')}
-            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'company'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-500 hover:text-slate-700'
@@ -360,8 +362,9 @@ const Settings = () => {
             Firma Bilgileri
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('roles')}
-            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'roles'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-500 hover:text-slate-700'
@@ -371,8 +374,9 @@ const Settings = () => {
             Roller ve İzinler
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('molds')}
-            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'molds'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-500 hover:text-slate-700'
@@ -382,8 +386,9 @@ const Settings = () => {
             Ürün Kalıpları
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('backup')}
-            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 ${
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
               activeTab === 'backup'
                 ? 'text-blue-600 border-b-2 border-blue-600'
                 : 'text-slate-500 hover:text-slate-700'
@@ -415,8 +420,8 @@ const Settings = () => {
                 {/* Logo Upload Section */}
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Firma Logosu</label>
-                    <div className="flex items-start gap-6">
-                        <div className="w-24 h-24 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden relative group">
+                    <div className="flex flex-col sm:flex-row items-start gap-6">
+                        <div className="w-24 h-24 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden relative group shrink-0">
                             {companyForm.logoUrl ? (
                                 <>
                                     <img src={companyForm.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
@@ -425,6 +430,8 @@ const Settings = () => {
                                             type="button"
                                             onClick={() => setCompanyForm({...companyForm, logoUrl: ''})}
                                             className="text-white p-1 hover:text-red-400"
+                                            title="Logoyu Sil"
+                                            aria-label="Logoyu Sil"
                                         >
                                             <Trash2 size={20} />
                                         </button>
@@ -442,6 +449,7 @@ const Settings = () => {
                                     type="file" 
                                     className="hidden" 
                                     accept="image/*"
+                                    aria-label="Logo Yükle"
                                     onChange={async (e) => {
                                         const file = e.target.files?.[0];
                                         if (!file) return;
@@ -484,6 +492,7 @@ const Settings = () => {
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             placeholder="Örn: Symi Tekstil"
                             required
+                            aria-label="Firma İsmi"
                         />
                         <p className="text-xs text-slate-500 mt-1">Bu isim uygulamanın sol üst köşesindeki başlık alanında görünecektir.</p>
                     </div>
@@ -497,6 +506,7 @@ const Settings = () => {
                                 onChange={e => setCompanyForm({...companyForm, contactName: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 placeholder="Ad Soyad"
+                                aria-label="Yetkili Kişi Adı Soyadı"
                             />
                         </div>
                          <div>
@@ -507,6 +517,7 @@ const Settings = () => {
                                 onChange={e => setCompanyForm({...companyForm, mobile: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 placeholder="05XX XXX XX XX"
+                                aria-label="Yetkili Cep Telefonu"
                             />
                         </div>
                     </div>
@@ -520,6 +531,7 @@ const Settings = () => {
                                 onChange={e => setCompanyForm({...companyForm, phone: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 placeholder="0212 XXX XX XX"
+                                aria-label="Firma Sabit Telefon"
                             />
                         </div>
                     </div>
@@ -531,6 +543,7 @@ const Settings = () => {
                             onChange={e => setCompanyForm({...companyForm, address: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] transition-all"
                             placeholder="Açık adres..."
+                            aria-label="Firma Adresi"
                         />
                     </div>
                 </div>
@@ -553,6 +566,7 @@ const Settings = () => {
             <div className="space-y-4">
               <div className="flex justify-end">
                 <button
+                  type="button"
                   onClick={() => {
                     setCurrentUser({ isActive: 1, roleId: roles[0]?.id });
                     setShowUserModal(true);
@@ -564,7 +578,85 @@ const Settings = () => {
                 </button>
               </div>
 
-              <div className="overflow-x-auto">
+              {/* Mobile View (Cards) for Users */}
+              <div className="md:hidden space-y-4">
+                  {users.map(user => (
+                    <div key={user.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <div className="font-medium text-slate-800">{user.fullName}</div>
+                                <div className="text-sm text-slate-500">@{user.username}</div>
+                            </div>
+                            {user.isActive ? (
+                                <span className="flex items-center gap-1 text-green-600 text-xs font-medium bg-green-50 px-2 py-1 rounded-full">
+                                  <CheckCircle2 size={12} /> Aktif
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-red-600 text-xs font-medium bg-red-50 px-2 py-1 rounded-full">
+                                  <X size={12} /> Pasif
+                                </span>
+                              )}
+                        </div>
+                        
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                             <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                                {user.roleName}
+                              </span>
+                             <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCurrentUser(user);
+                                    setShowUserModal(true);
+                                  }}
+                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                                  title="Rol ve Bilgileri Düzenle"
+                                  aria-label="Rol ve Bilgileri Düzenle"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPasswordForm({ userId: user.id, newPassword: '' });
+                                    setShowPasswordModal(true);
+                                  }}
+                                  className="p-1.5 text-orange-600 hover:bg-orange-50 rounded"
+                                  title="Şifre Değiştir"
+                                  aria-label="Şifre Değiştir"
+                                >
+                                  <Lock size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleUserStatus(user)}
+                                  className={`p-1.5 rounded ${
+                                    user.isActive 
+                                      ? 'text-slate-600 hover:bg-slate-100' 
+                                      : 'text-green-600 hover:bg-green-50'
+                                  }`}
+                                  title={user.isActive ? 'Kullanıcıyı Dondur' : 'Kullanıcıyı Aktif Et'}
+                                  aria-label={user.isActive ? 'Kullanıcıyı Dondur' : 'Kullanıcıyı Aktif Et'}
+                                >
+                                  {user.isActive ? <UserX size={16} /> : <UserCheck size={16} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteUser(user.id)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                                  title="Sil"
+                                  aria-label="Sil"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                             </div>
+                        </div>
+                    </div>
+                  ))}
+              </div>
+
+              {/* Desktop View (Table) for Users */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-200 text-left">
@@ -599,26 +691,31 @@ const Settings = () => {
                         <td className="py-3 px-4">
                           <div className="flex items-center justify-end gap-2">
                             <button
+                              type="button"
                               onClick={() => {
                                 setCurrentUser(user);
                                 setShowUserModal(true);
                               }}
                               className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
                               title="Rol ve Bilgileri Düzenle"
+                              aria-label="Rol ve Bilgileri Düzenle"
                             >
                               <Edit size={16} />
                             </button>
                             <button
+                              type="button"
                               onClick={() => {
                                 setPasswordForm({ userId: user.id, newPassword: '' });
                                 setShowPasswordModal(true);
                               }}
                               className="p-1.5 text-orange-600 hover:bg-orange-50 rounded"
                               title="Şifre Değiştir"
+                              aria-label="Şifre Değiştir"
                             >
                               <Lock size={16} />
                             </button>
                             <button
+                              type="button"
                               onClick={() => toggleUserStatus(user)}
                               className={`p-1.5 rounded ${
                                 user.isActive 
@@ -626,13 +723,16 @@ const Settings = () => {
                                   : 'text-green-600 hover:bg-green-50'
                               }`}
                               title={user.isActive ? 'Kullanıcıyı Dondur' : 'Kullanıcıyı Aktif Et'}
+                              aria-label={user.isActive ? 'Kullanıcıyı Dondur' : 'Kullanıcıyı Aktif Et'}
                             >
                               {user.isActive ? <UserX size={16} /> : <UserCheck size={16} />}
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleDeleteUser(user.id)}
                               className="p-1.5 text-red-600 hover:bg-red-50 rounded"
                               title="Sil"
+                              aria-label="Sil"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -650,6 +750,7 @@ const Settings = () => {
             <div className="space-y-4">
               <div className="flex justify-end">
                 <button
+                  type="button"
                   onClick={() => {
                     setCurrentRole({ permissions: [] });
                     setShowRoleModal(true);
@@ -675,17 +776,23 @@ const Settings = () => {
                       </div>
                       <div className="flex gap-2">
                         <button
+                          type="button"
                           onClick={() => {
                             setCurrentRole(role);
                             setShowRoleModal(true);
                           }}
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                          title="Rolü Düzenle"
+                          aria-label="Rolü Düzenle"
                         >
                           <Edit size={16} />
                         </button>
                         <button
+                          type="button"
                           onClick={() => handleDeleteRole(role.id)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded"
+                          title="Rolü Sil"
+                          aria-label="Rolü Sil"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -721,6 +828,7 @@ const Settings = () => {
                     Veritabanı ve tüm yüklenen dosyalar (img, doc) tek arşivde sıkıştırılır.
                   </p>
                   <button
+                    type="button"
                     onClick={handleExportBackup}
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
@@ -741,8 +849,10 @@ const Settings = () => {
                       accept=".tar.gz,.tgz"
                       onChange={(e) => setBackupFile(e.target.files?.[0] || null)}
                       className="text-sm"
+                      aria-label="Yedek Dosyası Seç"
                     />
                     <button
+                      type="button"
                       onClick={handleImportBackup}
                       className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
                     >
@@ -764,6 +874,7 @@ const Settings = () => {
                   Sistemi test etmek için rastgele Müşteriler, Ürünler ve Siparişler oluşturur.
                 </p>
                 <button
+                  type="button"
                   onClick={() => setShowSeedModal(true)}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                 >
@@ -781,6 +892,7 @@ const Settings = () => {
                   <strong>Silinmeyecekler:</strong> Kullanıcılar, Roller, Firma Bilgileri ve Firma Logosu.
                 </p>
                 <button
+                  type="button"
                   onClick={() => setShowResetModal(true)}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                 >
@@ -806,6 +918,7 @@ const Settings = () => {
               value={currentRole.name || ''}
               onChange={e => setCurrentRole({ ...currentRole, name: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              aria-label="Rol Adı"
             />
           </div>
           <div>
@@ -823,6 +936,7 @@ const Settings = () => {
                       setCurrentRole({ ...currentRole, permissions: Array.from(perms) });
                     }}
                     className="rounded border-slate-300 text-blue-600"
+                    aria-label={`İzin: ${perm.label}`}
                   />
                   <span className="text-sm text-slate-700">{perm.label}</span>
                 </label>
@@ -831,12 +945,14 @@ const Settings = () => {
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
+              type="button"
               onClick={() => setShowRoleModal(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
             >
               İptal
             </button>
             <button
+              type="button"
               onClick={handleSaveRole}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
@@ -860,6 +976,7 @@ const Settings = () => {
               value={currentUser.fullName || ''}
               onChange={e => setCurrentUser({ ...currentUser, fullName: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              aria-label="Ad Soyad"
             />
           </div>
           <div>
@@ -870,6 +987,7 @@ const Settings = () => {
               onChange={e => setCurrentUser({ ...currentUser, username: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg"
               disabled={!!currentUser.id} // Cannot change username
+              aria-label="Kullanıcı Adı"
             />
           </div>
           {!currentUser.id && (
@@ -881,6 +999,7 @@ const Settings = () => {
                 onChange={e => setCurrentUser({ ...currentUser, password: e.target.value })}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg"
                 placeholder="Şifre belirleyin"
+                aria-label="Şifre"
               />
             </div>
           )}
@@ -890,6 +1009,7 @@ const Settings = () => {
               value={currentUser.roleId || ''}
               onChange={e => setCurrentUser({ ...currentUser, roleId: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+              aria-label="Rol Seçimi"
             >
               <option value="">Seçiniz</option>
               {roles.map(role => (
@@ -899,12 +1019,14 @@ const Settings = () => {
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
+              type="button"
               onClick={() => setShowUserModal(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
             >
               İptal
             </button>
             <button
+              type="button"
               onClick={handleSaveUser}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
@@ -929,16 +1051,19 @@ const Settings = () => {
               onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg"
               placeholder="Yeni şifreyi girin"
+              aria-label="Yeni Şifre"
             />
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
+              type="button"
               onClick={() => setShowPasswordModal(false)}
               className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
             >
               İptal
             </button>
             <button
+              type="button"
               onClick={handleChangePassword}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
@@ -978,11 +1103,13 @@ const Settings = () => {
               onChange={e => setResetConfirmation(e.target.value)}
               className="w-full px-3 py-2 border border-red-300 rounded-lg focus:ring-red-500 focus:border-red-500"
               placeholder="SIFIRLA"
+              aria-label="Sıfırlama Onayı"
             />
           </div>
 
           <div className="flex justify-end gap-2 mt-4">
             <button
+              type="button"
               onClick={() => {
                 setShowResetModal(false);
                 setResetConfirmation('');
@@ -992,6 +1119,7 @@ const Settings = () => {
               İptal
             </button>
             <button
+              type="button"
               onClick={handleResetData}
               disabled={resetConfirmation !== 'SIFIRLA'}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -1022,12 +1150,14 @@ const Settings = () => {
             </p>
             <div className="flex justify-end gap-2 mt-4">
               <button
+                type="button"
                 onClick={() => setShowSeedModal(false)}
                 className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
               >
                 İptal
               </button>
               <button
+                type="button"
                 onClick={handleSeedData}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >

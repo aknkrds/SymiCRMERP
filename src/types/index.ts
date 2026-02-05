@@ -147,6 +147,7 @@ export interface Order {
     assignedRoleName?: string;
     designStatus?: string; // Specific status for design flow
     procurementStatus?: string; // Specific status for procurement flow
+    stockUsage?: Record<string, number>; // itemId -> quantity
     productionStatus?: string; // Specific status for production flow
     procurementDate?: string; // When procurement was completed
     designImages?: string[]; // URLs of uploaded design images

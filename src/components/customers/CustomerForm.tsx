@@ -44,6 +44,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                             errors.companyName ? "border-red-500" : "border-slate-300"
                         )}
                         placeholder="Şirket A.Ş."
+                        aria-label="Firma Ünvanı"
                     />
                     {errors.companyName && <p className="text-xs text-red-500">{errors.companyName.message}</p>}
                 </div>
@@ -57,6 +58,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                             errors.contactName ? "border-red-500" : "border-slate-300"
                         )}
                         placeholder="Ad Soyad"
+                        aria-label="Yetkili Kişi"
                     />
                     {errors.contactName && <p className="text-xs text-red-500">{errors.contactName.message}</p>}
                 </div>
@@ -70,6 +72,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                             errors.phone ? "border-red-500" : "border-slate-300"
                         )}
                         placeholder="0212..."
+                        aria-label="Telefon"
                     />
                     {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
                 </div>
@@ -83,6 +86,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                             errors.mobile ? "border-red-500" : "border-slate-300"
                         )}
                         placeholder="05..."
+                        aria-label="Mobil"
                     />
                     {errors.mobile && <p className="text-xs text-red-500">{errors.mobile.message}</p>}
                 </div>
@@ -97,6 +101,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                             errors.email ? "border-red-500" : "border-slate-300"
                         )}
                         placeholder="ornek@sirket.com"
+                        aria-label="Email"
                     />
                     {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
                 </div>
@@ -111,6 +116,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                             errors.address ? "border-red-500" : "border-slate-300"
                         )}
                         placeholder="Açık adres..."
+                        aria-label="Adres"
                     />
                     {errors.address && <p className="text-xs text-red-500">{errors.address.message}</p>}
                 </div>
@@ -121,12 +127,14 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                     type="button"
                     onClick={onCancel}
                     className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    aria-label="İptal"
                 >
                     İptal
                 </button>
                 <button
                     type="submit"
                     className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                    aria-label={initialData ? 'Müşteriyi Güncelle' : 'Müşteriyi Kaydet'}
                 >
                     {initialData ? 'Güncelle' : 'Kaydet'}
                 </button>

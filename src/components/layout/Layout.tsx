@@ -5,16 +5,26 @@ import { DepartmentTasks } from '../ui/DepartmentTasks';
 import { Messaging } from '../ui/Messaging';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
+import { useState } from 'react';
+import { Menu } from 'lucide-react';
 
 export function Layout() {
     const { settings } = useCompanySettings();
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
 
     return (
         <div className="flex h-screen bg-[var(--bg-main)]">
-            <Sidebar />
+            <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
             <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-                <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[var(--border-subtle)] h-16 flex items-center justify-between px-6 sm:px-8 shadow-sm transition-all duration-300">
+                <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[var(--border-subtle)] h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 shadow-sm transition-all duration-300">
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="p-2 -ml-2 mr-1 text-slate-600 hover:bg-slate-100 rounded-lg md:hidden"
+                        >
+                            <Menu size={24} />
+                        </button>
+
                         {settings.logoUrl && (
                             <img 
                                 src={settings.logoUrl} 

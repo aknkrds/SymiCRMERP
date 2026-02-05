@@ -393,54 +393,126 @@ export default function Planning() {
 
   return (
   <div className="space-y-6 h-full flex flex-col relative">
-        <div className="flex justify-between items-center flex-shrink-0">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
             <div>
                 <h1 className="text-2xl font-bold text-slate-800">Planlama</h1>
                 <p className="text-slate-500">Haftalık üretim planlama</p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
                 <button 
                     onClick={handlePrint}
-                    className="flex items-center gap-2 bg-white text-slate-600 border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-slate-600 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"
+                    title="PDF İndir"
+                    aria-label="PDF İndir"
                 >
-                    <Download size={20} />
-                    Tabloyu Yazdır (PDF)
+                    <Download size={18} />
+                    <span className="hidden sm:inline">PDF</span>
                 </button>
                 <button 
                     onClick={() => setIsHistoryModalOpen(true)}
-                    className="flex items-center gap-2 bg-white text-slate-600 border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-slate-600 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"
+                    title="Geçmiş Planlar"
+                    aria-label="Geçmiş Planlar"
                 >
-                    <History size={20} />
-                    Geçmiş Haftalık Planlar
+                    <History size={18} />
+                    <span className="hidden sm:inline">Geçmiş</span>
                 </button>
                 <button 
                     onClick={() => handleSave(false)}
-                    className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium text-sm"
+                    title="Kaydet"
+                    aria-label="Kaydet"
                 >
-                    <Save size={20} />
-                    Haftalık Planı Kaydet
+                    <Save size={18} />
+                    <span className="hidden sm:inline">Kaydet</span>
                 </button>
                 <button 
                     onClick={() => setIsClearModalOpen(true)}
-                    className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg hover:bg-red-100 transition-colors shadow-sm font-medium"
+                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"
+                    title="Temizle"
+                    aria-label="Temizle"
                 >
-                    <Trash2 size={20} />
-                    Tabloyu Temizle
+                    <Trash2 size={18} />
+                    <span className="hidden sm:inline">Temizle</span>
                 </button>
         </div>
         </div>
 
-        <div className="flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        {/* Mobile View (List) */}
+        <div className="md:hidden space-y-4 overflow-y-auto pb-20">
+            {Object.keys(planData).length === 0 ? (
+                <div className="text-center text-slate-500 py-8 bg-white rounded-lg border border-slate-200">
+                    Henüz planlanmış bir üretim yok.
+                    <p className="text-xs mt-2 text-slate-400">Planlama yapmak için masaüstü görünümünü kullanınız veya ilgili güne tıklayarak işlem yapınız.</p>
+                </div>
+            ) : (
+                ROWS.map(row => {
+                    const hasItems = MACHINES.some(machine => {
+                        const cellKey = `${row.key}-${machine}`;
+                        return (planData[cellKey] || []).length > 0;
+                    });
+                    
+                    if (!hasItems) return null;
+                    
+                    return (
+                         <div key={row.key} className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+                            <div className={`px-4 py-2 font-bold text-sm bg-slate-50 border-b border-slate-200 flex justify-between items-center ${row.color}`}>
+                                <span>{row.label}</span>
+                                <button 
+                                    onClick={() => handleDayClick(row.day, row.key)}
+                                    className="text-xs font-normal text-indigo-600 hover:underline"
+                                    aria-label={`${row.label} için Detay veya Ekle`}
+                                >
+                                    Detay/Ekle
+                                </button>
+                            </div>
+                            <div className="divide-y divide-slate-100">
+                                {MACHINES.map(machine => {
+                                     const cellKey = `${row.key}-${machine}`;
+                                     const items = planData[cellKey] || [];
+                                     if (items.length === 0) return null;
+                                     
+                                     return (
+                                        <div key={machine} className="p-3">
+                                            <div className="text-xs font-semibold text-slate-500 mb-2">{machine}</div>
+                                            <div className="space-y-2">
+                                                {items.map((item, idx) => (
+                                                    <div key={idx} className="bg-indigo-50 p-2 rounded text-sm border border-indigo-100 relative group/mobile-item">
+                                                        <div className="font-medium text-indigo-900 pr-6">{item.customerName}</div>
+                                                        <div className="text-indigo-700 text-xs">{item.productName}</div>
+                                                        <div className="text-slate-500 text-xs mt-1">{item.quantity} Adet</div>
+                                                        <button 
+                                                            onClick={() => handleRemoveItem(cellKey, idx)}
+                                                            className="absolute top-2 right-2 text-indigo-400 hover:text-red-500 p-2 -mr-2 -mt-2"
+                                                            title="Sil"
+                                                            aria-label="Sil"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                     );
+                                })}
+                            </div>
+                         </div>
+                    );
+                })
+            )}
+        </div>
+
+        <div className="hidden md:flex flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-col">
             <div className="overflow-auto flex-1">
                 <table className="w-full border-collapse min-w-[1500px]" id="planning-table" ref={tableRef}>
                     <thead className="sticky top-0 z-20 shadow-sm">
                         <tr>
-                            <th className="p-3 border-b border-r border-slate-200 bg-slate-50 text-left text-sm font-bold text-slate-700 sticky left-0 z-30 w-32 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                            <th scope="col" className="p-3 border-b border-r border-slate-200 bg-slate-50 text-left text-sm font-bold text-slate-700 sticky left-0 z-30 w-32 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                 Gün
                             </th>
                             {MACHINES.map((machine) => (
-                                <th key={machine} className="p-3 border-b border-r border-slate-200 bg-slate-50 text-center text-xs font-bold text-slate-700 min-w-[140px]">
+                                <th key={machine} scope="col" className="p-3 border-b border-r border-slate-200 bg-slate-50 text-center text-xs font-bold text-slate-700 min-w-[140px]">
                                     {machine}
                                 </th>
                             ))}
@@ -482,6 +554,7 @@ export default function Planning() {
                                             <button 
                                                 onClick={() => handleAddClick(row.key, machine)}
                                                 className="flex items-center justify-center gap-1 w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50 transition-all text-xs font-medium opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                                aria-label={`${machine} makinesine ekle`}
                                             >
                                                 <Plus size={14} />
                                                 Ekle
@@ -510,6 +583,7 @@ export default function Planning() {
                     <input
                         type="text"
                         placeholder="Müşteri veya Sipariş No ara..."
+                        aria-label="Sipariş Ara"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 border border-slate-200 bg-white text-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -556,9 +630,10 @@ export default function Planning() {
                                             key={order.id} 
                                             className={`hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`}
                                             onClick={() => handleToggleOrder(order.id)}
+                                            aria-selected={isSelected}
                                         >
                                             <td className="p-3">
-                                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`}>
+                                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`} aria-hidden="true">
                                                     {isSelected && <Check size={12} />}
                                                 </div>
                                             </td>
@@ -585,6 +660,7 @@ export default function Planning() {
                     <button
                         onClick={() => setIsAddModalOpen(false)}
                         className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        aria-label="İptal"
                     >
                         İptal
                     </button>
@@ -592,6 +668,7 @@ export default function Planning() {
                         onClick={handleConfirmAdd}
                         disabled={selectedOrderIds.length === 0}
                         className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-label={`Seçilen ${selectedOrderIds.length} siparişi ekle`}
                     >
                         Seçilenleri Ekle ({selectedOrderIds.length})
                     </button>
@@ -621,6 +698,7 @@ export default function Planning() {
                     <button
                         onClick={handleSaveAndClear}
                         className="w-full py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
+                        aria-label="Kaydet ve Temizle"
                     >
                         <Save size={18} />
                         Kaydet ve Temizle
@@ -629,6 +707,7 @@ export default function Planning() {
                     <button
                         onClick={handleClearOnly}
                         className="w-full py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
+                        aria-label="Kaydetmeden Temizle"
                     >
                         <Trash2 size={18} />
                         Temizle (Kaydetmeden)
@@ -637,6 +716,7 @@ export default function Planning() {
                     <button
                         onClick={() => setIsClearModalOpen(false)}
                         className="w-full py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                        aria-label="İptal"
                     >
                         İptal
                     </button>
@@ -690,6 +770,7 @@ export default function Planning() {
                                                 }}
                                                 className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                                                 title="Yazdır / Görüntüle"
+                                                aria-label="Yazdır veya Görüntüle"
                                             >
                                                 <Printer size={18} />
                                             </button>
@@ -700,6 +781,7 @@ export default function Planning() {
                                                     setIsHistoryModalOpen(false);
                                                 }}
                                                 className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                                                aria-label="Planı Görüntüle"
                                             >
                                                 Görüntüle
                                             </button>
@@ -721,6 +803,7 @@ export default function Planning() {
                                                 }}
                                                 className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                                                 title="Planı Sil"
+                                                aria-label="Planı Sil"
                                             >
                                                 <Trash2 size={18} />
                                             </button>
@@ -746,9 +829,61 @@ export default function Planning() {
                             <X size={24} />
                         </button>
                     </div>
-                    <div className="p-8 text-center text-slate-500">
-                        <p className="text-lg">Günlük planlama modülü yapım aşamasında...</p>
-                        <p className="text-sm mt-2">Bu alan seçilen gün için detaylı planlama yapmak üzere kullanılacak.</p>
+                    <div className="p-4 overflow-y-auto flex-1 space-y-6">
+                        {MACHINES.map(machine => {
+                            const cellKey = `${selectedDay.key}-${machine}`;
+                            const items = planData[cellKey] || [];
+                            
+                            return (
+                                <div key={machine} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="font-semibold text-slate-700 text-sm">{machine}</h3>
+                                        <button 
+                                            onClick={() => handleAddClick(selectedDay.key, machine)}
+                                            className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors font-medium"
+                                        >
+                                            <Plus size={14} />
+                                            Ekle
+                                        </button>
+                                    </div>
+                                    
+                                    {items.length === 0 ? (
+                                        <div className="text-xs text-slate-400 italic text-center py-2 border border-dashed border-slate-200 rounded">
+                                            Bu makine için plan bulunmuyor
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {items.map((item, idx) => (
+                                                <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm relative group">
+                                                    <div className="pr-6">
+                                                        <div className="font-medium text-sm text-slate-800">{item.customerName}</div>
+                                                        <div className="text-xs text-slate-500 mt-0.5">{item.productName}</div>
+                                                        <div className="text-xs font-bold text-indigo-600 mt-1.5 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
+                                                            {item.quantity.toLocaleString()} Adet
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleRemoveItem(cellKey, idx)}
+                                                        className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                                        title="Sil"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <div className="p-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
+                        <button 
+                            onClick={() => setIsDailyModalOpen(false)}
+                            className="w-full py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors"
+                        >
+                            Kapat
+                        </button>
                     </div>
                 </div>
             </div>

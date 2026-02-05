@@ -111,6 +111,7 @@ const initDb = () => {
   try { db.exec('ALTER TABLE orders ADD COLUMN jobSize TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN boxSize TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN efficiency TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN stockUsage TEXT'); } catch (error) {}
 
   // Stock Items
   db.exec(`

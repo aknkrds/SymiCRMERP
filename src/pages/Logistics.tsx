@@ -113,7 +113,7 @@ export default function Logistics() {
                 <div className="p-6 border-b border-slate-200 bg-slate-50">
                     <h2 className="font-semibold text-slate-800">Sevkiyat Bekleyen Siparişler</h2>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -159,6 +159,47 @@ export default function Logistics() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {logisticsOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Sevkiyat bekleyen sipariş bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {logisticsOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                            {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                         <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                                            Fatura/İrsaliye Eklendi
+                                        </span>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <button
+                                            onClick={() => handleOpenModal(order)}
+                                            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors text-sm font-medium"
+                                        >
+                                            <Truck size={16} />
+                                            Sevkiyat Bilgileri Girişi
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Shipment Details Modal */}
@@ -184,6 +225,7 @@ export default function Logistics() {
                                     onChange={handleInputChange}
                                     className="w-full rounded-lg border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                     required
+                                    aria-label="Paketleme Türü"
                                 >
                                     <option value="Koli">Koli</option>
                                     <option value="Palet">Palet</option>
@@ -204,6 +246,7 @@ export default function Logistics() {
                                     required
                                     min="1"
                                     placeholder="Adet giriniz"
+                                    aria-label="Paketleme Adet"
                                 />
                             </div>
                             
@@ -217,6 +260,7 @@ export default function Logistics() {
                                     className="w-full rounded-lg border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                     required
                                     placeholder="Örn: PKT-2024-001"
+                                    aria-label="Paket Numarası"
                                 />
                             </div>
                             
@@ -231,6 +275,7 @@ export default function Logistics() {
                                         className="w-full rounded-lg border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         required
                                         placeholder="34 ABC 123"
+                                        aria-label="Araç Plakası"
                                     />
                                 </div>
                                 <div>
@@ -242,6 +287,7 @@ export default function Logistics() {
                                         onChange={handleInputChange}
                                         className="w-full rounded-lg border-slate-200 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                         placeholder="34 XYZ 789"
+                                        aria-label="Dorse Plakası"
                                     />
                                 </div>
                             </div>
@@ -258,6 +304,7 @@ export default function Logistics() {
                                             type="file" 
                                             onChange={handleFileUpload}
                                             className="hidden" 
+                                            aria-label="Ek Evrak Yükle"
                                         />
                                     </label>
                                 </div>

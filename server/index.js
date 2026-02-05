@@ -697,12 +697,15 @@ app.get('/api/stock-items', (req, res) => {
 
 app.post('/api/stock-items', (req, res) => {
   try {
-    const { id, stockNumber, company, product, quantity, unit, createdAt } = req.body;
+    const { id, stockNumber, company, product, quantity, unit, category, notes, minLimit, purchasePrice, date, createdAt } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, notes, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, stockNumber, company, product, quantity, unit, createdAt);
+    // Note: minLimit, purchasePrice, date are not in the schema yet based on db.js, 
+    // but category IS in the schema. 
+    // Wait, let me check db.js again for notes. Yes, notes is there.
+    stmt.run(id, stockNumber, company, product, quantity, unit, category, notes, createdAt);
     res.status(201).json(req.body);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -715,6 +718,44 @@ app.delete('/api/stock-items/:id', (req, res) => {
     const stmt = db.prepare('DELETE FROM stock_items WHERE id = ?');
     stmt.run(id);
     res.json({ message: 'Stock item deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/stock-items/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    // Check if it's a deduct/add operation (legacy support)
+    if (updates.deduct !== undefined) {
+      const stmt = db.prepare('UPDATE stock_items SET quantity = quantity - ? WHERE id = ?');
+      stmt.run(updates.deduct, id);
+    } else if (updates.quantity !== undefined && Object.keys(updates).length === 1) {
+       // Simple quantity set
+       const stmt = db.prepare('UPDATE stock_items SET quantity = ? WHERE id = ?');
+       stmt.run(updates.quantity, id);
+    } else {
+      // General update for any field
+      // Remove 'deduct' if it exists to avoid trying to update a non-existent column
+      const { deduct, ...fieldsToUpdate } = updates;
+      
+      const fields = Object.keys(fieldsToUpdate).map(key => `${key} = ?`).join(', ');
+      const values = [...Object.values(fieldsToUpdate), id];
+      
+      if (fields.length > 0) {
+        const stmt = db.prepare(`UPDATE stock_items SET ${fields} WHERE id = ?`);
+        stmt.run(...values);
+      }
+    }
+    
+    const updatedItem = db.prepare('SELECT * FROM stock_items WHERE id = ?').get(id);
+    if (!updatedItem) {
+      return res.status(404).json({ error: 'Stock item not found' });
+    }
+    
+    res.json(updatedItem);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -908,10 +949,19 @@ const parseOrder = (order) => {
     designImages = [];
   }
 
+  let stockUsage = {};
+  try {
+    stockUsage = order.stockUsage ? JSON.parse(order.stockUsage) : {};
+  } catch (e) {
+    console.error(`Error parsing stockUsage for order ${order.id}:`, e);
+    stockUsage = {};
+  }
+
   return {
     ...order,
     items,
-    designImages
+    designImages,
+    stockUsage
   };
 };
 
@@ -1104,6 +1154,9 @@ app.patch('/api/orders/:id', (req, res) => {
     }
     if (updates.designImages) {
       updates.designImages = JSON.stringify(updates.designImages);
+    }
+    if (updates.stockUsage) {
+      updates.stockUsage = JSON.stringify(updates.stockUsage);
     }
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');

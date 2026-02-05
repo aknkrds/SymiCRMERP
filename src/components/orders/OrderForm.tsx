@@ -172,6 +172,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                         type="button"
                         onClick={handleWorkflowAction}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
+                        aria-label={nextStep.label}
                     >
                         {nextStep.label}
                         <ArrowRight size={18} />
@@ -188,6 +189,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                             "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white",
                             errors.customerId ? "border-red-500" : "border-slate-300"
                         )}
+                        aria-label="Müşteri Seçimi"
                     >
                         <option value="">Seçiniz</option>
                         {customers.map(c => (
@@ -203,6 +205,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                         type="date"
                         {...register('deadline')}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        aria-label="Termin Tarihi"
                     />
                 </div>
 
@@ -211,6 +214,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                     <select
                         {...register('currency')}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                        aria-label="Para Birimi"
                     >
                         <option value="TRY">TRY - Türk Lirası</option>
                         <option value="USD">USD - Amerikan Doları</option>
@@ -223,6 +227,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                     <select
                         {...register('paymentMethod')}
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                        aria-label="Ödeme Şekli"
                     >
                         <option value="">Seçiniz</option>
                         <option value="havale_eft">Havale-EFT</option>
@@ -239,6 +244,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                             {...register('maturityDays')}
                             placeholder="Örn: 45"
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Vade Gün"
                         />
                     </div>
                 )}
@@ -259,6 +265,7 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                             total: 0
                         })}
                         className="text-indigo-600 hover:bg-indigo-50 px-3 py-1 rounded text-sm font-medium transition-colors"
+                        aria-label="Ürün Ekle"
                     >
                         + Ürün Ekle
                     </button>
@@ -266,12 +273,13 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
 
                 <div className="space-y-4">
                     {fields.map((field, index) => (
-                        <div key={field.id} className="grid grid-cols-12 gap-2 items-end p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div key={field.id} className="grid grid-cols-12 gap-3 md:gap-2 items-end p-4 bg-slate-50 rounded-lg border border-slate-200">
                             <div className="col-span-12 md:col-span-4 space-y-1">
                                 <label className="text-xs font-medium text-slate-500">Ürün</label>
                                 <select
                                     {...register(`items.${index}.productId` as const)}
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                    className="w-full px-2 py-2 md:py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                    aria-label="Ürün Seçimi"
                                 >
                                     <option value="">Seçiniz</option>
                                     {products.map(p => (
@@ -285,7 +293,8 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                                 <input
                                     type="number"
                                     {...register(`items.${index}.quantity` as const)}
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500"
+                                    className="w-full px-2 py-2 md:py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500"
+                                    aria-label="Adet"
                                 />
                             </div>
 
@@ -295,7 +304,8 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                                     type="number"
                                     step="0.01"
                                     {...register(`items.${index}.unitPrice` as const)}
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500"
+                                    className="w-full px-2 py-2 md:py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500"
+                                    aria-label="Fiyat"
                                 />
                             </div>
 
@@ -304,7 +314,8 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                                 <input
                                     type="number"
                                     {...register(`items.${index}.vatRate` as const)}
-                                    className="w-full px-2 py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500"
+                                    className="w-full px-2 py-2 md:py-1.5 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500"
+                                    aria-label="KDV Oranı"
                                 />
                             </div>
 
@@ -315,9 +326,11 @@ export function OrderForm({ initialData, onSubmit, onCancel }: OrderFormProps) {
                                 <button
                                     type="button"
                                     onClick={() => remove(index)}
-                                    className="text-red-500 hover:bg-red-50 p-1.5 rounded"
+                                    className="text-red-500 hover:bg-red-50 p-2 rounded"
+                                    title="Ürünü Kaldır"
+                                    aria-label="Ürünü Kaldır"
                                 >
-                                    <Trash2 size={16} />
+                                    <Trash2 size={18} />
                                 </button>
                             </div>
                         </div>

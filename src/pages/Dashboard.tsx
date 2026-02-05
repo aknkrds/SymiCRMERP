@@ -223,7 +223,7 @@ export default function Dashboard() {
                     <h2 className="text-lg font-bold text-slate-800">Son İşlemler</h2>
                     <button className="text-sm text-[var(--accent)] hover:text-[var(--accent-strong)] font-medium transition-colors">Tümünü Gör</button>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50/80 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -269,6 +269,40 @@ export default function Dashboard() {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {recentOrders.length === 0 ? (
+                        <div className="p-6 text-center text-slate-500">
+                            Henüz sipariş bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {recentOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-2">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                            {format(new Date(order.createdAt), 'dd MMM', { locale: tr })}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center">
+                                        <div className="font-semibold text-slate-700 text-sm">
+                                            {order.grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {order.currency}
+                                        </div>
+                                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-800 border-slate-200'} bg-opacity-10 border-opacity-20`}>
+                                            {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

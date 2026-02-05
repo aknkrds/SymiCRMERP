@@ -1,5 +1,4 @@
 import type { Product } from '../../types';
-import { X } from 'lucide-react';
 
 interface ProductDetailProps {
     product: Product;
@@ -261,6 +260,7 @@ export function ProductDetail({ product, onClose, jobDetails }: ProductDetailPro
                 <button
                     onClick={onClose}
                     className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
+                    aria-label="Kapat"
                 >
                     Kapat
                 </button>

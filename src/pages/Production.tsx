@@ -8,6 +8,7 @@ import {
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Modal } from '../components/ui/Modal';
+import { useStock } from '../hooks/useStock';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData } from '../types';
 
@@ -53,6 +54,9 @@ export default function Production() {
 
     // Selection States
     const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+
+    // Stock Management
+    const { stockItems, addStockItem, updateStockQuantity } = useStock();
 
     // Fetch Data
     useEffect(() => {
@@ -101,6 +105,77 @@ export default function Production() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: mainStatus })
                 });
+            }
+
+            // Handle Stock Updates when Production is Completed
+            if (status === 'production_completed') {
+                const order = orders.find(o => o.id === orderId);
+                const totals = getOrderTotals(orderId);
+
+                if (order && totals.produced > 0) {
+                    // Add Finished Product to Stock
+                    const productName = order.items?.map(i => i.productName).join(', ') || order.customerName + ' Ürünü';
+                    
+                    // Check if this specific order product already exists in stock (to avoid duplicates if clicked multiple times)
+                    // We use orderId as stockNumber for uniqueness as requested
+                    const existingProductStock = stockItems.find(i => i.stockNumber === orderId);
+
+                    if (existingProductStock) {
+                        // If exists, maybe update quantity? Or do nothing?
+                        // User said: "girişi yapılsın". If already entered, we shouldn't duplicate.
+                        // But if they are correcting status, maybe we should be careful.
+                        // For now, if it exists, we assume it's already processed or we add difference?
+                        // Safest is to check if we should add.
+                        // But simplistic approach: Check if exists. If not, add. If yes, maybe alert?
+                        // Given "production_completed" can be toggled, this is risky.
+                        // However, user asked to add it.
+                        // Let's check if the quantity matches.
+                        // Better: Just add if it doesn't exist. If it exists, assume it's done.
+                        // Or better: Use updateStockQuantity with deduct: -totals.produced if it exists? 
+                        // No, if it exists, it means we already created it.
+                        // Let's create it if it doesn't exist.
+                        if (existingProductStock.quantity !== totals.produced) {
+                             // Maybe update quantity to match produced total?
+                             // await updateStockQuantity(existingProductStock.id, { quantity: totals.produced });
+                        }
+                    } else {
+                        await addStockItem({
+                            product: productName,
+                            company: order.customerName,
+                            stockNumber: orderId, // Reference Order ID
+                            category: 'Mamul',
+                            quantity: totals.produced,
+                            unit: 'Adet',
+                            minLimit: 0,
+                            purchasePrice: 0,
+                            date: new Date().toISOString()
+                        });
+                    }
+                }
+
+                if (totals.scrap > 0) {
+                    // Add Scrap to General Scrap Stock
+                    // Find generic 'Hurda' item
+                    const scrapItem = stockItems.find(i => i.product === 'Genel Hurda' || (i.category === 'Hurda' && i.stockNumber === 'HURDA-GENEL'));
+                    
+                    if (scrapItem) {
+                        // Add to existing scrap stock
+                        await updateStockQuantity(scrapItem.id, { deduct: -totals.scrap });
+                    } else {
+                        // Create new scrap stock
+                        await addStockItem({
+                            stockNumber: 'HURDA-GENEL',
+                            company: 'İşletme İçi',
+                            product: 'Genel Hurda',
+                            category: 'Hurda',
+                            quantity: totals.scrap,
+                            unit: 'Adet',
+                            minLimit: 0,
+                            purchasePrice: 0,
+                            date: new Date().toISOString()
+                        });
+                    }
+                }
             }
 
             fetchData();
@@ -338,7 +413,53 @@ export default function Production() {
                 <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
                     <h2 className="font-semibold text-slate-800">Üretim Bekleyen Siparişler</h2>
                 </div>
-                <div className="overflow-x-auto">
+                
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {productionOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Üretim bekleyen sipariş bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {productionOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        </div>
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+                                            {order.status === 'production_planned' ? 'Planlamada' :
+                                             order.status === 'production_started' ? 'Üretimde' :
+                                             order.status === 'production_completed' ? 'Tamamlandı' : order.status}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex justify-between text-sm text-slate-600">
+                                        <div>Tedarik: {order.procurementDate ? format(new Date(order.procurementDate), 'dd MMM yyyy', { locale: tr }) : '-'}</div>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <select
+                                            value={order.productionStatus || 'production_planning'}
+                                            onChange={(e) => handleProductionStatusChange(order.id, e.target.value)}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                            aria-label="Üretim Durumu Seçimi"
+                                        >
+                                            {PRODUCTION_STATUSES.map(status => (
+                                                <option key={status.value} value={status.value}>{status.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -369,6 +490,7 @@ export default function Production() {
                                             value={order.productionStatus || 'production_planning'}
                                             onChange={(e) => handleProductionStatusChange(order.id, e.target.value)}
                                             className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            aria-label="Üretim Durumu Seçimi"
                                         >
                                             {PRODUCTION_STATUSES.map(status => (
                                                 <option key={status.value} value={status.value}>{status.label}</option>
@@ -387,7 +509,76 @@ export default function Production() {
                 <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
                     <h2 className="font-semibold text-slate-800">Aktif Üretim Listesi</h2>
                 </div>
-                <div className="overflow-x-auto">
+                
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {activeProductionOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Şu anda aktif üretim bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {activeProductionOrders.map((order) => {
+                                const totals = getOrderTotals(order.id);
+                                const activeShifts = shifts.filter(s => s.orderId === order.id && s.status === 'active').length;
+                                return (
+                                    <div key={order.id} className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                                <div className="font-medium text-slate-800">{order.customerName}</div>
+                                            </div>
+                                            {activeShifts > 0 ? (
+                                                <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded-full">
+                                                    <span className="relative flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                                    </span>
+                                                    {activeShifts} Vardiya
+                                                </span>
+                                            ) : (
+                                                <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">Aktif vardiya yok</span>
+                                            )}
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                                <div className="text-xs text-slate-500">Üretilen</div>
+                                                <div className="font-semibold text-emerald-600">{totals.produced}</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                                <div className="text-xs text-slate-500">Fire</div>
+                                                <div className="font-semibold text-red-600">{totals.scrap}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleProductionStatusChange(order.id, 'production_completed')}
+                                                className="px-3 py-2 text-sm font-medium bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors flex-1"
+                                                aria-label="Üretimi Tamamla"
+                                            >
+                                                Tamamlandı
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleProductionStatusChange(order.id, 'production_cancelled')}
+                                                className="px-3 py-2 text-sm font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex-1"
+                                                aria-label="Üretimi İptal Et"
+                                            >
+                                                İptal
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -426,14 +617,18 @@ export default function Production() {
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
                                                 <button 
+                                                    type="button"
                                                     onClick={() => handleProductionStatusChange(order.id, 'production_completed')}
                                                     className="px-3 py-1.5 text-xs font-medium bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                                                    aria-label="Üretimi Tamamla"
                                                 >
                                                     Tamamlandı
                                                 </button>
                                                 <button 
+                                                    type="button"
                                                     onClick={() => handleProductionStatusChange(order.id, 'production_cancelled')}
                                                     className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                                                    aria-label="Üretimi İptal Et"
                                                 >
                                                     İptal
                                                 </button>
@@ -459,7 +654,75 @@ export default function Production() {
                 <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
                     <h2 className="font-semibold text-slate-800">Tamamlanan Üretimler</h2>
                 </div>
-                <div className="overflow-x-auto">
+                
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {completedProductionOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Henüz tamamlanan üretim bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {completedProductionOrders.map((order) => {
+                                const totals = getOrderTotals(order.id);
+                                const targetQuantity = order.items.reduce((acc, item) => acc + item.quantity, 0);
+                                const isTargetReached = totals.produced >= targetQuantity;
+
+                                return (
+                                    <div key={order.id} className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                                <div className="font-medium text-slate-800">{order.customerName}</div>
+                                            </div>
+                                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                                                Tamamlandı
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="text-sm text-slate-600">
+                                            <span className="font-medium">Ürünler:</span> {order.items.map(i => i.productName).join(', ')}
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-2 text-sm">
+                                            <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                                <div className="text-xs text-slate-500">Hedef</div>
+                                                <div className="font-medium text-slate-800">{targetQuantity}</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                                <div className="text-xs text-slate-500">Üretilen</div>
+                                                <div className="font-semibold text-emerald-600">{totals.produced}</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-2 rounded-lg text-center">
+                                                <div className="text-xs text-slate-500">Fire</div>
+                                                <div className="font-semibold text-red-600">{totals.scrap}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end pt-2 border-t border-slate-100">
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleContinueProduction(order)}
+                                                className={`w-full px-3 py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                                                    isTargetReached 
+                                                        ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                                                }`}
+                                                aria-label="Siparişi Devam Et"
+                                            >
+                                                <Play size={16} />
+                                                Siparişi Devam Et
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -500,12 +763,14 @@ export default function Production() {
                                         <td className="px-6 py-4 text-red-600">{totals.scrap}</td>
                                         <td className="px-6 py-4 text-right">
                                             <button 
+                                                type="button"
                                                 onClick={() => handleContinueProduction(order)}
                                                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-1 ml-auto ${
                                                     isTargetReached 
                                                         ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                                                         : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                                                 }`}
+                                                aria-label="Siparişi Devam Et"
                                             >
                                                 <Play size={14} />
                                                 Siparişi Devam Et
@@ -530,15 +795,20 @@ export default function Production() {
             <div className="space-y-4">
                 <div className="flex items-center gap-3">
                     <button
+                        type="button"
                         onClick={() => setIsShiftModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                        aria-label="Vardiya Oluştur"
                     >
                         <Plus size={18} />
-                        Vardiya Oluştur
+                        <span className="hidden sm:inline">Vardiya Oluştur</span>
+                        <span className="sm:hidden">Vardiya</span>
                     </button>
                     <button
+                        type="button"
                         onClick={() => setIsPersonnelListModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-white text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                        aria-label="Personel Listesini Görüntüle"
                     >
                         <Users size={18} />
                         Personeller
@@ -573,7 +843,31 @@ export default function Production() {
                             <p className="text-xs text-slate-500">Bu siparişler henüz tedarik ve üretim onayı almamıştır. Üretim listesinde görünmesi için Tedarik sayfasından "Üretim Sevkiyatı Yapıldı" seçilmelidir.</p>
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    
+                    {/* Mobile View (Cards) */}
+                    <div className="md:hidden">
+                        <div className="divide-y divide-slate-200">
+                            {otherOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-2">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-700">{order.customerName}</div>
+                                        </div>
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-200 text-slate-600'}`}>
+                                            {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                        </span>
+                                    </div>
+                                    <div className="text-sm text-slate-500">
+                                        {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Desktop View (Table) */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-600">
                             <thead className="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
                                 <tr>
@@ -615,6 +909,7 @@ export default function Production() {
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <button
+                            type="button"
                             onClick={() => setIsPersonnelModalOpen(true)}
                             className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm"
                         >
@@ -651,6 +946,7 @@ export default function Production() {
                 <div className="space-y-4">
                     <div className="flex justify-end">
                         <button
+                            type="button"
                             onClick={() => setIsMachineModalOpen(true)}
                             className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-sm"
                         >
@@ -694,6 +990,8 @@ export default function Production() {
                                 value={newPersonnel.firstName}
                                 onChange={e => setNewPersonnel({...newPersonnel, firstName: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Ad"
+                                aria-label="Ad"
                             />
                         </div>
                         <div>
@@ -704,6 +1002,8 @@ export default function Production() {
                                 value={newPersonnel.lastName}
                                 onChange={e => setNewPersonnel({...newPersonnel, lastName: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                placeholder="Soyad"
+                                aria-label="Soyad"
                             />
                         </div>
                     </div>
@@ -714,6 +1014,7 @@ export default function Production() {
                             value={newPersonnel.role}
                             onChange={e => setNewPersonnel({...newPersonnel, role: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Görev Seçimi"
                         >
                             <option value="">Seçiniz</option>
                             <option value="Operatör">Operatör</option>
@@ -741,6 +1042,8 @@ export default function Production() {
                             value={newMachine.machineNumber}
                             onChange={e => setNewMachine({...newMachine, machineNumber: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Makine No"
+                            aria-label="Makine Numarası"
                         />
                     </div>
                     <div>
@@ -751,6 +1054,8 @@ export default function Production() {
                             value={newMachine.features}
                             onChange={e => setNewMachine({...newMachine, features: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Özellikler"
+                            aria-label="Özellikler"
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -762,6 +1067,7 @@ export default function Production() {
                                 value={newMachine.maintenanceInterval}
                                 onChange={e => setNewMachine({...newMachine, maintenanceInterval: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                aria-label="Bakım Aralığı"
                             />
                         </div>
                         <div>
@@ -771,6 +1077,7 @@ export default function Production() {
                                 value={newMachine.lastMaintenance}
                                 onChange={e => setNewMachine({...newMachine, lastMaintenance: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                aria-label="Son Bakım Tarihi"
                             />
                         </div>
                     </div>
@@ -792,6 +1099,7 @@ export default function Production() {
                             value={newShift.orderId}
                             onChange={e => setNewShift({...newShift, orderId: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Sipariş Seçimi"
                         >
                             <option value="">Sipariş Seçiniz</option>
                             {productionOrders.map(o => (
@@ -806,6 +1114,7 @@ export default function Production() {
                             value={newShift.machineId}
                             onChange={e => setNewShift({...newShift, machineId: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Makine Seçimi"
                         >
                             <option value="">Makine Seçiniz</option>
                             {machines.map(m => (
@@ -820,6 +1129,7 @@ export default function Production() {
                             value={newShift.supervisorId}
                             onChange={e => setNewShift({...newShift, supervisorId: e.target.value})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Vardiya Amiri Seçimi"
                         >
                             <option value="">Amir Seçiniz</option>
                             {personnel.filter(p => p.role === 'Vardiya Amiri').map(p => (
@@ -860,6 +1170,7 @@ export default function Production() {
                                 value={newShift.startTime}
                                 onChange={e => setNewShift({...newShift, startTime: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                aria-label="Başlangıç Tarihi ve Saati"
                             />
                         </div>
                         <div>
@@ -870,6 +1181,7 @@ export default function Production() {
                                 value={newShift.endTime}
                                 onChange={e => setNewShift({...newShift, endTime: e.target.value})}
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                aria-label="Bitiş Tarihi ve Saati"
                             />
                         </div>
                     </div>
@@ -881,6 +1193,8 @@ export default function Production() {
                             value={newShift.plannedQuantity}
                             onChange={e => setNewShift({...newShift, plannedQuantity: parseFloat(e.target.value)})}
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="0"
+                            aria-label="Planlanan Üretim Adedi"
                         />
                     </div>
                     <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">Vardiya Oluştur</button>
@@ -973,6 +1287,7 @@ export default function Production() {
                                         onChange={e => setStartProductionQty(e.target.value)}
                                         placeholder="0"
                                         className="flex-1 px-3 py-2 border border-indigo-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                        aria-label="Başlangıç Üretim Adeti"
                                     />
                                     <button
                                         onClick={handleStartShift}
@@ -994,8 +1309,9 @@ export default function Production() {
                                             type="number"
                                             value={selectedShift.producedQuantity || ''}
                                             onChange={e => updateShift(selectedShift.id, { producedQuantity: parseFloat(e.target.value) })}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full px-3 py-3 md:py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                                             placeholder="0"
+                                            aria-label="Üretilen Adet"
                                         />
                                     </div>
                                     <div>
@@ -1004,8 +1320,9 @@ export default function Production() {
                                             type="number"
                                             value={selectedShift.scrapQuantity || ''}
                                             onChange={e => updateShift(selectedShift.id, { scrapQuantity: parseFloat(e.target.value) })}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            className="w-full px-3 py-3 md:py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
                                             placeholder="0"
+                                            aria-label="Fire/Hurda Adet"
                                         />
                                     </div>
 

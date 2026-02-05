@@ -156,7 +156,7 @@ export default function Approvals() {
                     <DollarSign className="w-5 h-5 text-emerald-500" />
                     Tahmini Ciro (Son 6 Ay)
                 </h3>
-                <div className="h-80">
+                <div className="h-80" role="img" aria-label="Tahmini Ciro Grafiği">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={revenueData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                             <defs>
@@ -210,6 +210,8 @@ export default function Approvals() {
                             .map(u => (
                                 <div
                                     key={u.id}
+                                    role="button"
+                                    aria-label={`${u.fullName} kişisine ata`}
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => {
                                         e.preventDefault();
@@ -217,7 +219,7 @@ export default function Approvals() {
                                         if (orderId) handleAssignToUser(orderId, { id: u.id, fullName: u.fullName, roleName: u.roleName });
                                         setDragOrderId(null);
                                     }}
-                                    className={`p-3 border rounded-lg transition-colors cursor-pointer w-48 ${ROLE_COLOR_MAP[u.roleName] || 'bg-slate-50 border-slate-200'}`}
+                                    className={`p-3 border rounded-lg transition-colors cursor-pointer w-full sm:w-48 ${ROLE_COLOR_MAP[u.roleName] || 'bg-slate-50 border-slate-200'}`}
                                     title={u.roleName}
                                 >
                                     <div className="font-medium text-slate-800 truncate">{u.fullName}</div>
@@ -241,24 +243,33 @@ export default function Approvals() {
                                     setDragOrderId(order.id);
                                     e.dataTransfer.setData('text/plain', order.id);
                                 }}
-                                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-grab relative"
+                                className="flex flex-col md:flex-row md:items-center justify-between px-4 py-3 hover:bg-slate-50 cursor-grab relative gap-3 md:gap-0"
                             >
-                                <div className="flex items-center gap-4">
-                                    <span className="font-mono text-xs text-slate-500">#{order.id.slice(0,8)}</span>
+                                <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs text-slate-500">#{order.id.slice(0,8)}</span>
+                                        <span className="md:hidden text-xs text-slate-400">•</span>
+                                        <span className="md:hidden text-xs text-slate-500">{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
+                                    </div>
                                     <span className="font-medium text-slate-800">{order.customerName}</span>
-                                    <span className="text-xs text-slate-500">{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
+                                    <span className="hidden md:inline text-xs text-slate-500">{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
                                 </div>
-                                <div className="relative">
+                                <div className="relative w-full md:w-auto">
                                     <button
                                         onClick={() => setAssignDropdownOpen(assignDropdownOpen === order.id ? null : order.id)}
-                                        className="flex items-center gap-2 text-xs hover:bg-slate-200 px-2 py-1 rounded transition-colors"
+                                        className="w-full md:w-auto flex items-center justify-between md:justify-start gap-2 text-sm md:text-xs hover:bg-slate-200 px-3 py-2.5 md:px-2 md:py-1.5 rounded-lg md:rounded transition-colors bg-slate-100 md:bg-transparent"
+                                        aria-label="Atama Durumu Değiştir"
+                                        aria-haspopup="true"
+                                        aria-expanded={assignDropdownOpen === order.id ? "true" : "false"}
                                     >
-                                        {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                        <span className="font-medium">
+                                            {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                        </span>
                                         <ChevronDown size={14} className="text-slate-400" />
                                     </button>
                                     
                                     {assignDropdownOpen === order.id && (
-                                        <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50 max-h-80 overflow-y-auto">
+                                        <div className="absolute right-0 left-0 md:left-auto top-full mt-1 md:w-64 bg-white rounded-lg shadow-lg border border-slate-200 z-50 max-h-80 overflow-y-auto">
                                             <div className="p-2 sticky top-0 bg-white border-b border-slate-100 font-semibold text-xs text-slate-500">
                                                 Atama Yapılacak Kişi Seçin
                                             </div>
@@ -273,6 +284,7 @@ export default function Approvals() {
                                                             setAssignDropdownOpen(null);
                                                         }}
                                                         className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between group"
+                                                        aria-label={`${u.fullName} Kişisine Ata`}
                                                     >
                                                         <div>
                                                             <div className="text-sm font-medium text-slate-800">{u.fullName}</div>
@@ -293,6 +305,7 @@ export default function Approvals() {
                             onClick={() => setPage(p => Math.max(1, p - 1))}
                             disabled={page === 1}
                             className="px-3 py-1.5 text-sm rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                            aria-label="Önceki Sayfa"
                         >
                             ← Önceki
                         </button>
@@ -303,6 +316,7 @@ export default function Approvals() {
                             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                             disabled={page === totalPages}
                             className="px-3 py-1.5 text-sm rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
+                            aria-label="Sonraki Sayfa"
                         >
                             Sonraki →
                         </button>
@@ -323,7 +337,91 @@ export default function Approvals() {
                     Onay Bekleyen Siparişler
                 </h2>
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* Mobile View (Cards) */}
+                    <div className="md:hidden">
+                        {pendingApprovals.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500">
+                                Onay bekleyen sipariş bulunmuyor.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-200">
+                                {pendingApprovals.map((order) => (
+                                    <div key={order.id} className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                                <div className="font-medium text-slate-800">{order.customerName}</div>
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex flex-wrap gap-2">
+                                            {order.invoiceUrl && (
+                                                <a 
+                                                    href={order.invoiceUrl} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 transition-colors"
+                                                    aria-label="Faturayı Görüntüle"
+                                                >
+                                                    <FileText size={14} /> Fatura
+                                                </a>
+                                            )}
+                                            {order.waybillUrl && (
+                                                <a 
+                                                    href={order.waybillUrl} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded text-xs hover:bg-amber-100 transition-colors"
+                                                    aria-label="İrsaliyeyi Görüntüle"
+                                                >
+                                                    <Truck size={14} /> İrsaliye
+                                                </a>
+                                            )}
+                                             {order.additionalDocUrl && (
+                                                <a 
+                                                    href={order.additionalDocUrl} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-1 px-2 py-1 bg-purple-50 text-purple-700 rounded text-xs hover:bg-purple-100 transition-colors"
+                                                >
+                                                    <FileText size={14} /> Ek Evrak
+                                                </a>
+                                            )}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                            <button
+                                                onClick={() => handleViewDetails(order)}
+                                                className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-sm font-medium"
+                                            >
+                                                <Eye size={16} />
+                                                Detay
+                                            </button>
+                                            <button
+                                                onClick={() => handleCompleteOrder(order.id)}
+                                                className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-sm font-medium"
+                                            >
+                                                <CheckCircle2 size={16} />
+                                                Onayla
+                                            </button>
+                                            <button
+                                                onClick={() => handleCancelOrder(order.id)}
+                                                className="flex items-center justify-center gap-2 px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors text-sm font-medium"
+                                            >
+                                                <XCircle size={16} />
+                                                İptal
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-600">
                             <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                                 <tr>
@@ -426,7 +524,49 @@ export default function Approvals() {
                     Tamamlanan İşlemler
                 </h2>
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
+                    {/* Mobile View (Cards) */}
+                    <div className="md:hidden">
+                        {completedHistory.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500">
+                                Geçmiş işlem bulunmuyor.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-200">
+                                {completedHistory.map((order) => (
+                                    <div key={order.id} className="p-4 space-y-2">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                                <div className="font-medium text-slate-800">{order.customerName}</div>
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex justify-between items-center">
+                                             <div>
+                                                {getStatusBadge(order.status)}
+                                             </div>
+                                        </div>
+
+                                        <div className="pt-2">
+                                            <button
+                                                onClick={() => handleViewDetails(order)}
+                                                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors text-sm font-medium"
+                                                aria-label="Sipariş Detaylarını Görüntüle"
+                                            >
+                                                <Eye size={16} />
+                                                Görüntüle
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-600">
                             <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                                 <tr>

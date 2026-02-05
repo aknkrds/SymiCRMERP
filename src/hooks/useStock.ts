@@ -61,11 +61,30 @@ export function useStock() {
         }
     };
 
+    const updateStockQuantity = async (id: string, updates: { quantity?: number, deduct?: number }) => {
+        try {
+            const res = await fetch(`${API_URL}/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
+            });
+            if (res.ok) {
+                const updatedItem = await res.json();
+                setStockItems(prev => prev.map(item => item.id === id ? updatedItem : item));
+                return updatedItem;
+            }
+        } catch (err) {
+            console.error('Error updating stock item:', err);
+            throw err;
+        }
+    };
+
     return {
         stockItems,
         loading,
         error,
         addStockItem,
-        deleteStockItem
+        deleteStockItem,
+        updateStockQuantity
     };
 }

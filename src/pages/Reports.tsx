@@ -186,8 +186,9 @@ export default function Reports() {
                                         <div key={msg.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group">
                                             <button
                                                 onClick={(e) => handleDelete(e, msg.id)}
-                                                className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-all"
+                                                className="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all"
                                                 title="Mesajı Sil"
+                                                aria-label="Mesajı Sil"
                                             >
                                                 <Trash2 size={16} />
                                             </button>
@@ -293,8 +294,42 @@ export default function Reports() {
                     )}
                 </div>
 
-                {/* Optional: Simple List for context */}
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                {/* Mobile View (Cards) for Monthly Report */}
+                <div className="md:hidden space-y-4">
+                    {monthOrders.length === 0 ? (
+                        <div className="text-center text-slate-500 py-8 bg-white rounded-lg border border-slate-200">
+                            Bu ay için kayıt bulunamadı.
+                        </div>
+                    ) : (
+                        monthOrders.map(order => (
+                            <div key={order.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                        <div className="font-medium text-slate-800">{order.customerName}</div>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        order.status === 'Tamamlandı' ? 'bg-green-100 text-green-700' : 
+                                        order.status === 'İptal' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                        {order.status}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm text-slate-600">
+                                    <span>{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</span>
+                                    {withPrices && (
+                                        <span className="font-medium text-slate-900">
+                                            {order.grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: order.currency })}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop View (Table) for Monthly Report */}
+                <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
                         <h3 className="font-semibold text-slate-800">Ayın Sipariş Özeti</h3>
                     </div>
@@ -372,7 +407,7 @@ export default function Reports() {
                         />
                     </div>
                     
-                    <div className="flex gap-4 border-l border-slate-200 pl-6 ml-2">
+                    <div className="flex flex-wrap gap-4 w-full md:w-auto md:border-l md:border-slate-200 md:pl-6 md:ml-2 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-slate-100 md:border-t-0">
                         <label className="flex items-center gap-2 cursor-pointer">
                             <input type="checkbox" checked={showCustomer} onChange={e => setShowCustomer(e.target.checked)} className="rounded text-indigo-600" />
                             <span className="text-sm text-slate-700">Müşteri</span>
@@ -392,7 +427,53 @@ export default function Reports() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                {/* Mobile View (Cards) for Detailed Report */}
+                <div className="md:hidden space-y-4">
+                    {filteredOrders.length === 0 ? (
+                        <div className="text-center text-slate-500 py-8 bg-white rounded-lg border border-slate-200">
+                            Seçilen tarih aralığında kayıt bulunamadı.
+                        </div>
+                    ) : (
+                        filteredOrders.map(order => (
+                            <div key={order.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                        {showCustomer && <div className="font-medium text-slate-800">{order.customerName}</div>}
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs text-slate-500">{format(new Date(order.createdAt), 'dd.MM.yyyy', { locale: tr })}</div>
+                                        {showStatus && (
+                                            <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-600'}`}>
+                                                {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {showProduct && (
+                                    <div className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
+                                        <span className="text-xs text-slate-400 block">İlk Ürün:</span>
+                                        {order.items[0]?.productName || '-'}
+                                        {order.items.length > 1 && <span className="text-xs text-slate-400 ml-1">(+{order.items.length - 1} diğer)</span>}
+                                    </div>
+                                )}
+
+                                {showPrices && (
+                                    <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+                                        <span className="text-sm text-slate-500">Tutar:</span>
+                                        <span className="font-bold text-slate-900">
+                                            {order.grandTotal.toLocaleString('tr-TR', { style: 'currency', currency: order.currency })}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop View (Table) for Detailed Report */}
+                <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
                             <thead className="bg-slate-50 text-slate-600 font-medium">
@@ -489,6 +570,7 @@ export default function Reports() {
                             onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
                             className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
                             title="Başlangıç Tarihi"
+                            aria-label="Başlangıç Tarihi"
                         />
                     </div>
                     <div>
@@ -499,6 +581,7 @@ export default function Reports() {
                             onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
                             className="border border-slate-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
                             title="Bitiş Tarihi"
+                            aria-label="Bitiş Tarihi"
                         />
                     </div>
                 </div>
@@ -524,7 +607,33 @@ export default function Reports() {
                     </div>
                 </div>
 
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                {/* Mobile View (Cards) for Production Report */}
+                <div className="md:hidden space-y-4">
+                    {Object.entries(productionByProduct).length === 0 ? (
+                        <div className="text-center text-slate-500 py-8 bg-white rounded-lg border border-slate-200">
+                            Üretim kaydı bulunamadı.
+                        </div>
+                    ) : (
+                        Object.entries(productionByProduct).map(([name, stats]) => (
+                            <div key={name} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                <div className="font-medium text-slate-800 mb-3">{name}</div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+                                        <div className="text-xs text-green-600 font-medium mb-1">Üretilen</div>
+                                        <div className="text-lg font-bold text-green-700">{stats.produced.toLocaleString()}</div>
+                                    </div>
+                                    <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+                                        <div className="text-xs text-red-600 font-medium mb-1">Hurda</div>
+                                        <div className="text-lg font-bold text-red-700">{stats.scrap.toLocaleString()}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Desktop View (Table) for Production Report */}
+                <div className="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
                         <h3 className="font-semibold text-slate-800">Ürün Bazlı Üretim Dağılımı</h3>
                     </div>
@@ -566,45 +675,60 @@ export default function Reports() {
                 <p className="text-slate-500">İşletme performansınızı analiz edin ve raporlayın</p>
             </div>
 
-            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm inline-flex">
+            <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm flex overflow-x-auto md:inline-flex w-full md:w-auto gap-1 no-scrollbar" role="tablist" aria-label="Rapor Sekmeleri">
                 <button
                     onClick={() => setActiveTab('monthly')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                         activeTab === 'monthly' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
                     }`}
+                    role="tab"
+                    aria-selected={activeTab === 'monthly'}
+                    aria-controls="monthly-panel"
                 >
                     Aylık Özet
                 </button>
                 <button
                     onClick={() => setActiveTab('monthly-price')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                         activeTab === 'monthly-price' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
                     }`}
+                    role="tab"
+                    aria-selected={activeTab === 'monthly-price'}
+                    aria-controls="monthly-price-panel"
                 >
                     Finansal Rapor
                 </button>
                 <button
                     onClick={() => setActiveTab('detailed')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                         activeTab === 'detailed' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
                     }`}
+                    role="tab"
+                    aria-selected={activeTab === 'detailed'}
+                    aria-controls="detailed-panel"
                 >
                     Detaylı Rapor
                 </button>
                 <button
                     onClick={() => setActiveTab('production')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                         activeTab === 'production' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
                     }`}
+                    role="tab"
+                    aria-selected={activeTab === 'production'}
+                    aria-controls="production-panel"
                 >
                     Üretim Raporu
                 </button>
                 {user?.roleName === 'Admin' && (
                     <button
                         onClick={() => setActiveTab('messages')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-shrink-0 ${
                             activeTab === 'messages' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
                         }`}
+                        role="tab"
+                        aria-selected={activeTab === 'messages'}
+                        aria-controls="messages-panel"
                     >
                         Mesajlar
                     </button>
@@ -612,11 +736,11 @@ export default function Reports() {
             </div>
 
             <div className="min-h-[400px]">
-                {activeTab === 'monthly' && renderMonthlyReport(false)}
-                {activeTab === 'monthly-price' && renderMonthlyReport(true)}
-                {activeTab === 'detailed' && renderDetailedReport()}
-                {activeTab === 'production' && renderProductionReport()}
-                {activeTab === 'messages' && renderMessagesReport()}
+                {activeTab === 'monthly' && <div id="monthly-panel" role="tabpanel">{renderMonthlyReport(false)}</div>}
+                {activeTab === 'monthly-price' && <div id="monthly-price-panel" role="tabpanel">{renderMonthlyReport(true)}</div>}
+                {activeTab === 'detailed' && <div id="detailed-panel" role="tabpanel">{renderDetailedReport()}</div>}
+                {activeTab === 'production' && <div id="production-panel" role="tabpanel">{renderProductionReport()}</div>}
+                {activeTab === 'messages' && <div id="messages-panel" role="tabpanel">{renderMessagesReport()}</div>}
             </div>
         </div>
     );

@@ -106,6 +106,7 @@ export default function ProductMoldSettings() {
                                         else setSelectedShape('Standart');
                                     }}
                                     className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    aria-label="Ürün Tipi"
                                 >
                                     {PRODUCT_TYPES.map(t => (
                                         <option key={t.value} value={t.value}>{t.label}</option>
@@ -120,6 +121,7 @@ export default function ProductMoldSettings() {
                                         value={selectedShape}
                                         onChange={e => setSelectedShape(e.target.value)}
                                         className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        aria-label="Kutu Şekli"
                                     >
                                         {SHAPES.percinli.map(s => (
                                             <option key={s} value={s}>{s}</option>
@@ -152,6 +154,7 @@ export default function ProductMoldSettings() {
                                 value={newDimension}
                                 onChange={e => setNewDimension(e.target.value)}
                                 className="flex-1 text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                aria-label="Yeni Ölçü"
                             />
                             <input
                                 type="text"
@@ -159,10 +162,12 @@ export default function ProductMoldSettings() {
                                 value={newLabel}
                                 onChange={e => setNewLabel(e.target.value)}
                                 className="flex-1 text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                aria-label="Yeni Etiket"
                             />
                             <button
                                 type="submit"
                                 className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 flex items-center gap-1"
+                                aria-label="Ekle"
                             >
                                 <Plus className="w-4 h-4" /> Ekle
                             </button>
@@ -181,6 +186,8 @@ export default function ProductMoldSettings() {
                                         <button
                                             onClick={() => deleteMold(mold.id)}
                                             className="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            title="Sil"
+                                            aria-label="Sil"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>

@@ -187,7 +187,80 @@ export default function Design() {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {designOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Tasarım bekleyen sipariş bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {designOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        </div>
+                                        <div className="text-xs text-slate-500">
+                                            {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                        </div>
+                                    </div>
+
+                                    <div className="text-sm text-slate-600">
+                                        <span className="text-xs text-slate-400 block mb-1">Ürünler:</span>
+                                        {order.items.map(i => i.productName).join(', ')}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                        <button
+                                            onClick={() => handleViewOrder(order)}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
+                                            aria-label="Sipariş Detaylarını Görüntüle"
+                                        >
+                                            <Eye size={16} />
+                                            Görüntüle
+                                        </button>
+                                        <button
+                                            onClick={() => handleOpenInfo(order)}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors text-xs font-medium"
+                                            aria-label="Bilgi Girişi Yap"
+                                        >
+                                            <PencilLine size={16} />
+                                            Bilgi Girişi
+                                        </button>
+                                        <button
+                                            onClick={() => handleOpenUpload(order)}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-xs font-medium"
+                                            aria-label="Tasarım Yükle"
+                                        >
+                                            <Upload size={16} />
+                                            Tasarım Ekle
+                                        </button>
+                                        <button
+                                            onClick={() => handleOpenJob(order)}
+                                            className="flex items-center justify-center gap-2 px-3 py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
+                                            aria-label="İş Bilgisi Gir"
+                                        >
+                                            <Info size={16} />
+                                            İş Bilgi
+                                        </button>
+                                        <button
+                                            onClick={() => handleCompleteDesign(order.id)}
+                                            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
+                                            aria-label="Tasarımı Tamamla"
+                                        >
+                                            <CheckCircle2 size={16} />
+                                            İşlem Tamamlandı
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -346,6 +419,8 @@ export default function Design() {
                                 value={infoSelectedItemId || ''}
                                 onChange={e => setInfoSelectedItemId(e.target.value)}
                                 className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                title="Sipariş Ürünü Seç"
+                                aria-label="Sipariş Ürünü Seç"
                             >
                                 {infoOrder.items.map(item => (
                                     <option key={item.productId} value={item.productId}>
@@ -385,6 +460,9 @@ export default function Design() {
                                 <button
                                     onClick={() => handleRemoveImage(idx)}
                                     className="absolute top-1 right-1 p-1 bg-white/80 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                                    title="Resmi Kaldır"
+                                    aria-label="Resmi Kaldır"
+                                    type="button"
                                 >
                                     <X size={14} />
                                 </button>
@@ -404,6 +482,7 @@ export default function Design() {
                                     className="hidden"
                                     onChange={handleImageUpload}
                                     disabled={isUploading}
+                                    aria-label="Görsel Yükle"
                                 />
                                 {isUploading ? (
                                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
@@ -423,6 +502,7 @@ export default function Design() {
                         <button
                             onClick={() => setIsUploadModalOpen(false)}
                             className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            aria-label="İptal"
                         >
                             İptal
                         </button>
@@ -430,6 +510,7 @@ export default function Design() {
                             onClick={handleSaveDesign}
                             disabled={uploadedImages.length === 0 || isUploading}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            aria-label="Kaydet ve Onayla"
                         >
                             Kaydet ve Onayla
                         </button>
@@ -452,6 +533,7 @@ export default function Design() {
                             onChange={e => setJobSize(e.target.value)}
                             placeholder="Örn: 500x700 mm"
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="İşin ebadı"
                         />
                     </div>
                     <div className="space-y-2">
@@ -462,6 +544,7 @@ export default function Design() {
                             onChange={e => setBoxSize(e.target.value)}
                             placeholder="Örn: 90x90x25 mm"
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Kutu boyutu"
                         />
                     </div>
                     <div className="space-y-2">
@@ -472,18 +555,21 @@ export default function Design() {
                             onChange={e => setEfficiency(e.target.value)}
                             placeholder="Örn: 6 adet/baskı"
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            aria-label="Verim"
                         />
                     </div>
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                         <button
                             onClick={() => setIsJobModalOpen(false)}
                             className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            aria-label="İptal"
                         >
                             İptal
                         </button>
                         <button
                             onClick={handleSaveJob}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                            aria-label="Kaydet"
                         >
                             Kaydet
                         </button>

@@ -68,11 +68,70 @@ export default function Customers() {
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            aria-label="Müşteri ara"
                         />
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {filteredCustomers.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Kayıtlı müşteri bulunamadı.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {filteredCustomers.map((customer) => (
+                                <div key={customer.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-semibold text-slate-800">{customer.companyName}</div>
+                                            <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
+                                                <User size={14} />
+                                                {customer.contactName}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => handleEdit(customer)}
+                                                className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"
+                                                aria-label="Düzenle"
+                                            >
+                                                <Edit2 size={18} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(customer.id)}
+                                                className="p-2 text-red-600 bg-red-50 rounded-lg"
+                                                aria-label="Sil"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 gap-2 text-sm text-slate-600">
+                                        <div className="flex items-center gap-2">
+                                            <Phone size={14} className="text-emerald-500" />
+                                            {customer.mobile}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Mail size={14} className="text-blue-500" />
+                                            <span className="truncate">{customer.email}</span>
+                                        </div>
+                                        {customer.address && (
+                                            <div className="text-xs text-slate-400 mt-1">
+                                                {customer.address}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -118,6 +177,7 @@ export default function Customers() {
                                                     onClick={() => handleEdit(customer)}
                                                     className="p-2 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"
                                                     title="Düzenle"
+                                                    aria-label="Düzenle"
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
@@ -125,6 +185,7 @@ export default function Customers() {
                                                     onClick={() => handleDelete(customer.id)}
                                                     className="p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
                                                     title="Sil"
+                                                    aria-label="Sil"
                                                 >
                                                     <Trash2 size={18} />
                                                 </button>

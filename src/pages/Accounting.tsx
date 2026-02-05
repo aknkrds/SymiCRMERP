@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
-import { FileText, CheckCircle2, Upload, Eye, X, ArrowRight, Truck } from 'lucide-react';
+import { useStock } from '../hooks/useStock';
+import { FileText, CheckCircle2, Upload, Eye, X, ArrowRight, Truck, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Modal } from '../components/ui/Modal';
@@ -8,8 +9,20 @@ import type { Order } from '../types';
 
 export default function Accounting() {
     const { orders, updateStatus, updateOrder } = useOrders();
+    const { stockItems, updateStockQuantity } = useStock();
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [uploading, setUploading] = useState<{id: string, type: 'invoice' | 'waybill'} | null>(null);
+    
+    // Shipment Modal State
+    const [shipmentModal, setShipmentModal] = useState<{
+        isOpen: boolean;
+        order: Order | null;
+        quantities: Record<string, number>; // productId -> invoiceQuantity
+    }>({
+        isOpen: false,
+        order: null,
+        quantities: {}
+    });
 
     // Filter orders
     const pendingOrders = orders.filter(o => o.status === 'production_completed' || o.status === 'invoice_waiting');
@@ -44,17 +57,57 @@ export default function Accounting() {
         }
     };
 
-    const handleComplete = async (order: Order) => {
+    const handleCompleteClick = (order: Order) => {
         if (!order.invoiceUrl) {
             alert('Lütfen önce faturayı yükleyiniz.');
             return;
         }
-
-        if (!confirm('Sipariş sevkiyat aşamasına gönderilecek. Onaylıyor musunuz?')) {
-            return;
+        
+        // Initialize quantities with order quantities
+        const initialQuantities: Record<string, number> = {};
+        if (order.items) {
+            order.items.forEach(item => {
+                initialQuantities[item.productId] = item.quantity;
+            });
         }
 
-        await updateStatus(order.id, 'invoice_added');
+        setShipmentModal({
+            isOpen: true,
+            order: order,
+            quantities: initialQuantities
+        });
+    };
+
+    const handleShipmentConfirm = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const { order, quantities } = shipmentModal;
+        if (!order) return;
+
+        try {
+            // 1. Deduct from General Stock
+            const stockItem = stockItems.find(i => i.stockNumber === order.id);
+            const totalDeduct = Object.values(quantities).reduce((a, b) => a + b, 0);
+            
+            if (stockItem) {
+                if (totalDeduct > stockItem.quantity) {
+                    alert(`Girilen toplam miktar (${totalDeduct}) mevcut stoktan (${stockItem.quantity}) fazla olamaz!`);
+                    return;
+                }
+
+                await updateStockQuantity(stockItem.id, { deduct: totalDeduct });
+            } else {
+                const proceed = confirm('Bu sipariş için üretim stoğu bulunamadı. Stok düşümü yapılmadan sevkiyat onaylansın mı?');
+                if (!proceed) return;
+            }
+
+            // 2. Update Order Status
+            await updateStatus(order.id, 'invoice_added');
+
+            setShipmentModal({ isOpen: false, order: null, quantities: {} });
+        } catch (error) {
+            console.error('Shipment error:', error);
+            alert('İşlem sırasında bir hata oluştu.');
+        }
     };
 
     return (
@@ -71,7 +124,102 @@ export default function Accounting() {
                 <div className="p-6 border-b border-slate-200 bg-slate-50">
                     <h2 className="font-semibold text-slate-800">Fatura Bekleyen Siparişler</h2>
                 </div>
-                <div className="overflow-x-auto">
+                
+                {/* Mobile View (Cards) */}
+                <div className="md:hidden">
+                    {pendingOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            Fatura bekleyen sipariş bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {pendingOrders.map((order) => (
+                                <div key={order.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                            <div className="font-medium text-slate-800">{order.customerName}</div>
+                                        </div>
+                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                                            Üretim Tamamlandı
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex justify-between text-sm text-slate-600">
+                                        <div>{format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}</div>
+                                        <div className="font-medium text-slate-900">
+                                            {order.grandTotal?.toLocaleString('tr-TR')} {order.currency}
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-slate-100 space-y-3">
+                                        <div className="flex gap-2 overflow-x-auto pb-1">
+                                            {/* Invoice Upload Button */}
+                                            <label className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-xs font-medium ${order.invoiceUrl ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-600'}`}>
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    onChange={(e) => handleFileUpload(order.id, e, 'invoice')}
+                                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                                    disabled={uploading?.id === order.id}
+                                                />
+                                                {uploading?.id === order.id && uploading?.type === 'invoice' ? (
+                                                    <span className="animate-pulse">Yükleniyor...</span>
+                                                ) : order.invoiceUrl ? (
+                                                    <>
+                                                        <CheckCircle2 size={14} />
+                                                        Fatura Yüklendi
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Upload size={14} />
+                                                        Fatura Ekle
+                                                    </>
+                                                )}
+                                            </label>
+
+                                            {/* Waybill Upload Button */}
+                                            <label className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-xs font-medium ${order.waybillUrl ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-white border-slate-200 text-slate-600 hover:border-amber-300 hover:text-amber-600'}`}>
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    onChange={(e) => handleFileUpload(order.id, e, 'waybill')}
+                                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                                    disabled={uploading?.id === order.id}
+                                                />
+                                                {uploading?.id === order.id && uploading?.type === 'waybill' ? (
+                                                    <span className="animate-pulse">Yükleniyor...</span>
+                                                ) : order.waybillUrl ? (
+                                                    <>
+                                                        <CheckCircle2 size={14} />
+                                                        İrsaliye Yüklendi
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Upload size={14} />
+                                                        İrsaliye Ekle
+                                                    </>
+                                                )}
+                                            </label>
+                                        </div>
+                                        
+                                        <button
+                                            onClick={() => handleCompleteClick(order)}
+                                            disabled={!order.invoiceUrl}
+                                            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${order.invoiceUrl ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                                        >
+                                            <Truck size={16} />
+                                            Sevkiyata Gönder
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View (Table) */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
                             <tr>
@@ -159,7 +307,7 @@ export default function Accounting() {
                                                 </div>
                                                 
                                                 <button
-                                                    onClick={() => handleComplete(order)}
+                                                    onClick={() => handleCompleteClick(order)}
                                                     disabled={!order.invoiceUrl}
                                                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${order.invoiceUrl ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
                                                 >
@@ -175,6 +323,95 @@ export default function Accounting() {
                     </table>
                 </div>
             </div>
+
+            {/* Shipment Confirmation Modal */}
+            <Modal
+                isOpen={shipmentModal.isOpen}
+                onClose={() => setShipmentModal({ isOpen: false, order: null, quantities: {} })}
+                title="Sevkiyat Onayı ve Stok Düşümü"
+            >
+                <form onSubmit={handleShipmentConfirm} className="space-y-6">
+                    <div className="bg-blue-50 p-4 rounded-lg text-sm text-blue-800 flex gap-3 items-start">
+                        <AlertTriangle className="flex-shrink-0 mt-0.5" size={18} />
+                        <p>
+                            Bu işlem siparişi sevkiyat aşamasına gönderecek ve girilen adetleri genel stoktan düşecektir.
+                            Kalan miktar stokta tutulmaya devam edecektir.
+                        </p>
+                    </div>
+
+                    <div className="space-y-4">
+                        {shipmentModal.order?.items.map((item) => {
+                            const stockItem = stockItems.find(i => i.stockNumber === shipmentModal.order?.id);
+                            const currentStock = stockItem?.quantity || 0;
+                            
+                            return (
+                                <div key={item.productId} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                    <div className="mb-3">
+                                        <div className="font-semibold text-slate-800">{item.productName}</div>
+                                        <div className="text-xs text-slate-500 font-mono mt-1">Stok No: {shipmentModal.order?.id}</div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div className="bg-white p-2 rounded border border-slate-200">
+                                            <div className="text-xs text-slate-500">Sipariş Edilen</div>
+                                            <div className="font-medium text-slate-800">{item.quantity} {item.unit || 'Adet'}</div>
+                                        </div>
+                                        <div className="bg-emerald-50 p-2 rounded border border-emerald-100">
+                                            <div className="text-xs text-emerald-600">Mevcut Üretim Stoğu</div>
+                                            <div className="font-bold text-emerald-700">{currentStock} {item.unit || 'Adet'}</div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            Fatura Edilen / Sevk Edilen Miktar
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="number"
+                                                required
+                                                min="0.01"
+                                                step="0.01"
+                                                max={currentStock > 0 ? currentStock : undefined}
+                                                value={shipmentModal.quantities[item.productId] || ''}
+                                                onChange={(e) => setShipmentModal({
+                                                    ...shipmentModal,
+                                                    quantities: {
+                                                        ...shipmentModal.quantities,
+                                                        [item.productId]: parseFloat(e.target.value)
+                                                    }
+                                                })}
+                                                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                            <span className="text-sm text-slate-500">{item.unit || 'Adet'}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            * Bu miktar stoktan düşülecektir.
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <button
+                            type="button"
+                            onClick={() => setShipmentModal({ isOpen: false, order: null, quantities: {} })}
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors text-sm font-medium"
+                        >
+                            İptal
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium flex items-center gap-2"
+                        >
+                            <Truck size={16} />
+                            Onayla ve Gönder
+                        </button>
+                    </div>
+                </form>
+            </Modal>
 
             {/* Completed/History Orders Table */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
