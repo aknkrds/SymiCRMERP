@@ -16,7 +16,7 @@ export function Layout() {
                             Symi Satış ve Üretim Takip
                         </h2>
                         <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--accent-soft)] text-[var(--accent-strong)] border border-[var(--border-subtle)]">
-                            v9.0.1
+                            v.0.9.2
                         </span>
                     </div>
                     <div className="flex items-center gap-3 sm:gap-4">
