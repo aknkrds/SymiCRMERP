@@ -10,7 +10,8 @@ import { tr } from 'date-fns/locale';
 export const Messaging: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { messages, sendMessage, markAsRead, refresh } = useMessages();
-  const { users } = useUsers({ includeAdmins: true });
+  const userOptions = useMemo(() => ({ includeAdmins: true }), []);
+  const { users } = useUsers(userOptions);
   const { orders } = useOrders();
   const { user } = useAuth();
   
@@ -22,14 +23,6 @@ export const Messaging: React.FC = () => {
   const [subject, setSubject] = useState('');
   const [relatedOrderId, setRelatedOrderId] = useState('');
   const [content, setContent] = useState('');
-
-  // Reset state when modal opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      refresh();
-      setView('inbox');
-    }
-  }, [isOpen, refresh]);
 
   // Calculate unread count
   const unreadCount = useMemo(() => {
@@ -122,7 +115,11 @@ export const Messaging: React.FC = () => {
     <>
       {/* Trigger Button */}
       <button 
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          setIsOpen(true);
+          refresh();
+          setView('inbox');
+        }}
         className="relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none flex items-center gap-2 group"
         title="Mesajlar"
       >
@@ -146,7 +143,7 @@ export const Messaging: React.FC = () => {
                 <MessageCircle className="text-indigo-600" />
                 Mesajlar
               </h2>
-              <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+              <button onClick={() => setIsOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors" title="Kapat">
                 <X size={20} />
               </button>
             </div>
