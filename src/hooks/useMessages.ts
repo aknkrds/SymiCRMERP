@@ -14,6 +14,10 @@ export const useMessages = () => {
       const response = await fetch(`/api/messages?userId=${user.id}`);
       if (!response.ok) throw new Error('Mesajlar yüklenemedi');
       const data = await response.json();
+      if (!Array.isArray(data)) {
+        console.error('Messages data is not an array:', data);
+        return;
+      }
       setMessages(prev => {
         // Deep comparison to prevent unnecessary re-renders
         if (JSON.stringify(prev) === JSON.stringify(data)) return prev;

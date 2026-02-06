@@ -32,26 +32,49 @@ export const Messaging: React.FC = () => {
 
   // Group messages by thread
   const threads = useMemo(() => {
-    const threadMap = new Map();
+    if (!Array.isArray(messages) || !user) return [];
     
-    messages.forEach(msg => {
-      if (!threadMap.has(msg.threadId)) {
-        threadMap.set(msg.threadId, []);
-      }
-      threadMap.get(msg.threadId).push(msg);
-    });
-    
-    // Convert to array and sort by latest message date
-    return Array.from(threadMap.values()).map(msgs => {
-      // Sort messages in thread by date (oldest to newest)
-      msgs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-      return {
-        threadId: msgs[0].threadId,
-        messages: msgs,
-        latestMessage: msgs[msgs.length - 1],
-        hasUnread: msgs.some(m => !m.isRead && m.recipientId === user?.id)
-      };
-    }).sort((a, b) => new Date(b.latestMessage.createdAt).getTime() - new Date(a.latestMessage.createdAt).getTime());
+    try {
+      const threadMap = new Map();
+      
+      messages.forEach(msg => {
+        if (!msg || !msg.threadId) return;
+        if (!threadMap.has(msg.threadId)) {
+          threadMap.set(msg.threadId, []);
+        }
+        threadMap.get(msg.threadId).push(msg);
+      });
+      
+      // Convert to array and sort by latest message date
+      return Array.from(threadMap.values()).map(msgs => {
+        if (!msgs.length) return null;
+        // Sort messages in thread by date (oldest to newest)
+        msgs.sort((a, b) => {
+          const dateA = new Date(a.createdAt).getTime();
+          const dateB = new Date(b.createdAt).getTime();
+          return (isNaN(dateA) ? 0 : dateA) - (isNaN(dateB) ? 0 : dateB);
+        });
+        
+        const latestMsg = msgs[msgs.length - 1];
+        
+        return {
+          threadId: msgs[0].threadId,
+          messages: msgs,
+          latestMessage: latestMsg,
+          hasUnread: msgs.some(m => !m.isRead && m.recipientId === user?.id)
+        };
+      })
+      .filter(Boolean) // Remove nulls
+      .sort((a, b) => {
+        if (!a || !b) return 0;
+        const dateA = new Date(b.latestMessage.createdAt).getTime();
+        const dateB = new Date(a.latestMessage.createdAt).getTime();
+        return (isNaN(dateA) ? 0 : dateA) - (isNaN(dateB) ? 0 : dateB);
+      });
+    } catch (err) {
+      console.error('Error grouping messages:', err);
+      return [];
+    }
   }, [messages, user]);
 
   const handleSend = async () => {
