@@ -1,11 +1,53 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { X, Plus, MessageCircle, Send, ChevronLeft } from 'lucide-react';
+import React, { useState, useMemo, useEffect, Component, ErrorInfo, ReactNode } from 'react';
+import { X, Plus, MessageCircle, Send, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { useMessages } from '../../hooks/useMessages';
 import { useUsers } from '../../hooks/useUsers';
 import { useOrders } from '../../hooks/useOrders';
 import { useAuth } from '../../context/AuthContext';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { tr } from 'date-fns/locale';
+
+// Safe date formatter helper
+const safeFormatDate = (dateString: string | Date | undefined, formatStr: string): string => {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    if (!isValid(date)) return 'Tarih hatası';
+    return format(date, formatStr, { locale: tr });
+  } catch (err) {
+    console.error('Date formatting error:', err);
+    return 'Tarih hatası';
+  }
+};
+
+// Error Boundary Component
+class MessagingErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Messaging component error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-6 text-center text-slate-500">
+          <AlertTriangle className="w-12 h-12 text-amber-500 mb-2" />
+          <h3 className="font-medium text-slate-800 mb-1">Bir hata oluştu</h3>
+          <p className="text-sm">Mesajlar yüklenirken bir sorun oluştu. Lütfen sayfayı yenileyin.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export const Messaging: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -173,8 +215,9 @@ export const Messaging: React.FC = () => {
 
             {/* Content */}
             <div className="flex-1 overflow-hidden flex flex-col">
-              {view === 'inbox' && (
-                <div className="flex-1 overflow-y-auto p-4">
+              <MessagingErrorBoundary>
+                {view === 'inbox' && (
+                  <div className="flex-1 overflow-y-auto p-4">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="font-medium text-slate-700">Gelen Kutusu</h3>
                     <button 
@@ -219,7 +262,7 @@ export const Messaging: React.FC = () => {
                                 {otherParty}
                               </span>
                               <span className="text-xs text-slate-500">
-                                {format(new Date(thread.latestMessage.createdAt), 'dd MMM HH:mm', { locale: tr })}
+                                {safeFormatDate(thread.latestMessage.createdAt, 'dd MMM HH:mm')}
                               </span>
                             </div>
                             <div className="text-sm font-medium text-slate-800 mb-1">
@@ -341,7 +384,7 @@ export const Messaging: React.FC = () => {
                                 {msg.senderName}
                               </span>
                               <span className={`text-xs ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                {format(new Date(msg.createdAt), 'dd MMM HH:mm', { locale: tr })}
+                                {safeFormatDate(msg.createdAt, 'dd MMM HH:mm')}
                               </span>
                             </div>
                             <p className={`text-sm whitespace-pre-wrap ${isMe ? 'text-white' : 'text-slate-800'}`}>
@@ -373,6 +416,7 @@ export const Messaging: React.FC = () => {
                   </div>
                 </div>
               )}
+              </MessagingErrorBoundary>
             </div>
           </div>
         </div>
