@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Trash2, CheckCircle, ArrowRight, Plus } from 'lucide-react';
+import { Trash2, CheckCircle, ArrowRight, Plus, Search, ChevronDown } from 'lucide-react';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProducts } from '../../hooks/useProducts';
 import { useAuth } from '../../context/AuthContext';
@@ -65,6 +65,11 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
 
+    // Customer Search State
+    const [customerSearch, setCustomerSearch] = useState('');
+    const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+    const customerDropdownRef = useRef<HTMLDivElement>(null);
+
     const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<OrderFormData>({
         resolver: zodResolver(orderSchema) as any,
         defaultValues: initialData || {
@@ -124,6 +129,29 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
     // Watch items to calculate totals interactively
     const watchedItems = watch('items');
     const watchedCustomerId = watch('customerId');
+
+    // Click outside handler for customer dropdown
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
+                setIsCustomerDropdownOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, []);
+
+    // Sync search text with selected customer
+    useEffect(() => {
+        if (watchedCustomerId) {
+            const customer = customers.find(c => c.id === watchedCustomerId);
+            if (customer) {
+                setCustomerSearch(customer.companyName);
+            }
+        }
+    }, [watchedCustomerId, customers]);
 
     // Fetch customer products when customer changes
     useEffect(() => {
@@ -251,22 +279,65 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
+                <div className="space-y-1 relative" ref={customerDropdownRef}>
                     <label className="text-sm font-medium text-slate-700">Müşteri</label>
-                    <select
-                        {...register('customerId')}
-                        disabled={readOnly}
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-slate-100 disabled:text-slate-500",
-                            errors.customerId ? "border-red-500" : "border-slate-300"
-                        )}
-                        aria-label="Müşteri Seçimi"
-                    >
-                        <option value="">Seçiniz</option>
-                        {customers.map(c => (
-                            <option key={c.id} value={c.id}>{c.companyName} ({c.contactName})</option>
-                        ))}
-                    </select>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            value={customerSearch}
+                            onChange={(e) => {
+                                setCustomerSearch(e.target.value);
+                                setIsCustomerDropdownOpen(true);
+                                if (watchedCustomerId) setValue('customerId', '');
+                            }}
+                            onFocus={() => !readOnly && setIsCustomerDropdownOpen(true)}
+                            disabled={readOnly}
+                            placeholder="Müşteri ara..."
+                            className={cn(
+                                "w-full pl-10 pr-10 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 bg-white disabled:bg-slate-100 disabled:text-slate-500",
+                                errors.customerId ? "border-red-500" : "border-slate-300"
+                            )}
+                        />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    </div>
+                    
+                    {/* Hidden input to maintain form registration */}
+                    <input type="hidden" {...register('customerId')} />
+
+                    {isCustomerDropdownOpen && !readOnly && (
+                        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {customers
+                                .filter(c => 
+                                    c.companyName.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                                    c.contactName.toLowerCase().includes(customerSearch.toLowerCase())
+                                )
+                                .map(c => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setValue('customerId', c.id);
+                                            setCustomerSearch(c.companyName);
+                                            setIsCustomerDropdownOpen(false);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none border-b border-slate-50 last:border-0"
+                                    >
+                                        <div className="font-medium text-slate-800">{c.companyName}</div>
+                                        <div className="text-xs text-slate-500">{c.contactName}</div>
+                                    </button>
+                                ))
+                            }
+                            {customers.filter(c => 
+                                c.companyName.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                                c.contactName.toLowerCase().includes(customerSearch.toLowerCase())
+                            ).length === 0 && (
+                                <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                                    Sonuç bulunamadı
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {errors.customerId && <p className="text-xs text-red-500">{errors.customerId.message}</p>}
                 </div>
 

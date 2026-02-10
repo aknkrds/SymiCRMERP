@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Phone, Mail, User } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Phone, Mail, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCustomers } from '../hooks/useCustomers';
 import type { Customer, CustomerFormData } from '../types';
 import { Modal } from '../components/ui/Modal';
@@ -10,12 +10,24 @@ export default function Customers() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState<Customer | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 25;
 
     const filteredCustomers = customers.filter(c =>
         c.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.contactName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + itemsPerPage);
+
+    const handlePageChange = (newPage: number) => {
+        if (newPage >= 1 && newPage <= totalPages) {
+            setCurrentPage(newPage);
+        }
+    };
 
     const handleAdd = () => {
         setEditingCustomer(undefined);
@@ -66,7 +78,10 @@ export default function Customers() {
                             type="text"
                             placeholder="Müşteri ara..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setCurrentPage(1); // Reset to first page on search
+                            }}
                             className="w-full pl-10 pr-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             aria-label="Müşteri ara"
                         />
@@ -75,13 +90,13 @@ export default function Customers() {
 
                 {/* Mobile View (Cards) */}
                 <div className="md:hidden">
-                    {filteredCustomers.length === 0 ? (
+                    {paginatedCustomers.length === 0 ? (
                         <div className="p-8 text-center text-slate-500">
                             Kayıtlı müşteri bulunamadı.
                         </div>
                     ) : (
                         <div className="divide-y divide-slate-200">
-                            {filteredCustomers.map((customer) => (
+                            {paginatedCustomers.map((customer) => (
                                 <div key={customer.id} className="p-4 space-y-3">
                                     <div className="flex justify-between items-start">
                                         <div>
@@ -142,14 +157,14 @@ export default function Customers() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
-                            {filteredCustomers.length === 0 ? (
+                            {paginatedCustomers.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
                                         Kayıtlı müşteri bulunamadı.
                                     </td>
                                 </tr>
                             ) : (
-                                filteredCustomers.map((customer) => (
+                                paginatedCustomers.map((customer) => (
                                     <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="font-semibold text-slate-800">{customer.companyName}</div>
@@ -197,6 +212,94 @@ export default function Customers() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 sm:px-6">
+                        <div className="flex flex-1 justify-between sm:hidden">
+                            <button
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Önceki
+                            </button>
+                            <button
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                className="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Sonraki
+                            </button>
+                        </div>
+                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm text-slate-700">
+                                    Toplam <span className="font-medium">{filteredCustomers.length}</span> kayıttan <span className="font-medium">{startIndex + 1}</span> - <span className="font-medium">{Math.min(startIndex + itemsPerPage, filteredCustomers.length)}</span> arası gösteriliyor
+                                </p>
+                            </div>
+                            <div>
+                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                                    <button
+                                        onClick={() => handlePageChange(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <span className="sr-only">Önceki</span>
+                                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                                    </button>
+                                    
+                                    {/* Page Numbers */}
+                                    {[...Array(totalPages)].map((_, i) => {
+                                        const page = i + 1;
+                                        // Show first, last, current, and surrounding pages
+                                        if (
+                                            page === 1 ||
+                                            page === totalPages ||
+                                            (page >= currentPage - 1 && page <= currentPage + 1)
+                                        ) {
+                                            return (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => handlePageChange(page)}
+                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                                                        currentPage === page
+                                                            ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
+                                                            : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0'
+                                                    }`}
+                                                >
+                                                    {page}
+                                                </button>
+                                            );
+                                        } else if (
+                                            page === currentPage - 2 ||
+                                            page === currentPage + 2
+                                        ) {
+                                            return (
+                                                <span
+                                                    key={page}
+                                                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0"
+                                                >
+                                                    ...
+                                                </span>
+                                            );
+                                        }
+                                        return null;
+                                    })}
+
+                                    <button
+                                        onClick={() => handlePageChange(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <span className="sr-only">Sonraki</span>
+                                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Modal

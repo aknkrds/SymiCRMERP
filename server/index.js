@@ -403,8 +403,8 @@ app.post('/api/reset-data', (req, res) => {
       'orders',      // Has customerId
       'stock_items', // Has productId
       'products',
-      'customers',
-              'machines',
+      // 'customers', // KORUNDU: Kullanıcı isteği üzerine müşteriler silinmeyecek
+      'machines',
               // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
               'weekly_plans',
               'monthly_plans'
@@ -420,7 +420,7 @@ app.post('/api/reset-data', (req, res) => {
         for (const table of tablesToClear) {
           db.prepare(`DELETE FROM ${table}`).run();
         }
-        // NOTE: product_molds, users, roles, personnel, and company_settings tables are EXPLICITLY EXCLUDED from deletion.
+        // NOTE: product_molds, users, roles, personnel, customers, and company_settings tables are EXPLICITLY EXCLUDED from deletion.
       } finally {
         // Re-enable Foreign Key constraints
         db.prepare('PRAGMA foreign_keys = ON').run();
@@ -884,7 +884,7 @@ app.patch('/api/stock-items/:id', (req, res) => {
 
 app.get('/api/customers', (req, res) => {
   try {
-    const stmt = db.prepare('SELECT * FROM customers ORDER BY createdAt DESC');
+    const stmt = db.prepare('SELECT * FROM customers ORDER BY companyName ASC');
     const customers = stmt.all();
     res.json(customers);
   } catch (error) {

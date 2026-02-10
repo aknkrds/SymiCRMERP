@@ -10,9 +10,9 @@ export function useCustomers() {
         fetch(API_URL)
             .then(res => res.json())
             .then(data => {
-                // Sort by createdAt desc (newest first)
+                // Sort by companyName asc
                 const sorted = data.sort((a: Customer, b: Customer) => 
-                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                    a.companyName.localeCompare(b.companyName, 'tr')
                 );
                 setCustomers(sorted);
             })

@@ -9,7 +9,11 @@ conn.on('ready', () => {
   // Simplified logic: copy current DB to safe place, reset to allow pull, pull, then put back the safe DB over the pulled one
   // Note: we use a fixed name for the restore command to match the backup command in the same shell session?
   // Easier: 
-  const safeCmd = 'cd SymiCRMERP && cp crm.db crm.db.temp_safe && git checkout . && git pull && mv crm.db.temp_safe crm.db && npm install && npm run build && pm2 restart all';
+  // const safeCmd = 'cd SymiCRMERP && cp crm.db crm.db.temp_safe && git checkout . && git pull && mv crm.db.temp_safe crm.db && npm install && npm run build && pm2 restart all';
+  
+  // UPDATE DATA MODE: We want to overwrite the server DB with the GitHub version (which contains local imports)
+  // We still backup the server DB just in case, but we DO NOT restore it over the pulled DB.
+  const safeCmd = 'cd SymiCRMERP && cp crm.db crm.db.backup_before_data_update_$(date +%s) && git checkout . && git pull && npm install && npm run build && pm2 restart all';
   console.log('Executing: ' + safeCmd);
   
   conn.exec(safeCmd, (err, stream) => {
