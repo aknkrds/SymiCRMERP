@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Calendar, Save, History, X, Trash2, Check, Search, Printer, Download } from 'lucide-react';
+import { Plus, Calendar, Save, History, X, Trash2, Check, Search, Printer, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import { Modal } from '../components/ui/Modal';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
@@ -45,11 +45,11 @@ const generateRows = () => {
 
 const ROWS = generateRows();
 
-interface WeeklyPlan {
+interface MonthlyPlan {
     id: string;
-    weekStartDate: string;
-    weekEndDate: string;
-    planData: any; // Placeholder for now
+    month: number;
+    year: number;
+    planData: Record<string, Record<string, PlanItem[]>>; // weekIndex -> cellKey -> items
     createdAt: string;
 }
 
@@ -61,18 +61,70 @@ interface PlanItem {
     description?: string;
 }
 
+// Helper to get weeks of the month
+const getWeeksOfMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    
+    // Start from the first day of the month
+    const firstDay = new Date(year, month, 1);
+    
+    // Find the Monday of the week containing the 1st
+    // Day 0 is Sunday, 1 is Monday.
+    const dayOfWeek = firstDay.getDay(); // 0 (Sun) - 6 (Sat)
+    // If it's Sunday (0), we go back 6 days. If Monday (1), we go back 0.
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    
+    const startOfFirstWeek = new Date(firstDay);
+    startOfFirstWeek.setDate(firstDay.getDate() + diff);
+
+    const weeks = [];
+    let currentWeekStart = new Date(startOfFirstWeek);
+
+    // Generate 4-5 weeks
+    // We stop when the week start is in the next month
+    // BUT user asked for 4 weeks explicitly? "1.hafta... 4.hafta"
+    // We will generate enough weeks to cover the month, but UI might highlight 4.
+    
+    // Loop until we are past the end of the month
+    // Actually, we should probably just do 4 or 5 weeks fixed logic.
+    // Let's generate weeks until the start date is in the next month
+    while (true) {
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(currentWeekStart.getDate() + 6);
+        
+        // If the week starts in the next month, stop (unless it's the very first week which started in prev month)
+        // Actually, simpler: just generate weeks that overlap with the current month.
+        // If weekStart > endOfMonth, stop.
+        const endOfMonth = new Date(year, month + 1, 0);
+        if (currentWeekStart > endOfMonth) break;
+
+        weeks.push({
+            start: new Date(currentWeekStart),
+            end: new Date(weekEnd)
+        });
+
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+    }
+
+    return weeks;
+};
+
 export default function Planning() {
   const { orders } = useOrders();
-  const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [activeWeekIndex, setActiveWeekIndex] = useState(0);
+  
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isDailyModalOpen, setIsDailyModalOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<{name: string, key: string} | null>(null);
-  const [historyPlans, setHistoryPlans] = useState<WeeklyPlan[]>([]);
+  const [historyPlans, setHistoryPlans] = useState<MonthlyPlan[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [currentPlanId, setCurrentPlanId] = useState<string | null>(null);
 
-  // New states for adding orders
-  const [planData, setPlanData] = useState<Record<string, PlanItem[]>>({});
+  // Data structure: { "0": { "monday-1-MachineA": [...] }, "1": { ... } }
+  const [monthlyPlanData, setMonthlyPlanData] = useState<Record<string, Record<string, PlanItem[]>>>({});
+  
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<{rowKey: string, machine: string} | null>(null);
@@ -80,88 +132,56 @@ export default function Planning() {
   const [searchTerm, setSearchTerm] = useState('');
   const tableRef = useRef<HTMLDivElement>(null);
 
-  // Helper to save plan to backend (Auto-save)
-  const savePlanToBackend = async (newData: Record<string, PlanItem[]>, idToUpdate: string | null = null) => {
-      const curr = new Date(currentWeek);
-      const first = curr.getDate() - curr.getDay() + 1;
-      const last = first + 6;
-      const firstDay = new Date(curr.setDate(first));
-      const lastDay = new Date(curr.setDate(last));
-      
-      try {
-          // If we have an ID, update it. If not, create new.
-          let url = '/api/planning/weekly';
-          let method = 'POST';
-          
-          const targetId = idToUpdate || currentPlanId;
-          
-          if (targetId) {
-              url = `/api/planning/weekly/${targetId}`;
-              method = 'PUT';
-          }
+  const weeks = getWeeksOfMonth(currentMonth);
 
-          const response = await fetch(url, {
-              method,
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  weekStartDate: firstDay.toISOString(),
-                  weekEndDate: lastDay.toISOString(),
-                  planData: newData
-              })
-          });
-
-          if (response.ok) {
-              const resData = await response.json();
-              if (resData.id && !targetId) {
-                  setCurrentPlanId(resData.id);
-              }
-          }
-      } catch (error) {
-          console.error('Auto-save error:', error);
-      }
+  // Helper to get current week's data
+  const getCurrentWeekData = () => {
+      return monthlyPlanData[activeWeekIndex.toString()] || {};
   };
 
-  // Fetch current week's plan on mount
-  useEffect(() => {
-    const fetchCurrentPlan = async () => {
-        try {
-            const res = await fetch('/api/planning/weekly');
-            const plans = await res.json();
-            
-            // Calculate current week start
-            const curr = new Date();
-            const first = curr.getDate() - curr.getDay() + 1;
-            const firstDay = new Date(curr.setDate(first));
-            firstDay.setHours(0, 0, 0, 0);
-            
-            // Find plan matching this week
-            // Sort by ID (assuming newer IDs are higher) or createdAt if available to get the LATEST plan
-            // Since ID is random string maybe, we rely on the order returned or check createdAt if possible.
-            // Let's assume the last one in the list matching the date is the newest.
-            const matchingPlans = plans.filter((p: WeeklyPlan) => {
-                const planStart = new Date(p.weekStartDate);
-                planStart.setHours(0, 0, 0, 0);
-                return Math.abs(planStart.getTime() - firstDay.getTime()) < 24 * 60 * 60 * 1000;
-            });
+  // Helper to update current week's data
+  const updateCurrentWeekData = (newData: Record<string, PlanItem[]>) => {
+      setMonthlyPlanData(prev => ({
+          ...prev,
+          [activeWeekIndex.toString()]: newData
+      }));
+  };
 
-            if (matchingPlans.length > 0) {
-                // Get the last one (assuming implicit chronological order or simply treating last as latest)
-                const currentPlan = matchingPlans[matchingPlans.length - 1];
-                setPlanData(currentPlan.planData);
-                setCurrentPlanId(currentPlan.id);
+  // Fetch monthly plan
+  useEffect(() => {
+    const fetchMonthlyPlan = async () => {
+        try {
+            const year = currentMonth.getFullYear();
+            const month = currentMonth.getMonth(); // 0-11
+            
+            // Adjust month for query (server uses 0-11 based on my implementation?)
+            // I used `const { month, year } = req.query;` in server.
+            // Let's assume consistent usage.
+            
+            const res = await fetch(`/api/planning/monthly?month=${month}&year=${year}`);
+            const plan = await res.json();
+            
+            if (plan) {
+                setMonthlyPlanData(plan.planData || {});
+                setCurrentPlanId(plan.id);
+            } else {
+                setMonthlyPlanData({});
+                setCurrentPlanId(null);
             }
         } catch (error) {
-            console.error('Error fetching initial plan:', error);
+            console.error('Error fetching plan:', error);
         }
     };
-    fetchCurrentPlan();
-  }, []);
+    fetchMonthlyPlan();
+    // Reset active week when month changes
+    setActiveWeekIndex(0);
+  }, [currentMonth]);
 
-  // Fetch history when modal opens
+  // Fetch history
   useEffect(() => {
     if (isHistoryModalOpen) {
         setIsLoadingHistory(true);
-        fetch('/api/planning/weekly')
+        fetch('/api/planning/monthly')
             .then(res => res.json())
             .then(data => {
                 setHistoryPlans(data);
@@ -175,45 +195,27 @@ export default function Planning() {
   }, [isHistoryModalOpen]);
 
   const handleSave = async (shouldClear = false) => {
-    // Calculate start and end of current week (assuming currentWeek is within the week)
-    const curr = new Date(currentWeek);
-    const first = curr.getDate() - curr.getDay() + 1; // First day is the day of the month - the day of the week
-    const last = first + 6; // last day is the first day + 6
-
-    const firstDay = new Date(curr.setDate(first));
-    const lastDay = new Date(curr.setDate(last));
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
 
     try {
-        let url = '/api/planning/weekly';
-        let method = 'POST';
-        
-        if (currentPlanId) {
-            url = `/api/planning/weekly/${currentPlanId}`;
-            method = 'PUT';
-        }
-
-        const response = await fetch(url, {
-            method,
+        const response = await fetch('/api/planning/monthly', {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                weekStartDate: firstDay.toISOString(),
-                weekEndDate: lastDay.toISOString(),
-                planData: planData
+                month,
+                year,
+                planData: monthlyPlanData
             })
         });
 
         if (response.ok) {
             const resData = await response.json();
-            if (resData.id) setCurrentPlanId(resData.id); // Update ID if it was a new creation
-            alert('Haftalık plan başarıyla kaydedildi.');
+            if (resData.id) setCurrentPlanId(resData.id);
+            alert('Aylık plan başarıyla kaydedildi.');
             
             if (shouldClear) {
-                setPlanData({});
-                // Note: We might want to keep currentPlanId if we want to update the SAME plan to be empty,
-                // but usually "clearing the table" means starting fresh or just emptying the view.
-                // If we want to save the empty state, we just did (if planData was empty).
-                // But here we save THEN clear. So the saved version has data, and the view is now empty.
-                // If the user hits save again, it will update the plan to be empty.
+                setMonthlyPlanData({});
             }
             return true;
         } else {
@@ -227,35 +229,40 @@ export default function Planning() {
     }
   };
 
-  const handleSaveAndClear = async () => {
-    // Option A: Save current (Archive) then start new (Clear UI)
-    const success = await handleSave(false);
-    if (success) {
-        // Detach from current ID to start a fresh plan
-        setCurrentPlanId(null);
-        setPlanData({});
-        setIsClearModalOpen(false);
-    }
-  };
-
-  const handleClearOnly = () => {
-    // Option B: Wipe current plan data in DB (Clear permanently)
-    savePlanToBackend({}, currentPlanId);
-    setPlanData({});
-    setIsClearModalOpen(false);
+  // Auto-save wrapper (saves the whole month)
+  const autoSave = async (newData: Record<string, Record<string, PlanItem[]>>) => {
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      
+      try {
+          const response = await fetch('/api/planning/monthly', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  month,
+                  year,
+                  planData: newData
+              })
+          });
+          
+          if (response.ok) {
+              const resData = await response.json();
+              if (resData.id) setCurrentPlanId(resData.id);
+          }
+      } catch (e) {
+          console.error("Auto-save failed", e);
+      }
   };
 
   const handlePrint = async () => {
       if (!tableRef.current) return;
       
       try {
-          // Using html-to-image instead of html2canvas to support modern CSS (oklch)
           const dataUrl = await toPng(tableRef.current, { 
               quality: 0.95,
-              backgroundColor: '#ffffff' // Ensure white background
+              backgroundColor: '#ffffff'
           });
           
-          // Create an image to get dimensions
           const img = new Image();
           img.src = dataUrl;
           await new Promise((resolve) => { img.onload = resolve; });
@@ -263,7 +270,6 @@ export default function Planning() {
           const imgWidth = img.width;
           const imgHeight = img.height;
           
-          // A4 Landscape dimensions (mm)
           const pdfWidth = 297;
           const pdfHeight = 210;
           
@@ -273,8 +279,6 @@ export default function Planning() {
               format: 'a4'
           });
           
-          // Calculate ratio to fit width
-          // We want to fit the table width to the PDF width with some margin
           const margin = 10;
           const availableWidth = pdfWidth - (margin * 2);
           const availableHeight = pdfHeight - (margin * 2);
@@ -282,18 +286,16 @@ export default function Planning() {
           const widthRatio = availableWidth / imgWidth;
           const heightRatio = availableHeight / imgHeight;
           
-          // Use the smaller ratio to ensure it fits both dimensions
           const ratio = Math.min(widthRatio, heightRatio);
           
           const finalWidth = imgWidth * ratio;
           const finalHeight = imgHeight * ratio;
           
-          // Center the image
           const imgX = (pdfWidth - finalWidth) / 2;
           const imgY = (pdfHeight - finalHeight) / 2;
           
           pdf.addImage(dataUrl, 'PNG', imgX, imgY, finalWidth, finalHeight);
-          pdf.save('haftalik-plan.pdf');
+          pdf.save(`planlama-${currentMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}-hafta-${activeWeekIndex + 1}.pdf`);
       } catch (err) {
           console.error('PDF export failed:', err);
           alert('PDF oluşturulurken bir hata oluştu.');
@@ -327,7 +329,6 @@ export default function Planning() {
       const newItems: PlanItem[] = selectedOrderIds.map(id => {
           const order = orders.find(o => o.id === id);
           if (!order) return null;
-          // Parse items safely
           let productName = 'Ürün';
           let quantity = 0;
           try {
@@ -346,41 +347,51 @@ export default function Planning() {
           };
       }).filter(Boolean) as PlanItem[];
 
-      setPlanData(prev => {
-          const newData = {
-              ...prev,
-              [cellKey]: [...(prev[cellKey] || []), ...newItems]
-          };
-          savePlanToBackend(newData); // Auto-save
-          return newData;
-      });
+      const newMonthlyData = {
+          ...monthlyPlanData,
+          [activeWeekIndex.toString()]: {
+              ...(monthlyPlanData[activeWeekIndex.toString()] || {}),
+              [cellKey]: [...(monthlyPlanData[activeWeekIndex.toString()]?.[cellKey] || []), ...newItems]
+          }
+      };
 
+      setMonthlyPlanData(newMonthlyData);
+      autoSave(newMonthlyData);
       setIsAddModalOpen(false);
   };
 
   const handleRemoveItem = (cellKey: string, index: number) => {
-      setPlanData(prev => {
-          const newList = [...(prev[cellKey] || [])];
-          newList.splice(index, 1);
-          const newData = { ...prev, [cellKey]: newList };
-          savePlanToBackend(newData); // Auto-save
-          return newData;
-      });
+      const currentWeekData = monthlyPlanData[activeWeekIndex.toString()] || {};
+      const newList = [...(currentWeekData[cellKey] || [])];
+      newList.splice(index, 1);
+      
+      const newMonthlyData = {
+          ...monthlyPlanData,
+          [activeWeekIndex.toString()]: {
+              ...currentWeekData,
+              [cellKey]: newList
+          }
+      };
+      
+      setMonthlyPlanData(newMonthlyData);
+      autoSave(newMonthlyData);
   };
 
-  const formatDateRange = (startStr: string, endStr: string) => {
-    const start = new Date(startStr);
-    const end = new Date(endStr);
-    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' };
-    
-    // Custom formatting to match "2 - 8 Şubat 2026"
-    const startDay = start.getDate();
-    const endPart = end.toLocaleDateString('tr-TR', options);
-    
-    return `${startDay} - ${endPart}`;
+  const formatDateRange = (start: Date, end: Date) => {
+    const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long' };
+    return `${start.toLocaleDateString('tr-TR', options)} - ${end.toLocaleDateString('tr-TR', options)}`;
   };
 
-  // Filter available orders: Exclude completed production
+  const handleMonthChange = (direction: 'prev' | 'next') => {
+      const newDate = new Date(currentMonth);
+      if (direction === 'prev') {
+          newDate.setMonth(newDate.getMonth() - 1);
+      } else {
+          newDate.setMonth(newDate.getMonth() + 1);
+      }
+      setCurrentMonth(newDate);
+  };
+
   const availableOrders = orders.filter(o => 
       o.productionStatus !== 'Tamamlandı' && 
       o.status !== 'production_completed' &&
@@ -391,66 +402,90 @@ export default function Planning() {
       o.id.includes(searchTerm)
   );
 
+  const activeWeekData = getCurrentWeekData();
+
   return (
   <div className="space-y-6 h-full flex flex-col relative">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 flex-shrink-0">
             <div>
-                <h1 className="text-2xl font-bold text-slate-800">Planlama</h1>
-                <p className="text-slate-500">Haftalık üretim planlama</p>
+                <h1 className="text-2xl font-bold text-slate-800">Aylık Planlama</h1>
+                <div className="flex items-center gap-2 mt-1">
+                    <button onClick={() => handleMonthChange('prev')} className="p-1 hover:bg-slate-100 rounded">
+                        <ChevronLeft size={20} className="text-slate-500" />
+                    </button>
+                    <span className="text-lg font-medium text-indigo-600">
+                        {currentMonth.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <button onClick={() => handleMonthChange('next')} className="p-1 hover:bg-slate-100 rounded">
+                        <ChevronRight size={20} className="text-slate-500" />
+                    </button>
+                </div>
             </div>
             
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-                <button 
-                    onClick={handlePrint}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-slate-600 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"
-                    title="PDF İndir"
-                    aria-label="PDF İndir"
-                >
-                    <Download size={18} />
-                    <span className="hidden sm:inline">PDF</span>
-                </button>
-                <button 
-                    onClick={() => setIsHistoryModalOpen(true)}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white text-slate-600 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"
-                    title="Geçmiş Planlar"
-                    aria-label="Geçmiş Planlar"
-                >
-                    <History size={18} />
-                    <span className="hidden sm:inline">Geçmiş</span>
-                </button>
-                <button 
-                    onClick={() => handleSave(false)}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium text-sm"
-                    title="Kaydet"
-                    aria-label="Kaydet"
-                >
-                    <Save size={18} />
-                    <span className="hidden sm:inline">Kaydet</span>
-                </button>
-                <button 
-                    onClick={() => setIsClearModalOpen(true)}
-                    className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"
-                    title="Temizle"
-                    aria-label="Temizle"
-                >
-                    <Trash2 size={18} />
-                    <span className="hidden sm:inline">Temizle</span>
-                </button>
-        </div>
+            <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                 {/* Week Tabs */}
+                <div className="flex bg-slate-100 p-1 rounded-lg mr-4 overflow-x-auto max-w-full">
+                    {weeks.map((week, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => setActiveWeekIndex(idx)}
+                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
+                                activeWeekIndex === idx 
+                                    ? 'bg-white text-indigo-600 shadow-sm' 
+                                    : 'text-slate-500 hover:text-slate-700'
+                            }`}
+                        >
+                            <div className="font-bold">{idx + 1}. Hafta</div>
+                            <div className="text-[10px] opacity-75">{formatDateRange(week.start, week.end)}</div>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={handlePrint}
+                        className="flex items-center justify-center gap-2 bg-white text-slate-600 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"
+                    >
+                        <Download size={18} />
+                        <span className="hidden sm:inline">PDF</span>
+                    </button>
+                    <button 
+                        onClick={() => setIsHistoryModalOpen(true)}
+                        className="flex items-center justify-center gap-2 bg-white text-slate-600 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"
+                    >
+                        <History size={18} />
+                        <span className="hidden sm:inline">Geçmiş</span>
+                    </button>
+                    <button 
+                        onClick={() => handleSave(false)}
+                        className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium text-sm"
+                    >
+                        <Save size={18} />
+                        <span className="hidden sm:inline">Kaydet</span>
+                    </button>
+                    <button 
+                        onClick={() => setIsClearModalOpen(true)}
+                        className="flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"
+                    >
+                        <Trash2 size={18} />
+                        <span className="hidden sm:inline">Temizle</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         {/* Mobile View (List) */}
         <div className="md:hidden space-y-4 overflow-y-auto pb-20">
-            {Object.keys(planData).length === 0 ? (
+            {Object.keys(activeWeekData).length === 0 ? (
                 <div className="text-center text-slate-500 py-8 bg-white rounded-lg border border-slate-200">
-                    Henüz planlanmış bir üretim yok.
-                    <p className="text-xs mt-2 text-slate-400">Planlama yapmak için masaüstü görünümünü kullanınız veya ilgili güne tıklayarak işlem yapınız.</p>
+                    Bu hafta için planlanmış bir üretim yok.
+                    <p className="text-xs mt-2 text-slate-400">Planlama yapmak için masaüstü görünümünü kullanınız.</p>
                 </div>
             ) : (
                 ROWS.map(row => {
                     const hasItems = MACHINES.some(machine => {
                         const cellKey = `${row.key}-${machine}`;
-                        return (planData[cellKey] || []).length > 0;
+                        return (activeWeekData[cellKey] || []).length > 0;
                     });
                     
                     if (!hasItems) return null;
@@ -462,7 +497,6 @@ export default function Planning() {
                                 <button 
                                     onClick={() => handleDayClick(row.day, row.key)}
                                     className="text-xs font-normal text-indigo-600 hover:underline"
-                                    aria-label={`${row.label} için Detay veya Ekle`}
                                 >
                                     Detay/Ekle
                                 </button>
@@ -470,7 +504,7 @@ export default function Planning() {
                             <div className="divide-y divide-slate-100">
                                 {MACHINES.map(machine => {
                                      const cellKey = `${row.key}-${machine}`;
-                                     const items = planData[cellKey] || [];
+                                     const items = activeWeekData[cellKey] || [];
                                      if (items.length === 0) return null;
                                      
                                      return (
@@ -485,8 +519,6 @@ export default function Planning() {
                                                         <button 
                                                             onClick={() => handleRemoveItem(cellKey, idx)}
                                                             className="absolute top-2 right-2 text-indigo-400 hover:text-red-500 p-2 -mr-2 -mt-2"
-                                                            title="Sil"
-                                                            aria-label="Sil"
                                                         >
                                                             <X size={16} />
                                                         </button>
@@ -503,6 +535,7 @@ export default function Planning() {
             )}
         </div>
 
+        {/* Desktop View (Table) */}
         <div className="hidden md:flex flex-1 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex-col">
             <div className="overflow-auto flex-1">
                 <table className="w-full border-collapse min-w-[1500px]" id="planning-table" ref={tableRef}>
@@ -529,7 +562,7 @@ export default function Planning() {
                                 </td>
                                 {MACHINES.map((machine) => {
                                     const cellKey = `${row.key}-${machine}`;
-                                    const items = planData[cellKey] || [];
+                                    const items = activeWeekData[cellKey] || [];
                                     
                                     return (
                                     <td key={cellKey} className="p-2 border-b border-r border-slate-200 align-top min-h-[120px] bg-white group-hover:bg-slate-50/50">
@@ -538,25 +571,29 @@ export default function Planning() {
                                             {items.map((item, idx) => (
                                                 <div key={idx} className="bg-indigo-50 border border-indigo-100 p-2 rounded text-xs relative group/item hover:border-indigo-300 transition-colors">
                                                     <div className="font-bold text-indigo-700 truncate" title={item.customerName}>{item.customerName}</div>
-                                                    <div className="text-indigo-600 truncate" title={item.productName}>{item.productName}</div>
-                                                    <div className="text-slate-500 mt-1">{item.quantity.toLocaleString()} Adet</div>
+                                                    <div className="text-slate-600 truncate" title={item.productName}>{item.productName}</div>
+                                                    <div className="text-slate-500 mt-1">{item.quantity} Adet</div>
+                                                    
+                                                    {/* Delete Button (visible on hover) */}
                                                     <button 
-                                                        onClick={() => handleRemoveItem(cellKey, idx)}
-                                                        className="absolute top-1 right-1 text-indigo-300 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-opacity"
-                                                        title="Planı Sil"
-                                                        aria-label="Planı Sil"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRemoveItem(cellKey, idx);
+                                                        }}
+                                                        className="absolute -top-1.5 -right-1.5 bg-white rounded-full p-0.5 text-slate-400 border border-slate-200 shadow-sm opacity-0 group-hover/item:opacity-100 hover:text-red-500 transition-all"
+                                                        title="Sil"
                                                     >
-                                                        <X size={14} />
+                                                        <X size={12} />
                                                     </button>
                                                 </div>
                                             ))}
                                             
+                                            {/* Add Button (visible on hover) */}
                                             <button 
                                                 onClick={() => handleAddClick(row.key, machine)}
-                                                className="flex items-center justify-center gap-1 w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50 transition-all text-xs font-medium opacity-0 group-hover:opacity-100 focus:opacity-100"
-                                                aria-label={`${machine} makinesine ekle`}
+                                                className="w-full mt-auto py-1 text-[10px] font-medium text-slate-400 border border-dashed border-slate-300 rounded hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition-colors opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1"
                                             >
-                                                <Plus size={14} />
+                                                <Plus size={12} />
                                                 Ekle
                                             </button>
                                         </div>
@@ -574,101 +611,89 @@ export default function Planning() {
         <Modal
             isOpen={isAddModalOpen}
             onClose={() => setIsAddModalOpen(false)}
-            title="Sipariş Ekle"
-            size="xl"
+            title="Üretim Planına Ekle"
+            size="lg"
         >
             <div className="space-y-4">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Müşteri veya Sipariş No ara..."
-                        aria-label="Sipariş Ara"
+                    <input 
+                        type="text" 
+                        placeholder="Müşteri veya Sipariş No Ara..." 
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-slate-200 bg-white text-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
                 </div>
-
-                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-[400px] overflow-y-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-50 text-slate-600 font-medium sticky top-0">
-                            <tr>
-                                <th className="p-3 w-10">
-                                    <div className="w-4 h-4" />
-                                </th>
-                                <th className="p-3">Müşteri</th>
-                                <th className="p-3">Ürün</th>
-                                <th className="p-3">Adet</th>
-                                <th className="p-3">Durum</th>
-                                <th className="p-3">Tarih</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {availableOrders.length === 0 ? (
+                
+                <div className="max-h-[400px] overflow-y-auto border border-slate-200 rounded-lg">
+                    {availableOrders.length === 0 ? (
+                        <div className="p-8 text-center text-slate-500">
+                            {searchTerm ? 'Sonuç bulunamadı.' : 'Planlanacak uygun sipariş bulunmuyor.'}
+                        </div>
+                    ) : (
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-slate-50 text-slate-700 font-semibold sticky top-0">
                                 <tr>
-                                    <td colSpan={6} className="p-8 text-center text-slate-500">
-                                        Planlanacak uygun sipariş bulunamadı.
-                                    </td>
+                                    <th className="p-3 w-10">
+                                        <div className="w-4 h-4" />
+                                    </th>
+                                    <th className="p-3">Müşteri</th>
+                                    <th className="p-3">Ürün</th>
+                                    <th className="p-3">Adet</th>
+                                    <th className="p-3">Tarih</th>
                                 </tr>
-                            ) : (
-                                availableOrders.map(order => {
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {availableOrders.map(order => {
                                     let productName = '-';
                                     let quantity = 0;
                                     try {
                                         const items = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
                                         if (Array.isArray(items) && items.length > 0) {
-                                            productName = items[0].productName || items[0].name;
-                                            quantity = items[0].quantity;
+                                            productName = items[0].productName || items[0].name || '-';
+                                            quantity = items[0].quantity || 0;
                                         }
                                     } catch (e) {}
-
+                                    
                                     const isSelected = selectedOrderIds.includes(order.id);
-
+                                    
                                     return (
                                         <tr 
                                             key={order.id} 
-                                            className={`hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-indigo-50/50' : ''}`}
+                                            className={`hover:bg-slate-50 cursor-pointer ${isSelected ? 'bg-indigo-50' : ''}`}
                                             onClick={() => handleToggleOrder(order.id)}
-                                            aria-selected={isSelected}
                                         >
                                             <td className="p-3">
-                                                <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300 bg-white'}`} aria-hidden="true">
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-300'}`}>
                                                     {isSelected && <Check size={12} />}
                                                 </div>
                                             </td>
-                                            <td className="p-3 font-medium text-slate-700">{order.customerName}</td>
+                                            <td className="p-3 font-medium text-slate-900">{order.customerName}</td>
                                             <td className="p-3 text-slate-600">{productName}</td>
-                                            <td className="p-3 text-slate-600">{quantity.toLocaleString()}</td>
-                                            <td className="p-3">
-                                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
-                                                    {ORDER_STATUS_MAP[order.status]?.label || order.status}
-                                                </span>
-                                            </td>
+                                            <td className="p-3 text-slate-600">{quantity}</td>
                                             <td className="p-3 text-slate-500 text-xs">
                                                 {new Date(order.createdAt).toLocaleDateString('tr-TR')}
                                             </td>
                                         </tr>
                                     );
-                                })
-                            )}
-                        </tbody>
-                    </table>
+                                })}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
-
+                
                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                    <button
+                    <button 
                         onClick={() => setIsAddModalOpen(false)}
                         className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                        aria-label="İptal"
                     >
                         İptal
                     </button>
-                    <button
+                    <button 
                         onClick={handleConfirmAdd}
                         disabled={selectedOrderIds.length === 0}
-                        className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        aria-label={`Seçilen ${selectedOrderIds.length} siparişi ekle`}
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Seçilenleri Ekle ({selectedOrderIds.length})
                     </button>
@@ -680,166 +705,111 @@ export default function Planning() {
         <Modal
             isOpen={isClearModalOpen}
             onClose={() => setIsClearModalOpen(false)}
-            title="Tabloyu Temizle"
-            size="md"
+            title="Planı Temizle"
+            size="sm"
         >
-            <div className="space-y-6">
-                <div className="text-center space-y-2">
-                    <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
-                        <Trash2 size={24} />
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-800">Bilgileri kaydettiniz mi?</h3>
-                    <p className="text-slate-500">
-                        Tablodaki tüm veriler temizlenecek. Kaydetmeden temizlerseniz verileriniz kaybolabilir.
-                    </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                    <button
-                        onClick={handleSaveAndClear}
-                        className="w-full py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center justify-center gap-2"
-                        aria-label="Kaydet ve Temizle"
-                    >
-                        <Save size={18} />
-                        Kaydet ve Temizle
-                    </button>
-                    
-                    <button
-                        onClick={handleClearOnly}
-                        className="w-full py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
-                        aria-label="Kaydetmeden Temizle"
-                    >
-                        <Trash2 size={18} />
-                        Temizle (Kaydetmeden)
-                    </button>
-
-                    <button
+            <div className="space-y-4">
+                <p className="text-slate-600">
+                    Mevcut aylık planı temizlemek istediğinize emin misiniz? Bu işlem geri alınamaz.
+                </p>
+                <div className="flex justify-end gap-3 pt-4">
+                    <button 
                         onClick={() => setIsClearModalOpen(false)}
-                        className="w-full py-2.5 bg-white text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors font-medium"
-                        aria-label="İptal"
+                        className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                     >
                         İptal
+                    </button>
+                    <button 
+                        onClick={() => {
+                            setMonthlyPlanData({});
+                            autoSave({});
+                            setIsClearModalOpen(false);
+                        }}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                        Temizle
                     </button>
                 </div>
             </div>
         </Modal>
 
         {/* History Modal */}
-        {isHistoryModalOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-                    <div className="flex justify-between items-center p-4 border-b border-slate-200">
-                        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <History size={20} className="text-slate-500" />
-                            Geçmiş Haftalık Planlar
-                        </h2>
-                        <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-slate-600" title="Kapat" aria-label="Kapat">
-                            <X size={24} />
-                        </button>
+        <Modal
+            isOpen={isHistoryModalOpen}
+            onClose={() => setIsHistoryModalOpen(false)}
+            title="Plan Geçmişi"
+            size="lg"
+        >
+            <div className="max-h-[60vh] overflow-y-auto">
+                {isLoadingHistory ? (
+                    <div className="text-center py-8 text-slate-500">Yükleniyor...</div>
+                ) : historyPlans.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                        Henüz kaydedilmiş geçmiş plan bulunmuyor.
                     </div>
-                    <div className="p-4 overflow-y-auto flex-1">
-                        {isLoadingHistory ? (
-                            <div className="text-center py-8 text-slate-500">Yükleniyor...</div>
-                        ) : historyPlans.length === 0 ? (
-                            <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                                Henüz kaydedilmiş geçmiş plan bulunmuyor.
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {historyPlans.map((plan) => (
-                                    <div key={plan.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg hover:border-indigo-300 transition-colors shadow-sm group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600">
-                                                <Calendar size={20} />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-medium text-slate-800">
-                                                    {formatDateRange(plan.weekStartDate, plan.weekEndDate)}
-                                                </h3>
-                                                <p className="text-xs text-slate-500 mt-0.5">
-                                                    Oluşturulma: {new Date(plan.createdAt).toLocaleDateString('tr-TR')}
-                                                </p>
-                                            </div>
+                ) : (
+                    <div className="space-y-3">
+                        {historyPlans.map((plan) => {
+                            const date = new Date(plan.year, plan.month);
+                            return (
+                                <div key={plan.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-lg hover:border-indigo-300 transition-colors shadow-sm group">
+                                    <div className="flex items-center gap-4">
+                                        <div className="bg-indigo-50 p-2 rounded-lg text-indigo-600">
+                                            <Calendar size={20} />
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <button 
-                                                onClick={() => {
-                                                    setPlanData(plan.planData);
-                                                    setCurrentPlanId(plan.id);
-                                                    setIsHistoryModalOpen(false);
-                                                }}
-                                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-                                                title="Yazdır / Görüntüle"
-                                                aria-label="Yazdır veya Görüntüle"
-                                            >
-                                                <Printer size={18} />
-                                            </button>
-                                            <button 
-                                                onClick={() => {
-                                                    setPlanData(plan.planData);
-                                                    setCurrentPlanId(plan.id);
-                                                    setIsHistoryModalOpen(false);
-                                                }}
-                                                className="px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
-                                                aria-label="Planı Görüntüle"
-                                            >
-                                                Görüntüle
-                                            </button>
-                                            <button 
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if(!confirm('Bu planı silmek istediğinize emin misiniz?')) return;
-                                                    try {
-                                                        await fetch(`/api/planning/weekly/${plan.id}`, { method: 'DELETE' });
-                                                        setHistoryPlans(prev => prev.filter(p => p.id !== plan.id));
-                                                        if (currentPlanId === plan.id) {
-                                                            setCurrentPlanId(null);
-                                                            setPlanData({});
-                                                        }
-                                                    } catch(err) {
-                                                        console.error('Delete failed', err);
-                                                        alert('Silme işlemi başarısız oldu.');
-                                                    }
-                                                }}
-                                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                                                title="Planı Sil"
-                                                aria-label="Planı Sil"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
+                                        <div>
+                                            <h3 className="font-medium text-slate-800">
+                                                {date.toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' })}
+                                            </h3>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                Oluşturulma: {new Date(plan.createdAt).toLocaleDateString('tr-TR')}
+                                            </p>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={() => {
+                                                setCurrentMonth(new Date(plan.year, plan.month));
+                                                setMonthlyPlanData(plan.planData);
+                                                setCurrentPlanId(plan.id);
+                                                setIsHistoryModalOpen(false);
+                                            }}
+                                            className="px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition-colors"
+                                        >
+                                            Görüntüle
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
-                </div>
+                )}
             </div>
-        )}
+        </Modal>
 
-        {/* Daily Plan Modal (Placeholder) */}
-        {isDailyModalOpen && selectedDay && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                    <div className="flex justify-between items-center p-4 border-b border-slate-200">
-                        <h2 className="text-lg font-bold text-slate-800">
-                            Günlük Plan Detayı: <span className="text-indigo-600">{selectedDay.name}</span>
-                        </h2>
-                        <button onClick={() => setIsDailyModalOpen(false)} className="text-slate-400 hover:text-slate-600" title="Kapat" aria-label="Kapat">
-                            <X size={24} />
-                        </button>
-                    </div>
-                    <div className="p-4 overflow-y-auto flex-1 space-y-6">
+        {/* Daily Detail Modal */}
+        <Modal
+            isOpen={isDailyModalOpen}
+            onClose={() => setIsDailyModalOpen(false)}
+            title={`${selectedDay?.name || ''} - Detaylar`}
+            size="xl"
+        >
+            {selectedDay && (
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {MACHINES.map(machine => {
                             const cellKey = `${selectedDay.key}-${machine}`;
-                            const items = planData[cellKey] || [];
+                            const items = activeWeekData[cellKey] || [];
                             
                             return (
                                 <div key={machine} className="bg-slate-50 rounded-lg p-4 border border-slate-200">
                                     <div className="flex justify-between items-center mb-3">
                                         <h3 className="font-semibold text-slate-700 text-sm">{machine}</h3>
                                         <button 
-                                            onClick={() => handleAddClick(selectedDay.key, machine)}
+                                            onClick={() => {
+                                                setIsDailyModalOpen(false);
+                                                handleAddClick(selectedDay.key, machine);
+                                            }}
                                             className="flex items-center gap-1 text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1.5 rounded-lg hover:bg-indigo-200 transition-colors font-medium"
                                         >
                                             <Plus size={14} />
@@ -854,20 +824,18 @@ export default function Planning() {
                                     ) : (
                                         <div className="space-y-2">
                                             {items.map((item, idx) => (
-                                                <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm relative group">
-                                                    <div className="pr-6">
-                                                        <div className="font-medium text-sm text-slate-800">{item.customerName}</div>
-                                                        <div className="text-xs text-slate-500 mt-0.5">{item.productName}</div>
-                                                        <div className="text-xs font-bold text-indigo-600 mt-1.5 bg-indigo-50 inline-block px-1.5 py-0.5 rounded">
-                                                            {item.quantity.toLocaleString()} Adet
-                                                        </div>
+                                                <div key={idx} className="bg-white p-3 rounded border border-slate-200 shadow-sm relative group">
+                                                    <div className="font-medium text-slate-800 text-sm">{item.customerName}</div>
+                                                    <div className="text-slate-600 text-xs mt-0.5">{item.productName}</div>
+                                                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100">
+                                                        <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{item.quantity} Adet</span>
                                                     </div>
                                                     <button 
                                                         onClick={() => handleRemoveItem(cellKey, idx)}
-                                                        className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                                        className="absolute top-2 right-2 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                                         title="Sil"
                                                     >
-                                                        <X size={16} />
+                                                        <Trash2 size={14} />
                                                     </button>
                                                 </div>
                                             ))}
@@ -877,17 +845,9 @@ export default function Planning() {
                             );
                         })}
                     </div>
-                    <div className="p-4 border-t border-slate-200 bg-slate-50 rounded-b-xl">
-                        <button 
-                            onClick={() => setIsDailyModalOpen(false)}
-                            className="w-full py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors"
-                        >
-                            Kapat
-                        </button>
-                    </div>
                 </div>
-            </div>
-        )}
-    </div>
+            )}
+        </Modal>
+  </div>
   );
 }

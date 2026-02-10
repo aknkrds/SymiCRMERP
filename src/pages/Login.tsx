@@ -150,7 +150,7 @@ const Login = () => {
                 Telefon: +90 533 732 89 83<br/>
                 Lisans satış ile ilgili bizimle iletişime geçebilirsiniz.
             </p>
-            <p className="text-[10px] text-slate-300 mt-2">v.0.9.5</p>
+            <p className="text-[10px] text-slate-300 mt-2">v.0.9.5.1</p>
         </div>
       </div>
     </div>

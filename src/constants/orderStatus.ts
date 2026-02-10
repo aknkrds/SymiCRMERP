@@ -1,7 +1,10 @@
 export const ORDER_STATUS_MAP: Record<string, { label: string, color: string }> = {
     created: { label: 'Oluşturuldu', color: 'bg-slate-100 text-slate-700' },
     offer_sent: { label: 'Teklif Oluşturuldu', color: 'bg-blue-50 text-blue-700' },
-    offer_accepted: { label: 'Teklif Kabul Edildi', color: 'bg-blue-100 text-blue-800' },
+    waiting_manager_approval: { label: 'GM Onayı Bekleniyor', color: 'bg-orange-100 text-orange-800' },
+    manager_approved: { label: 'GM Onayladı', color: 'bg-blue-100 text-blue-800' },
+    revision_requested: { label: 'Revize İsteniyor', color: 'bg-red-50 text-red-700' },
+    offer_accepted: { label: 'Teklif Kabul Edildi', color: 'bg-blue-200 text-blue-900' },
     offer_cancelled: { label: 'Teklif İptal Edildi', color: 'bg-red-50 text-red-700' },
     supply_design_process: { label: 'Tedarik ve Tasarım Aşamasında', color: 'bg-purple-100 text-purple-800' },
     design_waiting: { label: 'Tasarım Bekleniyor', color: 'bg-purple-50 text-purple-700' },

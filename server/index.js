@@ -67,6 +67,60 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+// Get products sold to a specific customer
+app.get('/api/customers/:customerId/products', (req, res) => {
+  try {
+    const { customerId } = req.params;
+    
+    // 1. Get all orders for this customer
+    const orders = db.prepare('SELECT items FROM orders WHERE customerId = ?').all(customerId);
+    
+    if (orders.length === 0) {
+      return res.json([]);
+    }
+
+    // 2. Extract unique product IDs
+    const productIds = new Set();
+    orders.forEach(order => {
+      try {
+        const items = JSON.parse(order.items);
+        if (Array.isArray(items)) {
+          items.forEach(item => {
+            if (item.productId) productIds.add(item.productId);
+            if (item.product_id) productIds.add(item.product_id);
+          });
+        }
+      } catch (e) {
+        console.error('Error parsing order items:', e);
+      }
+    });
+
+    if (productIds.size === 0) {
+      return res.json([]);
+    }
+
+    // 3. Fetch product details
+    const placeholders = [...productIds].map(() => '?').join(',');
+    const products = db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`).all(...productIds);
+    
+    // Parse JSON fields
+    const formattedProducts = products.map(p => ({
+      ...p,
+      dimensions: JSON.parse(p.dimensions || '{}'),
+      features: JSON.parse(p.features || '{}'),
+      inks: JSON.parse(p.inks || '{}'),
+      windowDetails: JSON.parse(p.windowDetails || '{}'),
+      lidDetails: JSON.parse(p.lidDetails || '{}'),
+      images: JSON.parse(p.images || '{}')
+    }));
+
+    res.json(formattedProducts);
+  } catch (error) {
+    console.error('Error fetching customer products:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Upload Endpoint
 app.post('/api/upload', upload.single('image'), (req, res) => {
   try {
@@ -350,11 +404,12 @@ app.post('/api/reset-data', (req, res) => {
       'stock_items', // Has productId
       'products',
       'customers',
-      'machines',
-      // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
-      'weekly_plans'
-      // 'company_settings' // KORUNDU: Firma bilgileri silinmeyecek
-    ];
+              'machines',
+              // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
+              'weekly_plans',
+              'monthly_plans'
+              // 'company_settings' // KORUNDU: Firma bilgileri silinmeyecek
+            ];
 
     // Execute deletions in a transaction with FK checks disabled
     const deleteTransaction = db.transaction(() => {
@@ -620,6 +675,70 @@ app.post('/api/notifications/mark-read', (req, res) => {
 
 // --- PLANNING ---
 
+// MONTHLY PLANS
+app.get('/api/planning/monthly', (req, res) => {
+  try {
+    const { month, year } = req.query;
+    if (month === undefined || year === undefined) {
+      // Return all if no filter (or limit?)
+      const stmt = db.prepare('SELECT * FROM monthly_plans ORDER BY year DESC, month DESC');
+      const plans = stmt.all();
+      const parsedPlans = plans.map(p => ({
+        ...p,
+        planData: JSON.parse(p.planData)
+      }));
+      return res.json(parsedPlans);
+    }
+
+    const stmt = db.prepare('SELECT * FROM monthly_plans WHERE month = ? AND year = ?');
+    const plan = stmt.get(month, year);
+    
+    if (plan) {
+      plan.planData = JSON.parse(plan.planData);
+      res.json(plan);
+    } else {
+      res.json(null);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/planning/monthly', (req, res) => {
+  try {
+    const { month, year, planData } = req.body;
+    
+    // Check if exists
+    const checkStmt = db.prepare('SELECT id FROM monthly_plans WHERE month = ? AND year = ?');
+    const existing = checkStmt.get(month, year);
+
+    if (existing) {
+      // Update
+      const updateStmt = db.prepare(`
+        UPDATE monthly_plans 
+        SET planData = ?
+        WHERE id = ?
+      `);
+      updateStmt.run(JSON.stringify(planData), existing.id);
+      res.json({ success: true, id: existing.id });
+    } else {
+      // Insert
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      const insertStmt = db.prepare(`
+        INSERT INTO monthly_plans (id, month, year, planData, createdAt)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+      insertStmt.run(id, month, year, JSON.stringify(planData), createdAt);
+      res.json({ success: true, id });
+    }
+  } catch (error) {
+    console.error('Monthly plan saving error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// WEEKLY PLANS (Keep for backward compatibility or reference if needed)
 app.get('/api/planning/weekly', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM weekly_plans ORDER BY weekStartDate DESC');

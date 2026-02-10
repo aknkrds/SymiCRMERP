@@ -44,8 +44,21 @@ export default function Approvals() {
     const [assignDropdownOpen, setAssignDropdownOpen] = useState<string | null>(null);
 
     // Filter orders
+    const gmPendingApprovals = orders.filter(o => o.status === 'waiting_manager_approval');
     const pendingApprovals = orders.filter(o => o.status === 'shipping_completed');
     const completedHistory = orders.filter(o => o.status === 'order_completed' || o.status === 'cancelled');
+
+    const handleGMApprove = async (orderId: string) => {
+        if (confirm('Siparişi onaylıyor musunuz? Satış personeli artık değişiklik yapamayacak.')) {
+            await updateStatus(orderId, 'manager_approved');
+        }
+    };
+
+    const handleGMRequestRevision = async (orderId: string) => {
+        if (confirm('Sipariş için revize isteği gönderilsin mi? Satış personeli siparişi düzenleyebilecek.')) {
+            await updateStatus(orderId, 'revision_requested');
+        }
+    };
 
     const revenueData = useMemo(() => {
         // Last 6 months
@@ -327,6 +340,128 @@ export default function Approvals() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800">Onaylar</h1>
                     <p className="text-slate-500">Sevkiyatı yapılan ve final onayı bekleyen siparişler</p>
+                </div>
+            </div>
+
+            {/* GM Pending Approvals Section */}
+            <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <CheckCircle2 className="text-orange-500" size={20} />
+                    Genel Müdür Onayı Bekleyenler
+                </h2>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    {/* Mobile View (Cards) */}
+                    <div className="md:hidden">
+                        {gmPendingApprovals.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500">
+                                Genel Müdür onayı bekleyen sipariş bulunmuyor.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-200">
+                                {gmPendingApprovals.map((order) => (
+                                    <div key={order.id} className="p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
+                                                <div className="font-medium text-slate-800">{order.customerName}</div>
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="font-semibold text-slate-700">{order.grandTotal.toFixed(2)} {order.currency}</div>
+
+                                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                            <button
+                                                onClick={() => handleViewDetails(order)}
+                                                className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-sm font-medium"
+                                            >
+                                                <Eye size={16} />
+                                                Detay
+                                            </button>
+                                            <button
+                                                onClick={() => handleGMApprove(order.id)}
+                                                className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-sm font-medium"
+                                            >
+                                                <CheckCircle2 size={16} />
+                                                Onayla
+                                            </button>
+                                            <button
+                                                onClick={() => handleGMRequestRevision(order.id)}
+                                                className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors text-sm font-medium"
+                                            >
+                                                <XCircle size={16} />
+                                                Revize İste
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Desktop View (Table) */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Sipariş No</th>
+                                    <th className="px-6 py-4">Müşteri</th>
+                                    <th className="px-6 py-4">Tarih</th>
+                                    <th className="px-6 py-4">Tutar</th>
+                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {gmPendingApprovals.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
+                                            Genel Müdür onayı bekleyen sipariş bulunmuyor.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    gmPendingApprovals.map((order) => (
+                                        <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
+                                            <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
+                                            <td className="px-6 py-4">
+                                                {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
+                                            </td>
+                                            <td className="px-6 py-4 font-semibold text-slate-700">
+                                                {order.grandTotal.toFixed(2)} {order.currency}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => handleViewDetails(order)}
+                                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        title="Detay Görüntüle"
+                                                    >
+                                                        <Eye size={18} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleGMApprove(order.id)}
+                                                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                                        title="Onayla"
+                                                    >
+                                                        <CheckCircle2 size={18} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleGMRequestRevision(order.id)}
+                                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Revize İste"
+                                                    >
+                                                        <XCircle size={18} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 

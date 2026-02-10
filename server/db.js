@@ -65,6 +65,17 @@ const initDb = () => {
     )
   `);
 
+  // Monthly Plans
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS monthly_plans (
+      id TEXT PRIMARY KEY,
+      month INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      planData TEXT NOT NULL, -- JSON
+      createdAt TEXT NOT NULL
+    )
+  `);
+
   // Product Migrations
   try { db.exec('ALTER TABLE products ADD COLUMN name TEXT'); } catch (e) {}
   try { db.exec('ALTER TABLE products ADD COLUMN productType TEXT'); } catch (e) {}

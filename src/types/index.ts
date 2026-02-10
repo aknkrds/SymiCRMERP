@@ -104,6 +104,9 @@ export type ProductFormData = Omit<Product, 'id' | 'createdAt'> & {
 export type OrderStatus = 
     | 'created' 
     | 'offer_sent' 
+    | 'waiting_manager_approval'
+    | 'manager_approved'
+    | 'revision_requested'
     | 'offer_accepted' 
     | 'offer_cancelled'
     | 'supply_design_process'

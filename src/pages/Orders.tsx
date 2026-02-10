@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, FileDown } from 'lucide-react';
+import { Plus, Search, Eye, FileDown, Send, CheckCircle } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import type { Order, OrderFormData } from '../types';
 import { Modal } from '../components/ui/Modal';
@@ -8,12 +8,14 @@ import { generateQuotePDF } from '../lib/pdf';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 
 
 export default function Orders() {
     const { orders, addOrder, updateOrder, updateStatus } = useOrders();
+    const { user } = useAuth();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
@@ -50,11 +52,22 @@ export default function Orders() {
         setIsModalOpen(false);
     };
 
-    const handleStatusChange = (id: string, newStatus: string) => {
-        if (newStatus === 'offer_accepted') {
-            updateStatus(id, 'supply_design_process' as Order['status']);
-        } else {
-            updateStatus(id, newStatus as Order['status']);
+    // Helper to check if order is locked for editing
+    const isOrderLocked = (order: Order) => {
+        // Sales personnel can only edit in specific statuses
+        const editableStatuses = ['created', 'offer_sent', 'revision_requested'];
+        return !editableStatuses.includes(order.status);
+    };
+
+    const handleSendForApproval = (id: string) => {
+        if (confirm('Siparişi Genel Müdür onayına göndermek istediğinize emin misiniz?')) {
+            updateStatus(id, 'waiting_manager_approval' as Order['status']);
+        }
+    };
+
+    const handleOfferAccepted = (id: string) => {
+        if (confirm('Teklifin müşteri tarafından onaylandığını teyit ediyor musunuz?')) {
+            updateStatus(id, 'offer_accepted' as Order['status']);
         }
     };
 
@@ -103,16 +116,9 @@ export default function Orders() {
                                             <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
                                             <div className="font-medium text-slate-800">{order.customerName}</div>
                                         </div>
-                                        <select
-                                            value={order.status}
-                                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                            aria-label="Sipariş durumu"
-                                            className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none appearance-none ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'} bg-opacity-100 max-w-[120px]`}
-                                        >
-                                            {Object.entries(ORDER_STATUS_MAP).map(([key, val]) => (
-                                                <option key={key} value={key}>{val.label}</option>
-                                            ))}
-                                        </select>
+                                        <div className={`text-xs font-medium px-2 py-1 rounded-full ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'} bg-opacity-100`}>
+                                            {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                        </div>
                                     </div>
                                     
                                     <div className="flex justify-between text-sm text-slate-600">
@@ -121,6 +127,24 @@ export default function Orders() {
                                     </div>
 
                                     <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                                        {(order.status === 'created' || order.status === 'offer_sent' || order.status === 'revision_requested') && (
+                                            <button
+                                                onClick={() => handleSendForApproval(order.id)}
+                                                className="p-2 text-orange-600 bg-orange-50 rounded-lg"
+                                                title="Onaya Gönder"
+                                            >
+                                                <Send size={18} />
+                                            </button>
+                                        )}
+                                        {order.status === 'manager_approved' && (
+                                            <button
+                                                onClick={() => handleOfferAccepted(order.id)}
+                                                className="p-2 text-green-600 bg-green-50 rounded-lg"
+                                                title="Teklif Onaylandı"
+                                            >
+                                                <CheckCircle size={18} />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => generateQuotePDF(order)}
                                             className="p-2 text-slate-600 bg-slate-50 rounded-lg"
@@ -130,8 +154,8 @@ export default function Orders() {
                                         </button>
                                         <button
                                             onClick={() => { setEditingOrder(order); setIsModalOpen(true); }}
-                                            className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"
-                                            title="Düzenle"
+                                            className={`p-2 rounded-lg ${isOrderLocked(order) ? 'text-slate-500 bg-slate-100 hover:bg-slate-200' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}
+                                            title={isOrderLocked(order) ? "Görüntüle" : "Düzenle"}
                                         >
                                             <Eye size={18} />
                                         </button>
@@ -181,19 +205,32 @@ export default function Orders() {
                                             {order.grandTotal.toFixed(2)} {order.currency}
                                         </td>
                                         <td className="px-6 py-4">
-                                            <select
-                                                value={order.status}
-                                                onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                                aria-label="Sipariş durumu"
-                                                className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer outline-none appearance-none ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'} bg-opacity-100`}
-                                            >
-                                                {Object.entries(ORDER_STATUS_MAP).map(([key, val]) => (
-                                                    <option key={key} value={key}>{val.label}</option>
-                                                ))}
-                                            </select>
+                                            <div className={`inline-flex text-xs font-medium px-2 py-1 rounded-full ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100'} bg-opacity-100`}>
+                                                {ORDER_STATUS_MAP[order.status]?.label || order.status}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
+                                                {(order.status === 'created' || order.status === 'offer_sent' || order.status === 'revision_requested') && (
+                                                    <button
+                                                        onClick={() => handleSendForApproval(order.id)}
+                                                        className="p-2 text-orange-600 hover:bg-orange-100 rounded-lg transition-colors bg-white/50"
+                                                        title="Onaya Gönder"
+                                                    >
+                                                        <Send size={18} />
+                                                    </button>
+                                                )}
+                                                
+                                                {order.status === 'manager_approved' && (
+                                                    <button
+                                                        onClick={() => handleOfferAccepted(order.id)}
+                                                        className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors bg-white/50"
+                                                        title="Teklif Onaylandı"
+                                                    >
+                                                        <CheckCircle size={18} />
+                                                    </button>
+                                                )}
+
                                                 <button
                                                     onClick={() => generateQuotePDF(order)}
                                                     className="p-2 text-slate-600 hover:bg-slate-100 hover:text-blue-600 rounded-lg transition-colors bg-white/50"
@@ -201,10 +238,11 @@ export default function Orders() {
                                                 >
                                                     <FileDown size={18} />
                                                 </button>
+                                                
                                                 <button
                                                     onClick={() => { setEditingOrder(order); setIsModalOpen(true); }}
-                                                    className="p-2 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg transition-colors bg-white/50"
-                                                    title="Düzenle"
+                                                    className={`p-2 rounded-lg transition-colors bg-white/50 ${isOrderLocked(order) ? 'text-slate-500 hover:bg-slate-100' : 'text-slate-600 hover:bg-slate-100 hover:text-indigo-600'}`}
+                                                    title={isOrderLocked(order) ? "Görüntüle" : "Düzenle"}
                                                 >
                                                     <Eye size={18} />
                                                 </button>
@@ -221,12 +259,13 @@ export default function Orders() {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={editingOrder ? "Sipariş Düzenle" : "Yeni Sipariş Oluştur"}
+                title={editingOrder ? (isOrderLocked(editingOrder) ? "Sipariş Görüntüle" : "Sipariş Düzenle") : "Yeni Sipariş Oluştur"}
             >
                 <OrderForm
                     initialData={editingOrder}
                     onSubmit={handleSubmit}
                     onCancel={() => setIsModalOpen(false)}
+                    readOnly={editingOrder ? isOrderLocked(editingOrder) : false}
                 />
             </Modal>
         </div>
