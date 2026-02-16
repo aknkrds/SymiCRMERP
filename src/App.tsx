@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Layout } from './components/layout/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { AIProvider } from './context/AIContext';
 import Customers from './pages/Customers';
 import Products from './pages/Products';
 import Orders from './pages/Orders';
@@ -40,15 +41,16 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <ThemeProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            
-            <Route element={<Layout />}>
-              <Route path="/" element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } />
+          <AIProvider>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              
+              <Route element={<Layout />}>
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } />
               <Route path="/customers" element={
                 <ProtectedRoute permission="orders">
                   <Customers />
@@ -116,7 +118,8 @@ function App() {
               } />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
-          </Routes>
+            </Routes>
+          </AIProvider>
         </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>

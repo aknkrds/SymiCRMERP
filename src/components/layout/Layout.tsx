@@ -4,6 +4,7 @@ import { Notifications } from '../ui/Notifications';
 import { DepartmentTasks } from '../ui/DepartmentTasks';
 import { Messaging } from '../ui/Messaging';
 import { ThemeSwitcher } from '../ui/ThemeSwitcher';
+import { OctaviaChat } from '../ai/OctaviaChat';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
@@ -56,6 +57,7 @@ export function Layout() {
                         </p>
                     </footer>
                 </div>
+                <OctaviaChat />
             </main>
         </div>
     );

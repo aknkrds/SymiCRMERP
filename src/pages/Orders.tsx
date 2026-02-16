@@ -9,13 +9,14 @@ import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useAI } from '../context/AIContext';
 
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 
 
 export default function Orders() {
     const { orders, addOrder, updateOrder, updateStatus } = useOrders();
-    const { user } = useAuth();
+    const { trackAction } = useAI();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
@@ -41,13 +42,16 @@ export default function Orders() {
     const handleAdd = () => {
         setEditingOrder(undefined);
         setIsModalOpen(true);
+        trackAction('open_create_order_modal');
     };
 
-    const handleSubmit = (data: OrderFormData) => {
+    const handleSubmit = async (data: OrderFormData) => {
         if (editingOrder) {
-            updateOrder(editingOrder.id, data);
+            await updateOrder(editingOrder.id, data);
+            trackAction('update_order', { id: editingOrder.id });
         } else {
-            addOrder(data);
+            await addOrder(data);
+            trackAction('create_order');
         }
         setIsModalOpen(false);
     };
@@ -62,12 +66,14 @@ export default function Orders() {
     const handleSendForApproval = (id: string) => {
         if (confirm('Siparişi Genel Müdür onayına göndermek istediğinize emin misiniz?')) {
             updateStatus(id, 'waiting_manager_approval' as Order['status']);
+            trackAction('send_order_approval', { id });
         }
     };
 
     const handleOfferAccepted = (id: string) => {
         if (confirm('Teklifin müşteri tarafından onaylandığını teyit ediyor musunuz?')) {
             updateStatus(id, 'offer_accepted' as Order['status']);
+            trackAction('confirm_offer_acceptance', { id });
         }
     };
 
