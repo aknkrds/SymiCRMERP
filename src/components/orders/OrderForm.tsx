@@ -18,6 +18,11 @@ const orderSchema = z.object({
     deadline: z.string().optional(),
     paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap']).optional(),
     maturityDays: z.coerce.number().optional(),
+    prepaymentAmount: z.string().optional(),
+    gofrePrice: z.coerce.number().optional(),
+    gofreVatRate: z.coerce.number().optional(),
+    shippingPrice: z.coerce.number().optional(),
+    shippingVatRate: z.coerce.number().optional(),
     items: z.array(z.object({
         id: z.string(),
         productId: z.string().min(1, 'Ürün seçimi zorunludur'),
@@ -54,9 +59,10 @@ interface OrderFormProps {
     onSubmit: (data: OrderFormData) => void;
     onCancel: () => void;
     readOnly?: boolean;
+    defaultVatRate?: number;
 }
 
-export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }: OrderFormProps) {
+export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, defaultVatRate = 20 }: OrderFormProps) {
     const { customers } = useCustomers();
     const { products: allProducts } = useProducts(); // Renamed to avoid confusion, though we won't use it for the dropdown
     const { user } = useAuth();
@@ -88,6 +94,8 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
 
     const watchedStatus = watch('status');
     const watchedPaymentMethod = watch('paymentMethod');
+    const watchedPrepaymentAmount = watch('prepaymentAmount');
+    const [isPrepaymentVisible, setIsPrepaymentVisible] = useState(false);
 
     // Workflow Transition Logic
     const getNextStep = () => {
@@ -129,6 +137,10 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
     // Watch items to calculate totals interactively
     const watchedItems = watch('items');
     const watchedCustomerId = watch('customerId');
+    const watchedGofrePrice = watch('gofrePrice');
+    const watchedGofreVatRate = watch('gofreVatRate');
+    const watchedShippingPrice = watch('shippingPrice');
+    const watchedShippingVatRate = watch('shippingVatRate');
 
     // Click outside handler for customer dropdown
     useEffect(() => {
@@ -243,13 +255,23 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
 
     const calculateGrandTotal = () => {
         if (!watchedItems) return 0;
-        return watchedItems.reduce((acc, item) => {
+        const itemsTotal = watchedItems.reduce((acc, item) => {
             const qty = Number(item.quantity) || 0;
             const price = Number(item.unitPrice) || 0;
             const vat = Number(item.vatRate) || 0;
             const lineTotal = qty * price * (1 + vat / 100);
             return acc + lineTotal;
         }, 0);
+
+        const gofreBase = Number(watchedGofrePrice) || 0;
+        const gofreVatRate = Number(watchedGofreVatRate) || 0;
+        const gofreVat = gofreBase * (gofreVatRate / 100);
+
+        const shippingBase = Number(watchedShippingPrice) || 0;
+        const shippingVatRate = Number(watchedShippingVatRate) || 0;
+        const shippingVat = shippingBase * (shippingVatRate / 100);
+
+        return itemsTotal + gofreBase + gofreVat + shippingBase + shippingVat;
     };
 
     return (
@@ -394,6 +416,35 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
                         />
                     </div>
                 )}
+
+                <div className="space-y-1">
+                    <label className="text-sm font-medium text-slate-700">Ön Ödeme</label>
+                    {!isPrepaymentVisible && !watchedPrepaymentAmount && (
+                        <button
+                            type="button"
+                            onClick={() => !readOnly && setIsPrepaymentVisible(true)}
+                            className="mt-1 inline-flex items-center px-3 py-1.5 border border-dashed border-slate-300 text-xs font-medium rounded-md text-slate-600 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-60"
+                            disabled={readOnly}
+                        >
+                            Ön Ödeme Ekle
+                        </button>
+                    )}
+                    {(isPrepaymentVisible || !!watchedPrepaymentAmount) && (
+                        <div className="space-y-1">
+                            <input
+                                type="text"
+                                {...register('prepaymentAmount')}
+                                disabled={readOnly}
+                                placeholder="Örn: %30 veya 10.000"
+                                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                aria-label="Ön ödeme oranı veya tutarı"
+                            />
+                            <p className="text-[11px] text-slate-500">
+                                Bu alana ister % oran, ister tutar yazabilirsiniz. Genel toplamı değiştirmez.
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="space-y-2">
@@ -414,7 +465,9 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
                                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                                         aria-label="Ürün Seçimi"
                                     >
-                                        <option value="">Seçiniz</option>
+                                        {!watchedItems?.[index]?.productId && (
+                                            <option value="">Seçiniz</option>
+                                        )}
                                         {customerProducts.map(p => {
                                             const dims = p.dimensions || {};
                                             const dimStr = (dims.length && dims.width) 
@@ -529,7 +582,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
                                 productName: '',
                                 quantity: 1,
                                 unitPrice: 0,
-                                vatRate: 20,
+                                vatRate: defaultVatRate,
                                 total: 0
                             })}
                             className="w-full py-3 border-2 border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 font-medium"
@@ -540,11 +593,87 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false }:
                     )}
                 </div>
 
-                <div className="flex justify-end pt-4">
-                    <div className="bg-slate-100 p-4 rounded-lg min-w-[200px] space-y-2">
-                        <div className="flex justify-between text-sm">
-                            <span className="text-slate-500">Toplam Tutar:</span>
-                            <span className="font-bold text-slate-800">{calculateGrandTotal().toFixed(2)} {watch('currency')}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-slate-800">Ek Fiyatlar</span>
+                            <span className="text-xs text-slate-500">Tutarlar {watch('currency')} cinsindendir</span>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-12 gap-3 items-end">
+                                <div className="col-span-5 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">Gofre Fiyatı</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        {...register('gofrePrice')}
+                                        disabled={readOnly}
+                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="col-span-3 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">KDV %</label>
+                                    <input
+                                        type="number"
+                                        {...register('gofreVatRate')}
+                                        disabled={readOnly}
+                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                        placeholder={String(defaultVatRate)}
+                                    />
+                                </div>
+                                <div className="col-span-4 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">Toplam</label>
+                                    <div className="w-full px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md">
+                                        {(
+                                            (Number(watchedGofrePrice) || 0) *
+                                            (1 + (Number(watchedGofreVatRate) || 0) / 100)
+                                        ).toFixed(2)} {watch('currency')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-12 gap-3 items-end">
+                                <div className="col-span-5 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">Nakliye Fiyatı</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        {...register('shippingPrice')}
+                                        disabled={readOnly}
+                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                                <div className="col-span-3 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">KDV %</label>
+                                    <input
+                                        type="number"
+                                        {...register('shippingVatRate')}
+                                        disabled={readOnly}
+                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                        placeholder={String(defaultVatRate)}
+                                    />
+                                </div>
+                                <div className="col-span-4 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">Toplam</label>
+                                    <div className="w-full px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md">
+                                        {(
+                                            (Number(watchedShippingPrice) || 0) *
+                                            (1 + (Number(watchedShippingVatRate) || 0) / 100)
+                                        ).toFixed(2)} {watch('currency')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end md:justify-end items-end">
+                        <div className="bg-slate-100 p-4 rounded-lg min-w-[220px] space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-500">Genel Toplam:</span>
+                                <span className="font-bold text-slate-800">{calculateGrandTotal().toFixed(2)} {watch('currency')}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

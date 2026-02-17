@@ -13,9 +13,14 @@ export default function Design() {
     const { orders, updateStatus, updateOrder } = useOrders();
     const { products, updateProduct } = useProducts();
     
-    // Filter orders waiting for design
     const designOrders = orders.filter(o => 
-        o.status === 'supply_design_process' || o.status === 'design_waiting' || o.status === 'offer_accepted'
+        (o.status === 'supply_design_process' || 
+         o.status === 'design_waiting' || 
+         o.status === 'offer_accepted' ||
+         o.status === 'waiting_manager_approval' ||
+         o.status === 'manager_approved' ||
+         o.status === 'revision_requested') &&
+        o.designStatus !== 'completed'
     );
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -46,6 +51,12 @@ export default function Design() {
     const [jobSize, setJobSize] = useState('');
     const [boxSize, setBoxSize] = useState('');
     const [efficiency, setEfficiency] = useState('');
+
+    const handleSendToGM = async (orderId: string) => {
+        if (confirm('Siparişi Genel Müdür onayına göndermek istiyor musunuz?')) {
+            await updateStatus(orderId, 'waiting_manager_approval');
+        }
+    };
 
     const handleCompleteDesign = async (orderId: string) => {
         if (confirm('Tasarım işlemleri tamamlandı olarak işaretlensin mi?')) {
@@ -165,11 +176,9 @@ export default function Design() {
             alert('Lütfen en az bir tasarım görseli yükleyin.');
             return;
         }
-
-        // Update order with images and set designStatus to completed
+        
         await updateOrder(uploadOrder.id, {
-            designImages: uploadedImages,
-            designStatus: 'completed'
+            designImages: uploadedImages
         } as any);
 
         setIsUploadModalOpen(false);
@@ -240,14 +249,32 @@ export default function Design() {
                                         <button
                                             onClick={() => handleOpenJob(order)}
                                             className="flex items-center justify-center gap-2 px-3 py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
-                                            aria-label="İş Bilgisi Gir"
+                                            aria-label="Levha Bilgisi Gir"
                                         >
                                             <Info size={16} />
-                                            İş Bilgi
+                                            Levha Bilgi
+                                        </button>
+                                        <button
+                                            onClick={() => handleSendToGM(order.id)}
+                                            disabled={order.status === 'waiting_manager_approval' || order.status === 'manager_approved'}
+                                            className={`col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${
+                                                order.status === 'waiting_manager_approval' || order.status === 'manager_approved'
+                                                    ? 'bg-slate-400 cursor-not-allowed'
+                                                    : 'bg-orange-600 hover:bg-orange-700'
+                                            }`}
+                                            aria-label="Genel Müdüre Onaya Gönder"
+                                        >
+                                            <CheckCircle2 size={16} />
+                                            Genel Müdüre Onaya Gönder
                                         </button>
                                         <button
                                             onClick={() => handleCompleteDesign(order.id)}
-                                            className="col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
+                                            disabled={order.status !== 'manager_approved'}
+                                            className={`col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${
+                                                order.status === 'manager_approved'
+                                                    ? 'bg-green-600 hover:bg-green-700'
+                                                    : 'bg-slate-400 cursor-not-allowed'
+                                            }`}
                                             aria-label="Tasarımı Tamamla"
                                         >
                                             <CheckCircle2 size={16} />
@@ -290,7 +317,7 @@ export default function Design() {
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
+                                            <div className="flex flex-wrap justify-end gap-2">
                                                 <button
                                                     onClick={() => handleViewOrder(order)}
                                                     className="flex items-center gap-2 px-3 py-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
@@ -298,13 +325,13 @@ export default function Design() {
                                                     <Eye size={16} />
                                                     Görüntüle
                                                 </button>
-                                            <button
-                                                onClick={() => handleOpenInfo(order)}
-                                                className="flex items-center gap-2 px-3 py-1.5 text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors text-xs font-medium"
-                                            >
-                                                <PencilLine size={16} />
-                                                Bilgi Girişi
-                                            </button>
+                                                <button
+                                                    onClick={() => handleOpenInfo(order)}
+                                                    className="flex items-center gap-2 px-3 py-1.5 text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors text-xs font-medium"
+                                                >
+                                                    <PencilLine size={16} />
+                                                    Bilgi Girişi
+                                                </button>
                                                 <button
                                                     onClick={() => handleOpenUpload(order)}
                                                     className="flex items-center gap-2 px-3 py-1.5 text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-xs font-medium"
@@ -312,20 +339,37 @@ export default function Design() {
                                                     <Upload size={16} />
                                                     Tasarım Ekle
                                                 </button>
-                                            <button
-                                                onClick={() => handleOpenJob(order)}
-                                                className="flex items-center gap-2 px-3 py-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
-                                            >
-                                                <Info size={16} />
-                                                İş Bilgi Girişi
-                                            </button>
-                                            <button
-                                                onClick={() => handleCompleteDesign(order.id)}
-                                                className="flex items-center gap-2 px-3 py-1.5 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
-                                            >
-                                                <CheckCircle2 size={16} />
-                                                İşlem Tamamlandı
-                                            </button>
+                                                <button
+                                                    onClick={() => handleOpenJob(order)}
+                                                    className="flex items-center gap-2 px-3 py-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
+                                                >
+                                                    <Info size={16} />
+                                                    Levha Bilgi Girişi
+                                                </button>
+                                                <button
+                                                    onClick={() => handleSendToGM(order.id)}
+                                                    disabled={order.status === 'waiting_manager_approval' || order.status === 'manager_approved'}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 text-white rounded-lg transition-colors text-xs font-medium ${
+                                                        order.status === 'waiting_manager_approval' || order.status === 'manager_approved'
+                                                            ? 'bg-slate-400 cursor-not-allowed'
+                                                            : 'bg-orange-600 hover:bg-orange-700'
+                                                    }`}
+                                                >
+                                                    <CheckCircle2 size={16} />
+                                                    GM Onaya Gönder
+                                                </button>
+                                                <button
+                                                    onClick={() => handleCompleteDesign(order.id)}
+                                                    disabled={order.status !== 'manager_approved'}
+                                                    className={`flex items-center gap-2 px-3 py-1.5 text-white rounded-lg transition-colors text-xs font-medium ${
+                                                        order.status === 'manager_approved'
+                                                            ? 'bg-green-600 hover:bg-green-700'
+                                                            : 'bg-slate-400 cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    <CheckCircle2 size={16} />
+                                                    İşlem Tamamlandı
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -522,18 +566,18 @@ export default function Design() {
             <Modal
                 isOpen={isJobModalOpen}
                 onClose={() => setIsJobModalOpen(false)}
-                title="İş Bilgi Girişi"
+                title="Levha Bilgi Girişi"
             >
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">İşin ebadı</label>
+                        <label className="text-sm font-medium text-slate-700">Levha Ebadı</label>
                         <input
                             type="text"
                             value={jobSize}
                             onChange={e => setJobSize(e.target.value)}
                             placeholder="Örn: 500x700 mm"
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                            aria-label="İşin ebadı"
+                            aria-label="Levha ebadı"
                         />
                     </div>
                     <div className="space-y-2">

@@ -1101,7 +1101,9 @@ app.post('/api/orders', (req, res) => {
       id, customerId, customerName, items, currency, 
       subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
       assignedUserId, assignedUserName, assignedRoleName,
-      paymentMethod, maturityDays
+      paymentMethod, maturityDays,
+      prepaymentAmount, prepaymentRate,
+      gofrePrice, gofreVatRate, shippingPrice, shippingVatRate
     } = req.body;
 
     const stmt = db.prepare(`
@@ -1109,9 +1111,11 @@ app.post('/api/orders', (req, res) => {
         id, customerId, customerName, items, currency, 
         subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
         assignedUserId, assignedUserName, assignedRoleName,
-        paymentMethod, maturityDays
+        paymentMethod, maturityDays,
+        prepaymentAmount, prepaymentRate,
+        gofrePrice, gofreVatRate, shippingPrice, shippingVatRate
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -1131,7 +1135,13 @@ app.post('/api/orders', (req, res) => {
       assignedUserName || null,
       assignedRoleName || null,
       paymentMethod || null,
-      maturityDays || null
+      maturityDays || null,
+      prepaymentAmount || null,
+      prepaymentRate || null,
+      gofrePrice || null,
+      gofreVatRate || null,
+      shippingPrice || null,
+      shippingVatRate || null
     );
     res.status(201).json(req.body);
   } catch (error) {

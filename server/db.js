@@ -101,6 +101,12 @@ const initDb = () => {
       jobSize TEXT, -- İşin ebadı
       boxSize TEXT, -- Kutu boyutu
       efficiency TEXT, -- Verim
+      prepaymentAmount REAL,
+      prepaymentRate REAL,
+      gofrePrice REAL,
+      gofreVatRate REAL,
+      shippingPrice REAL,
+      shippingVatRate REAL,
       createdAt TEXT NOT NULL,
       FOREIGN KEY (customerId) REFERENCES customers (id)
     )
@@ -118,11 +124,27 @@ const initDb = () => {
   } catch (error) {
     // Column likely already exists
   }
+
+  try {
+    db.exec('ALTER TABLE orders ADD COLUMN prepaymentAmount REAL');
+  } catch (error) {
+    // Column likely already exists
+  }
+
+  try {
+    db.exec('ALTER TABLE orders ADD COLUMN prepaymentRate REAL');
+  } catch (error) {
+    // Column likely already exists
+  }
   // Add design job info columns if they don't exist
   try { db.exec('ALTER TABLE orders ADD COLUMN jobSize TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN boxSize TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN efficiency TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN stockUsage TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN gofrePrice REAL'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN gofreVatRate REAL'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN shippingPrice REAL'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN shippingVatRate REAL'); } catch (error) {}
 
   // Stock Items
   db.exec(`

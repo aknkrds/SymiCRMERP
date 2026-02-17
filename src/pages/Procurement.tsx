@@ -28,12 +28,14 @@ export default function Procurement() {
     const { products } = useProducts();
     const { stockItems, addStockItem, deleteStockItem, updateStockQuantity } = useStock();
     
-    // Filter orders that are design approved (waiting for procurement)
     const procurementOrders = orders.filter(o => 
         o.status === 'supply_design_process' || 
         o.status === 'design_approved' || 
         o.status === 'supply_waiting' ||
-        o.status === 'offer_accepted'
+        o.status === 'offer_accepted' ||
+        o.status === 'waiting_manager_approval' ||
+        o.status === 'manager_approved' ||
+        o.status === 'revision_requested'
     );
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -172,10 +174,14 @@ export default function Procurement() {
     };
 
     const handleProcurementStatusChange = async (orderId: string, status: string) => {
-        // Update procurement status
+        const order = orders.find(o => o.id === orderId);
+        if ((status === 'shipped_to_production' || status === 'completed') && order && order.designStatus !== 'completed') {
+            alert('Tasarım departmanı işi tamamlamadan üretime sevk edemezsiniz.');
+            return;
+        }
+
         await updateOrder(orderId, { procurementStatus: status } as any);
 
-        // If status is "shipped_to_production" or "completed", update main status to "production_planned"
         if (status === 'shipped_to_production' || status === 'completed') {
             await updateStatus(orderId, 'production_planned');
         }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, FileDown, Send, CheckCircle } from 'lucide-react';
+import { Plus, Search, Eye, FileDown, CheckCircle } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import type { Order, OrderFormData } from '../types';
 import { Modal } from '../components/ui/Modal';
@@ -8,11 +8,12 @@ import { generateQuotePDF } from '../lib/pdf';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { useAI } from '../context/AIContext';
 
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 
+
+type OrderTypePrefix = 'IHR' | 'ICP' | 'IKA';
 
 export default function Orders() {
     const { orders, addOrder, updateOrder, updateStatus } = useOrders();
@@ -20,6 +21,8 @@ export default function Orders() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
+    const [selectedTypePrefix, setSelectedTypePrefix] = useState<OrderTypePrefix | null>(null);
     const location = useLocation();
 
     useEffect(() => {
@@ -41,7 +44,8 @@ export default function Orders() {
 
     const handleAdd = () => {
         setEditingOrder(undefined);
-        setIsModalOpen(true);
+        setSelectedTypePrefix(null);
+        setIsTypeModalOpen(true);
         trackAction('open_create_order_modal');
     };
 
@@ -50,8 +54,9 @@ export default function Orders() {
             await updateOrder(editingOrder.id, data);
             trackAction('update_order', { id: editingOrder.id });
         } else {
-            await addOrder(data);
-            trackAction('create_order');
+            const typePrefix: OrderTypePrefix = selectedTypePrefix || 'ICP';
+            await addOrder(data, { typePrefix });
+            trackAction('create_order', { typePrefix });
         }
         setIsModalOpen(false);
     };
@@ -63,13 +68,6 @@ export default function Orders() {
         return !editableStatuses.includes(order.status);
     };
 
-    const handleSendForApproval = (id: string) => {
-        if (confirm('Siparişi Genel Müdür onayına göndermek istediğinize emin misiniz?')) {
-            updateStatus(id, 'waiting_manager_approval' as Order['status']);
-            trackAction('send_order_approval', { id });
-        }
-    };
-
     const handleOfferAccepted = (id: string) => {
         if (confirm('Teklifin müşteri tarafından onaylandığını teyit ediyor musunuz?')) {
             updateStatus(id, 'offer_accepted' as Order['status']);
@@ -78,6 +76,7 @@ export default function Orders() {
     };
 
     return (
+        <>
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
                 <div>
@@ -133,16 +132,7 @@ export default function Orders() {
                                     </div>
 
                                     <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                                        {(order.status === 'created' || order.status === 'offer_sent' || order.status === 'revision_requested') && (
-                                            <button
-                                                onClick={() => handleSendForApproval(order.id)}
-                                                className="p-2 text-orange-600 bg-orange-50 rounded-lg"
-                                                title="Onaya Gönder"
-                                            >
-                                                <Send size={18} />
-                                            </button>
-                                        )}
-                                        {order.status === 'manager_approved' && (
+                                        {(order.status === 'offer_sent' || order.status === 'revision_requested') && (
                                             <button
                                                 onClick={() => handleOfferAccepted(order.id)}
                                                 className="p-2 text-green-600 bg-green-50 rounded-lg"
@@ -217,17 +207,7 @@ export default function Orders() {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
-                                                {(order.status === 'created' || order.status === 'offer_sent' || order.status === 'revision_requested') && (
-                                                    <button
-                                                        onClick={() => handleSendForApproval(order.id)}
-                                                        className="p-2 text-orange-600 hover:bg-orange-100 rounded-lg transition-colors bg-white/50"
-                                                        title="Onaya Gönder"
-                                                    >
-                                                        <Send size={18} />
-                                                    </button>
-                                                )}
-                                                
-                                                {order.status === 'manager_approved' && (
+                                                {(order.status === 'offer_sent' || order.status === 'revision_requested') && (
                                                     <button
                                                         onClick={() => handleOfferAccepted(order.id)}
                                                         className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors bg-white/50"
@@ -272,8 +252,57 @@ export default function Orders() {
                     onSubmit={handleSubmit}
                     onCancel={() => setIsModalOpen(false)}
                     readOnly={editingOrder ? isOrderLocked(editingOrder) : false}
+                    defaultVatRate={!editingOrder && selectedTypePrefix === 'IHR' ? 0 : 20}
                 />
             </Modal>
         </div>
+
+        <Modal
+            isOpen={isTypeModalOpen}
+            onClose={() => setIsTypeModalOpen(false)}
+            title="Sipariş Tipi Seçimi"
+        >
+            <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                    Lütfen oluşturacağınız siparişin tipini seçin. Sipariş numarası bu seçime göre otomatik verilecektir.
+                </p>
+                <div className="grid grid-cols-1 gap-3">
+                    <button
+                        type="button"
+                        onClick={() => { setSelectedTypePrefix('IHR'); setIsTypeModalOpen(false); setIsModalOpen(true); }}
+                        className="flex items-center justify-between px-4 py-3 border rounded-lg hover:bg-indigo-50 border-slate-200"
+                    >
+                        <div>
+                            <div className="font-semibold text-slate-800">İhracat</div>
+                            <div className="text-xs text-slate-500">Sipariş numarası IHR ile başlayacaktır.</div>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">Örn: IHR1, IHR2</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setSelectedTypePrefix('ICP'); setIsTypeModalOpen(false); setIsModalOpen(true); }}
+                        className="flex items-center justify-between px-4 py-3 border rounded-lg hover:bg-indigo-50 border-slate-200"
+                    >
+                        <div>
+                            <div className="font-semibold text-slate-800">İç Piyasa</div>
+                            <div className="text-xs text-slate-500">Sipariş numarası ICP ile başlayacaktır.</div>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">Örn: ICP1, ICP2</span>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { setSelectedTypePrefix('IKA'); setIsTypeModalOpen(false); setIsModalOpen(true); }}
+                        className="flex items-center justify-between px-4 py-3 border rounded-lg hover:bg-indigo-50 border-slate-200"
+                    >
+                        <div>
+                            <div className="font-semibold text-slate-800">İhraç Kayıtlı</div>
+                            <div className="text-xs text-slate-500">Sipariş numarası IKA ile başlayacaktır.</div>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">Örn: IKA1, IKA2</span>
+                    </button>
+                </div>
+            </div>
+        </Modal>
+        </>
     );
 }

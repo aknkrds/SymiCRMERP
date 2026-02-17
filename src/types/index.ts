@@ -166,6 +166,11 @@ export interface Order {
     deadline?: string;
     paymentMethod?: 'havale_eft' | 'cek' | 'cari_hesap';
     maturityDays?: number;
+    prepaymentAmount?: string;
+    gofrePrice?: number;
+    gofreVatRate?: number;
+    shippingPrice?: number;
+    shippingVatRate?: number;
     createdAt: string;
 }
 

@@ -24,7 +24,7 @@ conn.on('ready', () => {
     });
   });
 }).connect({
-  host: '192.168.1.100',
+  host: '78.188.54.69',
   port: 2121,
   username: 'aknkrds',
   password: 'DorukNaz2010'

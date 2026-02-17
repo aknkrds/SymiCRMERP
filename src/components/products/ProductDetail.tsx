@@ -205,10 +205,10 @@ export function ProductDetail({ product, onClose, jobDetails }: ProductDetailPro
             {/* Job Details (if available) - Moved here */}
             {jobDetails && (jobDetails.jobSize || jobDetails.boxSize || jobDetails.efficiency) && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 pt-4 border-t border-slate-100">
-                    <h4 className="font-medium text-blue-800 mb-2 border-b border-blue-200 pb-2">İş Bilgileri (Tasarım)</h4>
+                    <h4 className="font-medium text-blue-800 mb-2 border-b border-blue-200 pb-2">Levha Bilgileri (Tasarım)</h4>
                     <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
-                            <span className="block text-xs font-medium text-blue-500 mb-1">İşin Ebadı</span>
+                            <span className="block text-xs font-medium text-blue-500 mb-1">Levha Ebadı</span>
                             <span className="font-medium text-blue-900">{jobDetails.jobSize || '-'}</span>
                         </div>
                         <div>
