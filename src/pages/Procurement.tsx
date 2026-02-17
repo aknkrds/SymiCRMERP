@@ -44,6 +44,7 @@ export default function Procurement() {
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [productJobDetails, setProductJobDetails] = useState<any>(null);
+    const [productDesignImages, setProductDesignImages] = useState<string[] | undefined>(undefined);
 
     const [isAddStockModalOpen, setIsAddStockModalOpen] = useState(false);
     const [newStockItem, setNewStockItem] = useState<StockItemFormData>({
@@ -121,8 +122,10 @@ export default function Procurement() {
                     boxSize: order.boxSize,
                     efficiency: order.efficiency
                 });
+                setProductDesignImages(order.designImages || undefined);
             } else {
                 setProductJobDetails(null);
+                setProductDesignImages(undefined);
             }
             setIsProductModalOpen(true);
         }
@@ -715,7 +718,14 @@ export default function Procurement() {
                 onClose={() => setIsProductModalOpen(false)}
                 title="Ürün Detayı"
             >
-                {selectedProduct && <ProductDetail product={selectedProduct} jobDetails={productJobDetails} onClose={() => setIsProductModalOpen(false)} />}
+                {selectedProduct && (
+                    <ProductDetail
+                        product={selectedProduct}
+                        jobDetails={productJobDetails || undefined}
+                        designImages={productDesignImages}
+                        onClose={() => setIsProductModalOpen(false)}
+                    />
+                )}
             </Modal>
 
             {/* Raw Materials Modal */}

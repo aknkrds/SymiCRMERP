@@ -445,6 +445,7 @@ export default function Design() {
                     <ProductDetail
                         product={selectedProduct}
                         onClose={() => setIsProductModalOpen(false)}
+                        designImages={selectedOrder?.designImages}
                     />
                 )}
             </Modal>

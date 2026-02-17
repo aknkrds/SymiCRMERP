@@ -8,9 +8,15 @@ interface ProductDetailProps {
         boxSize?: string;
         efficiency?: string;
     };
+    designImages?: string[];
 }
 
-export function ProductDetail({ product, onClose, jobDetails }: ProductDetailProps) {
+export function ProductDetail({ product, onClose, jobDetails, designImages }: ProductDetailProps) {
+    const hasCustomerImages = !!product.images?.customer && product.images.customer.length > 0;
+    const hasDesignImages =
+        ((product as any).images?.design && (product as any).images.design.length > 0) ||
+        (designImages && designImages.length > 0);
+
     return (
         <div className="space-y-6">
             {/* Job Details moved to bottom */}
@@ -223,12 +229,11 @@ export function ProductDetail({ product, onClose, jobDetails }: ProductDetailPro
                 </div>
             )}
 
-            {/* Images */}
-            {product.images && (
+            {(hasCustomerImages || hasDesignImages) && (
                 <div className="space-y-4 pt-4 border-t border-slate-100">
                     <h4 className="font-medium text-slate-800">Görseller</h4>
                     
-                    {product.images.customer && product.images.customer.length > 0 && (
+                    {hasCustomerImages && product.images && product.images.customer && (
                         <div className="space-y-2">
                             <h5 className="text-sm text-slate-500">Müşteri Görselleri</h5>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -241,12 +246,18 @@ export function ProductDetail({ product, onClose, jobDetails }: ProductDetailPro
                         </div>
                     )}
 
-                    {product.images.design && product.images.design.length > 0 && (
+                    {hasDesignImages && (
                         <div className="space-y-2">
                             <h5 className="text-sm text-slate-500">Tasarım Görselleri</h5>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                {product.images.design.map((img, idx) => (
-                                    <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-slate-200">
+                                {[
+                                    ...(((product as any).images?.design as string[] | undefined) || []),
+                                    ...(designImages || []),
+                                ].map((img, idx) => (
+                                    <div
+                                        key={`${img}-${idx}`}
+                                        className="aspect-square rounded-lg overflow-hidden border border-slate-200"
+                                    >
                                         <img src={img} alt={`Design ${idx + 1}`} className="w-full h-full object-cover" />
                                     </div>
                                 ))}

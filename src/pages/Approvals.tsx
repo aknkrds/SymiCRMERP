@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useUsers } from '../hooks/useUsers';
+import { useProducts } from '../hooks/useProducts';
 import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package, DollarSign, ChevronDown } from 'lucide-react';
 import { format, subMonths, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import type { Order } from '../types';
+import type { Order, Product } from '../types';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
+import { Modal } from '../components/ui/Modal';
+import { ProductDetail } from '../components/products/ProductDetail';
 import {
     AreaChart,
     Area,
@@ -38,10 +41,15 @@ const DEPARTMENTS: { title: string; roles: string[] }[] = [
 export default function Approvals() {
     const { orders, updateStatus, updateOrder } = useOrders() as any;
     const { users } = useUsers();
+    const { products } = useProducts();
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [showModal, setShowModal] = useState(false);
     const [dragOrderId, setDragOrderId] = useState<string | null>(null);
     const [assignDropdownOpen, setAssignDropdownOpen] = useState<string | null>(null);
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+    const [productJobDetails, setProductJobDetails] = useState<{ jobSize?: string; boxSize?: string; efficiency?: string } | null>(null);
+    const [productDesignImages, setProductDesignImages] = useState<string[] | undefined>(undefined);
 
     // Filter orders
     const gmPendingApprovals = orders.filter(o => o.status === 'waiting_manager_approval');
@@ -132,6 +140,21 @@ export default function Approvals() {
     const handleViewDetails = (order: Order) => {
         setSelectedOrder(order);
         setShowModal(true);
+    };
+
+    const handleViewProduct = (productId: string) => {
+        if (!selectedOrder) return;
+        const product = products.find(p => p.id === productId);
+        if (!product) return;
+
+        setSelectedProduct(product);
+        setProductJobDetails({
+            jobSize: selectedOrder.jobSize,
+            boxSize: selectedOrder.boxSize,
+            efficiency: selectedOrder.efficiency,
+        });
+        setProductDesignImages(selectedOrder.designImages || undefined);
+        setIsProductModalOpen(true);
     };
 
     const closeModal = () => {
@@ -850,7 +873,19 @@ export default function Approvals() {
                                         <tbody className="divide-y divide-slate-200">
                                             {selectedOrder.items.map((item, idx) => (
                                                 <tr key={idx}>
-                                                    <td className="px-4 py-3">{item.productName}</td>
+                                                    <td className="px-4 py-3">
+                                                        {item.productId ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleViewProduct(item.productId)}
+                                                                className="text-indigo-600 hover:text-indigo-800 hover:underline font-medium"
+                                                            >
+                                                                {item.productName}
+                                                            </button>
+                                                        ) : (
+                                                            item.productName
+                                                        )}
+                                                    </td>
                                                     <td className="px-4 py-3 text-right">{item.quantity}</td>
                                                     <td className="px-4 py-3 text-right">
                                                         {item.unitPrice.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {selectedOrder.currency}
@@ -885,6 +920,21 @@ export default function Approvals() {
                     </div>
                 </div>
             )}
+
+            <Modal
+                isOpen={isProductModalOpen}
+                onClose={() => setIsProductModalOpen(false)}
+                title="Ürün Detayları"
+            >
+                {selectedProduct && (
+                    <ProductDetail
+                        product={selectedProduct}
+                        jobDetails={productJobDetails || undefined}
+                        designImages={productDesignImages}
+                        onClose={() => setIsProductModalOpen(false)}
+                    />
+                )}
+            </Modal>
         </div>
     );
 }
