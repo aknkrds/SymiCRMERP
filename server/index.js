@@ -14,6 +14,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3005;
 
+app.set('trust proxy', true);
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -66,6 +67,44 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+
+const getClientIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length > 0) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip;
+};
+
+const logError = (req, error, context = {}) => {
+  try {
+    const id = crypto.randomUUID();
+    const ipAddress = getClientIp(req);
+    const pathValue = req.path;
+    const method = req.method;
+    const message = error && error.message ? String(error.message) : String(error);
+    const stack = error && error.stack ? String(error.stack) : null;
+    const contextJson = context && Object.keys(context).length > 0 ? JSON.stringify(context) : null;
+
+    db.prepare(`
+      INSERT INTO error_logs (id, userId, username, path, method, ipAddress, message, stack, context, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      context.userId || null,
+      context.username || null,
+      pathValue,
+      method,
+      ipAddress,
+      message,
+      stack,
+      contextJson,
+      new Date().toISOString()
+    );
+  } catch (loggingError) {
+    console.error('Error while writing to error_logs', loggingError);
+  }
+};
 
 // Get products sold to a specific customer
 app.get('/api/customers/:customerId/products', (req, res) => {
@@ -1103,7 +1142,8 @@ app.post('/api/orders', (req, res) => {
       assignedUserId, assignedUserName, assignedRoleName,
       paymentMethod, maturityDays,
       prepaymentAmount, prepaymentRate,
-      gofrePrice, gofreVatRate, shippingPrice, shippingVatRate
+      gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
+      gofreQuantity, gofreUnitPrice
     } = req.body;
 
     const stmt = db.prepare(`
@@ -1113,9 +1153,10 @@ app.post('/api/orders', (req, res) => {
         assignedUserId, assignedUserName, assignedRoleName,
         paymentMethod, maturityDays,
         prepaymentAmount, prepaymentRate,
-        gofrePrice, gofreVatRate, shippingPrice, shippingVatRate
+        gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
+        gofreQuantity, gofreUnitPrice
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -1141,7 +1182,9 @@ app.post('/api/orders', (req, res) => {
       gofrePrice || null,
       gofreVatRate || null,
       shippingPrice || null,
-      shippingVatRate || null
+      shippingVatRate || null,
+      gofreQuantity || null,
+      gofreUnitPrice || null
     );
     res.status(201).json(req.body);
   } catch (error) {
@@ -1513,10 +1556,46 @@ app.post('/api/auth/login', (req, res) => {
     `).get(username, password);
 
     if (!user) {
+      const ipAddress = getClientIp(req);
+      const id = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO login_logs (id, userId, username, fullName, roleId, roleName, ipAddress, userAgent, isSuccess, message, loginAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        null,
+        username || null,
+        null,
+        null,
+        null,
+        ipAddress,
+        req.headers['user-agent'] || null,
+        0,
+        'Invalid credentials',
+        new Date().toISOString()
+      );
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     if (!user.isActive) {
+      const ipAddress = getClientIp(req);
+      const id = crypto.randomUUID();
+      db.prepare(`
+        INSERT INTO login_logs (id, userId, username, fullName, roleId, roleName, ipAddress, userAgent, isSuccess, message, loginAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        user.id,
+        user.username,
+        user.fullName,
+        user.roleId,
+        user.roleName,
+        ipAddress,
+        req.headers['user-agent'] || null,
+        0,
+        'User account is inactive',
+        new Date().toISOString()
+      );
       return res.status(403).json({ error: 'User account is inactive' });
     }
 
@@ -1524,12 +1603,65 @@ app.post('/api/auth/login', (req, res) => {
     const userData = {
       ...user,
       permissions: JSON.parse(user.permissions || '[]'),
-      // Don't send password back
     };
     delete userData.password;
 
-    res.json(userData);
+    const ipAddress = getClientIp(req);
+    const loginLogId = crypto.randomUUID();
+
+    db.prepare(`
+      INSERT INTO login_logs (id, userId, username, fullName, roleId, roleName, ipAddress, userAgent, isSuccess, message, loginAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      loginLogId,
+      user.id,
+      user.username,
+      user.fullName,
+      user.roleId,
+      user.roleName,
+      ipAddress,
+      req.headers['user-agent'] || null,
+      1,
+      'Login successful',
+      new Date().toISOString()
+    );
+
+    res.json({ ...userData, loginLogId });
   } catch (error) {
+    logError(req, error, { context: 'auth_login', username: req.body?.username });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  try {
+    const { loginLogId } = req.body || {};
+    if (!loginLogId) {
+      return res.status(400).json({ error: 'loginLogId gerekli' });
+    }
+
+    const existing = db.prepare('SELECT loginAt FROM login_logs WHERE id = ?').get(loginLogId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Oturum kaydı bulunamadı' });
+    }
+
+    const logoutAt = new Date();
+    const loginAtDate = new Date(existing.loginAt);
+    const durationSeconds = Math.max(0, Math.floor((logoutAt.getTime() - loginAtDate.getTime()) / 1000));
+
+    db.prepare(`
+      UPDATE login_logs
+      SET logoutAt = ?, durationSeconds = ?
+      WHERE id = ?
+    `).run(
+      logoutAt.toISOString(),
+      durationSeconds,
+      loginLogId
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    logError(req, error, { context: 'auth_logout' });
     res.status(500).json({ error: error.message });
   }
 });
@@ -1608,6 +1740,136 @@ app.delete('/api/users/:id', (req, res) => {
     stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/logs/actions', (req, res) => {
+  try {
+    const {
+      userId,
+      username,
+      fullName,
+      roleId,
+      roleName,
+      path: pathValue,
+      type,
+      payload,
+      createdAt,
+    } = req.body || {};
+
+    const id = crypto.randomUUID();
+    const ipAddress = getClientIp(req);
+
+    db.prepare(`
+      INSERT INTO user_actions (id, userId, username, fullName, roleId, roleName, ipAddress, path, actionType, payload, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      userId || null,
+      username || null,
+      fullName || null,
+      roleId || null,
+      roleName || null,
+      ipAddress,
+      pathValue || null,
+      type || 'unknown',
+      payload ? JSON.stringify(payload) : null,
+      createdAt || new Date().toISOString()
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    logError(req, error, { context: 'log_action' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/logs/error', (req, res) => {
+  try {
+    const {
+      userId,
+      username,
+      path: pathValue,
+      message,
+      stack,
+      context,
+    } = req.body || {};
+
+    const id = crypto.randomUUID();
+    const ipAddress = getClientIp(req);
+    const contextJson = context ? JSON.stringify(context) : null;
+
+    db.prepare(`
+      INSERT INTO error_logs (id, userId, username, path, method, ipAddress, message, stack, context, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      userId || null,
+      username || null,
+      pathValue || req.path,
+      req.method,
+      ipAddress,
+      message || 'Frontend error',
+      stack || null,
+      contextJson,
+      new Date().toISOString()
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    logError(req, error, { context: 'log_error' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/logs/login', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 200;
+    const stmt = db.prepare(`
+      SELECT *
+      FROM login_logs
+      ORDER BY datetime(loginAt) DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(limit);
+    res.json(rows);
+  } catch (error) {
+    logError(req, error, { context: 'get_login_logs' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/logs/actions', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 200;
+    const stmt = db.prepare(`
+      SELECT *
+      FROM user_actions
+      ORDER BY datetime(createdAt) DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(limit);
+    res.json(rows);
+  } catch (error) {
+    logError(req, error, { context: 'get_action_logs' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/logs/errors', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 200;
+    const stmt = db.prepare(`
+      SELECT *
+      FROM error_logs
+      ORDER BY datetime(createdAt) DESC
+      LIMIT ?
+    `);
+    const rows = stmt.all(limit);
+    res.json(rows);
+  } catch (error) {
+    logError(req, error, { context: 'get_error_logs' });
     res.status(500).json({ error: error.message });
   }
 });

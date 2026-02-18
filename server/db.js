@@ -217,7 +217,57 @@ const initDb = () => {
     )
   `);
 
-  // Messages
+  // Login Logs
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS login_logs (
+      id TEXT PRIMARY KEY,
+      userId TEXT,
+      username TEXT,
+      fullName TEXT,
+      roleId TEXT,
+      roleName TEXT,
+      ipAddress TEXT,
+      userAgent TEXT,
+      isSuccess INTEGER NOT NULL DEFAULT 1,
+      message TEXT,
+      loginAt TEXT NOT NULL,
+      logoutAt TEXT,
+      durationSeconds INTEGER
+    )
+  `);
+
+  // User Action Logs
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_actions (
+      id TEXT PRIMARY KEY,
+      userId TEXT,
+      username TEXT,
+      fullName TEXT,
+      roleId TEXT,
+      roleName TEXT,
+      ipAddress TEXT,
+      path TEXT,
+      actionType TEXT NOT NULL,
+      payload TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Error Logs
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS error_logs (
+      id TEXT PRIMARY KEY,
+      userId TEXT,
+      username TEXT,
+      path TEXT,
+      method TEXT,
+      ipAddress TEXT,
+      message TEXT NOT NULL,
+      stack TEXT,
+      context TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -422,6 +472,15 @@ const initDb = () => {
     const hasAssignedRoleName = tableInfo.some(col => col.name === 'assignedRoleName');
     if (!hasAssignedRoleName) {
         db.prepare("ALTER TABLE orders ADD COLUMN assignedRoleName TEXT").run();
+    }
+
+    const hasGofreQuantity = tableInfo.some(col => col.name === 'gofreQuantity');
+    if (!hasGofreQuantity) {
+        db.prepare("ALTER TABLE orders ADD COLUMN gofreQuantity REAL").run();
+    }
+    const hasGofreUnitPrice = tableInfo.some(col => col.name === 'gofreUnitPrice');
+    if (!hasGofreUnitPrice) {
+        db.prepare("ALTER TABLE orders ADD COLUMN gofreUnitPrice REAL").run();
     }
   } catch (error) {
     console.error("Migration error:", error);

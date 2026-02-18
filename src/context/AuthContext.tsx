@@ -9,6 +9,7 @@ interface User {
   roleName: string;
   permissions: string[];
   isActive: number;
+  loginLogId?: string;
 }
 
 interface AuthContextType {
@@ -48,6 +49,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    if (user && user.loginLogId) {
+      try {
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loginLogId: user.loginLogId })
+        }).catch(() => {});
+      } catch {
+      }
+    }
+
     setUser(null);
     localStorage.removeItem('user');
     navigate('/login');

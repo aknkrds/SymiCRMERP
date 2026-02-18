@@ -40,11 +40,59 @@ interface User {
   password?: string;
 }
 
+interface LoginLog {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  fullName: string | null;
+  roleId: string | null;
+  roleName: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  isSuccess: number;
+  message: string | null;
+  loginAt: string;
+  logoutAt?: string | null;
+  durationSeconds?: number | null;
+}
+
+interface ActionLog {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  fullName: string | null;
+  roleId: string | null;
+  roleName: string | null;
+  ipAddress: string | null;
+  path: string | null;
+  actionType: string;
+  payload?: string | null;
+  createdAt: string;
+}
+
+interface ErrorLog {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  path: string | null;
+  method: string | null;
+  ipAddress: string | null;
+  message: string;
+  stack?: string | null;
+  context?: string | null;
+  createdAt: string;
+}
+
 const Settings = () => {
-  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup' | 'molds' | 'company'>('users');
+  const [activeTab, setActiveTab] = useState<'roles' | 'users' | 'backup' | 'molds' | 'company' | 'logs'>('users');
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
+  const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
+  const [errorLogs, setErrorLogs] = useState<ErrorLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // Company Settings Hook
   const { settings: companySettings, updateSettings: updateCompanySettings, loading: companyLoading } = useCompanySettings();
@@ -105,6 +153,31 @@ const Settings = () => {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      setLogsLoading(true);
+      const [loginRes, actionRes, errorRes] = await Promise.all([
+        fetch('/api/logs/login?limit=200'),
+        fetch('/api/logs/actions?limit=200'),
+        fetch('/api/logs/errors?limit=200'),
+      ]);
+
+      const [loginData, actionData, errorData] = await Promise.all([
+        loginRes.json(),
+        actionRes.json(),
+        errorRes.json(),
+      ]);
+
+      setLoginLogs(Array.isArray(loginData) ? loginData : []);
+      setActionLogs(Array.isArray(actionData) ? actionData : []);
+      setErrorLogs(Array.isArray(errorData) ? errorData : []);
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    } finally {
+      setLogsLoading(false);
     }
   };
 
@@ -396,6 +469,23 @@ const Settings = () => {
           >
             <Database size={18} />
             Veri Yönetimi
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('logs');
+              if (loginLogs.length === 0 && actionLogs.length === 0 && errorLogs.length === 0) {
+                fetchLogs();
+              }
+            }}
+            className={`px-6 py-3 text-sm font-medium flex items-center gap-2 whitespace-nowrap flex-shrink-0 ${
+              activeTab === 'logs'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Database size={18} />
+            Loglar
           </button>
         </div>
 
@@ -898,6 +988,223 @@ const Settings = () => {
                 >
                   Verileri Temizle
                 </button>
+              </div>
+            </div>
+          )}
+          {activeTab === 'logs' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-800">Sistem Logları</h3>
+                  <p className="text-sm text-slate-500">
+                    Giriş denemeleri, kullanıcı aksiyonları ve hata kayıtlarını inceleyebilirsiniz.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchLogs}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm"
+                >
+                  <Wand2 size={16} />
+                  Yenile
+                </button>
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-3">
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-slate-800 text-sm">Giriş Logları</h4>
+                      <p className="text-xs text-slate-500">Son giriş ve giriş denemeleri</p>
+                    </div>
+                    {logsLoading && (
+                      <span className="text-xs text-slate-400">Yükleniyor...</span>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-auto text-xs">
+                    <table className="w-full">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Kullanıcı</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">IP</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Durum</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Zaman</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loginLogs.map(log => (
+                          <tr key={log.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-slate-800">
+                                  {log.fullName || log.username || '-'}
+                                </span>
+                                <span className="text-[10px] text-slate-500">
+                                  {log.roleName || '-'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col">
+                                <span className="text-slate-700">{log.ipAddress || '-'}</span>
+                                {typeof log.durationSeconds === 'number' && log.durationSeconds > 0 && (
+                                  <span className="text-[10px] text-slate-500">
+                                    Süre: {Math.floor(log.durationSeconds / 60)} dk
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              {log.isSuccess ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-50 text-green-700">
+                                  <CheckCircle2 size={10} />
+                                  Başarılı
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 text-red-600">
+                                  <X size={10} />
+                                  Başarısız
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col">
+                                <span className="text-slate-700">
+                                  {new Date(log.loginAt).toLocaleString('tr-TR')}
+                                </span>
+                                {log.message && (
+                                  <span className="text-[10px] text-slate-500">
+                                    {log.message}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {loginLogs.length === 0 && !logsLoading && (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-4 text-center text-slate-400">
+                              Kayıt bulunamadı.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <h4 className="font-semibold text-slate-800 text-sm">Aksiyon Logları</h4>
+                    <p className="text-xs text-slate-500">Son kullanıcı hareketleri</p>
+                  </div>
+                  <div className="max-h-80 overflow-auto text-xs">
+                    <table className="w-full">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Kullanıcı</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Aksiyon</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Sayfa</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Zaman</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {actionLogs.map(log => (
+                          <tr key={log.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-slate-800">
+                                  {log.fullName || log.username || '-'}
+                                </span>
+                                <span className="text-[10px] text-slate-500">
+                                  {log.ipAddress || '-'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="inline-flex px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                                {log.actionType}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="text-slate-700">
+                                {log.path || '-'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="text-slate-700">
+                                {new Date(log.createdAt).toLocaleString('tr-TR')}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {actionLogs.length === 0 && !logsLoading && (
+                          <tr>
+                            <td colSpan={4} className="px-3 py-4 text-center text-slate-400">
+                              Kayıt bulunamadı.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                    <h4 className="font-semibold text-slate-800 text-sm">Hata Logları</h4>
+                    <p className="text-xs text-slate-500">Son hata kayıtları</p>
+                  </div>
+                  <div className="max-h-80 overflow-auto text-xs">
+                    <table className="w-full">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Mesaj</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Kullanıcı / Yol</th>
+                          <th className="px-3 py-2 text-left text-slate-500 font-medium">Zaman</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {errorLogs.map(log => (
+                          <tr key={log.id} className="border-t border-slate-100 align-top">
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col">
+                                <span className="text-red-700 font-medium">{log.message}</span>
+                                {log.stack && (
+                                  <span className="text-[10px] text-slate-500 line-clamp-2">
+                                    {log.stack}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-col">
+                                <span className="text-slate-700">
+                                  {log.fullName || log.username || '-'}
+                                </span>
+                                <span className="text-[10px] text-slate-500">
+                                  {log.method} {log.path} • {log.ipAddress || '-'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="text-slate-700">
+                                {new Date(log.createdAt).toLocaleString('tr-TR')}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {errorLogs.length === 0 && !logsLoading && (
+                          <tr>
+                            <td colSpan={3} className="px-3 py-4 text-center text-slate-400">
+                              Kayıt bulunamadı.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </div>
           )}

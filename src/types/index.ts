@@ -168,6 +168,8 @@ export interface Order {
     maturityDays?: number;
     prepaymentAmount?: string;
     gofrePrice?: number;
+    gofreQuantity?: number;
+    gofreUnitPrice?: number;
     gofreVatRate?: number;
     shippingPrice?: number;
     shippingVatRate?: number;

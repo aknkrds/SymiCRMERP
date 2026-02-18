@@ -138,6 +138,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     const watchedItems = watch('items');
     const watchedCustomerId = watch('customerId');
     const watchedGofrePrice = watch('gofrePrice');
+    const watchedGofreQuantity = watch('gofreQuantity');
     const watchedGofreVatRate = watch('gofreVatRate');
     const watchedShippingPrice = watch('shippingPrice');
     const watchedShippingVatRate = watch('shippingVatRate');
@@ -263,7 +264,9 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
             return acc + lineTotal;
         }, 0);
 
-        const gofreBase = Number(watchedGofrePrice) || 0;
+        const gofreQty = Number(watchedGofreQuantity) || 0;
+        const gofreUnit = Number(watchedGofrePrice) || 0;
+        const gofreBase = gofreQty * gofreUnit;
         const gofreVatRate = Number(watchedGofreVatRate) || 0;
         const gofreVat = gofreBase * (gofreVatRate / 100);
 
@@ -601,7 +604,18 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                         </div>
                         <div className="space-y-2">
                             <div className="grid grid-cols-12 gap-3 items-end">
-                                <div className="col-span-5 space-y-1">
+                                <div className="col-span-3 space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">Gofre Adeti</label>
+                                    <input
+                                        type="number"
+                                        step="1"
+                                        {...register('gofreQuantity')}
+                                        disabled={readOnly}
+                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div className="col-span-4 space-y-1">
                                     <label className="text-xs font-medium text-slate-500">Gofre Fiyatı</label>
                                     <input
                                         type="number"
@@ -612,7 +626,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                         placeholder="0.00"
                                     />
                                 </div>
-                                <div className="col-span-3 space-y-1">
+                                <div className="col-span-2 space-y-1">
                                     <label className="text-xs font-medium text-slate-500">KDV %</label>
                                     <input
                                         type="number"
@@ -622,11 +636,11 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                         placeholder={String(defaultVatRate)}
                                     />
                                 </div>
-                                <div className="col-span-4 space-y-1">
+                                <div className="col-span-3 space-y-1">
                                     <label className="text-xs font-medium text-slate-500">Toplam</label>
                                     <div className="w-full px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md">
                                         {(
-                                            (Number(watchedGofrePrice) || 0) *
+                                            ((Number(watchedGofreQuantity) || 0) * (Number(watchedGofrePrice) || 0)) *
                                             (1 + (Number(watchedGofreVatRate) || 0) / 100)
                                         ).toFixed(2)} {watch('currency')}
                                     </div>

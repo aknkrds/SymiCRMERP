@@ -38,6 +38,19 @@ const Login = () => {
       login(data);
     } catch (err: any) {
       setError(err.message);
+      try {
+        fetch('/api/logs/error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: err.message,
+            stack: err.stack,
+            path: '/login',
+            context: { phase: 'login' }
+          })
+        }).catch(() => {});
+      } catch {
+      }
     } finally {
       setLoading(false);
     }
