@@ -531,21 +531,65 @@ export default function Design() {
             >
                 {infoOrder && (
                     <div className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-xs text-slate-500">Sipariş Ürünü Seç</label>
-                            <select
-                                value={infoSelectedItemId || ''}
-                                onChange={e => setInfoSelectedItemId(e.target.value)}
-                                className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                title="Sipariş Ürünü Seç"
-                                aria-label="Sipariş Ürünü Seç"
-                            >
-                                {infoOrder.items.map(item => (
-                                    <option key={item.productId} value={item.productId}>
-                                        {item.productName}
-                                    </option>
-                                ))}
-                            </select>
+                        <div className="space-y-3">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Düzenlenecek Ürünü Seçin</label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                                {infoOrder.items.map(item => {
+                                    const product = products.find(p => p.id === item.productId);
+                                    const isSelected = infoSelectedItemId === item.productId;
+                                    
+                                    // Use product name if available, fallback to item name, fallback to generic
+                                    const displayName = product?.name || item.productName || 'İsimsiz Ürün';
+                                    
+                                    const dims = product?.dimensions;
+                                    const dimStr = (dims && dims.length && dims.width) 
+                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''} mm`
+                                        : '';
+
+                                    return (
+                                        <button
+                                            key={item.productId}
+                                            onClick={() => setInfoSelectedItemId(item.productId)}
+                                            className={`
+                                                relative flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-200 group
+                                                ${isSelected 
+                                                    ? 'bg-indigo-50 border-indigo-500 shadow-sm ring-1 ring-indigo-500' 
+                                                    : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50 hover:shadow-sm'
+                                                }
+                                            `}
+                                        >
+                                            <div className="flex items-start justify-between w-full mb-1">
+                                                <div className={`font-semibold text-sm ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>
+                                                    {displayName}
+                                                </div>
+                                                {isSelected && (
+                                                    <div className="text-indigo-600 shrink-0 ml-2">
+                                                        <CheckCircle2 size={16} /> 
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {dimStr && (
+                                                <div className={`text-xs font-mono mb-1 ${isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>
+                                                    {dimStr}
+                                                </div>
+                                            )}
+                                            
+                                            {product?.productType && (
+                                                <span className={`
+                                                    text-[10px] px-1.5 py-0.5 rounded border
+                                                    ${isSelected 
+                                                        ? 'bg-white border-indigo-200 text-indigo-700' 
+                                                        : 'bg-slate-100 border-slate-200 text-slate-500'
+                                                    }
+                                                `}>
+                                                    {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                         
                         {currentInfoProduct && (
