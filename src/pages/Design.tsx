@@ -216,9 +216,33 @@ export default function Design() {
                                         </div>
                                     </div>
 
-                                    <div className="text-sm text-slate-600">
-                                        <span className="text-xs text-slate-400 block mb-1">Ürünler:</span>
-                                        {order.items.map(i => i.productName).join(', ')}
+                                    <div className="text-sm text-slate-600 space-y-2">
+                                        <span className="text-xs text-slate-400 block font-medium">Ürünler:</span>
+                                        <div className="flex flex-col gap-2 pl-2 border-l-2 border-slate-100">
+                                            {order.items.map((item, idx) => {
+                                                const product = products.find(p => p.id === item.productId);
+                                                const dims = product?.dimensions;
+                                                const dimStr = (dims && dims.length && dims.width) 
+                                                    ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
+                                                    : '';
+                                                
+                                                return (
+                                                    <div key={idx} className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-semibold text-slate-700">{product ? product.name : (item.productName || 'Bilinmeyen Ürün')}</span>
+                                                            {product?.productType && (
+                                                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                                    {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {product?.details && <span className="text-slate-500 italic text-xs">{product.details}</span>}
+                                                        {dimStr && <span className="text-slate-600 font-mono text-xs">Ölçü: {dimStr}</span>}
+                                                        <span className="text-xs text-slate-400">Adet: {item.quantity}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
@@ -311,7 +335,37 @@ export default function Design() {
                                         <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
                                         <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
                                         <td className="px-6 py-4 text-sm text-slate-600">
-                                            {order.items.map(i => i.productName).join(', ')}
+                                            <div className="flex flex-col gap-3 max-w-[300px]">
+                                                {order.items.map((item, idx) => {
+                                                    const product = products.find(p => p.id === item.productId);
+                                                    const dims = product?.dimensions;
+                                                    const dimStr = (dims && dims.length && dims.width) 
+                                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
+                                                        : '';
+                                                    
+                                                    return (
+                                                        <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
+                                                            {product ? (
+                                                                <>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-semibold text-slate-700">{product.name}</span>
+                                                                        {product.productType && (
+                                                                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                                                {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {product.details && <span className="text-slate-500 italic text-[11px]">{product.details}</span>}
+                                                                    {dimStr && <span className="text-slate-600 font-mono text-[10px]">Ölçü: {dimStr}</span>}
+                                                                </>
+                                                            ) : (
+                                                                <span className="font-medium text-slate-700">{item.productName || 'Bilinmeyen Ürün'}</span>
+                                                            )}
+                                                            <div className="text-xs text-slate-400 mt-0.5">Adet: {item.quantity}</div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
@@ -404,22 +458,41 @@ export default function Design() {
                         <div>
                             <h4 className="font-medium text-slate-800 mb-3">Sipariş Kalemleri</h4>
                             <div className="space-y-3">
-                                {selectedOrder.items.map((item, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                        <div>
-                                            <p className="font-medium text-slate-800">{item.productName}</p>
-                                            <p className="text-xs text-slate-500">
-                                                {item.quantity} Adet
-                                            </p>
+                                {selectedOrder.items.map((item, idx) => {
+                                    const product = products.find(p => p.id === item.productId);
+                                    const dims = product?.dimensions;
+                                    const dimStr = (dims && dims.length && dims.width) 
+                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
+                                        : '';
+
+                                    return (
+                                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-medium text-slate-800">{product ? product.name : item.productName}</p>
+                                                    {product?.productType && (
+                                                        <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                                                            {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {product?.details && <p className="text-xs text-slate-500 mt-1">{product.details}</p>}
+                                                <div className="flex items-center gap-3 mt-1">
+                                                    {dimStr && <p className="text-xs text-slate-600 font-mono">Ölçü: {dimStr}</p>}
+                                                    <p className="text-xs text-slate-500 font-semibold">
+                                                        {item.quantity} Adet
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleViewProduct(item.productId)}
+                                                className="ml-4 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-blue-200 shrink-0"
+                                            >
+                                                Ürünü Görüntüle
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={() => handleViewProduct(item.productId)}
-                                            className="px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-blue-200"
-                                        >
-                                            Ürünü Görüntüle
-                                        </button>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
