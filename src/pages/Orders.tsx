@@ -75,6 +75,12 @@ export default function Orders() {
         }
     };
 
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        // Delay clearing editingOrder to allow animation to finish and prevent content flash
+        setTimeout(() => setEditingOrder(undefined), 300);
+    };
+
     return (
         <>
         <div className="space-y-6">
@@ -244,14 +250,14 @@ export default function Orders() {
 
             <Modal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={handleCloseModal}
                 title={editingOrder ? (isOrderLocked(editingOrder) ? "Sipariş Görüntüle" : "Sipariş Düzenle") : "Yeni Sipariş Oluştur"}
             >
                 <OrderForm
                     key={editingOrder?.id || 'new'}
                     initialData={editingOrder}
                     onSubmit={handleSubmit}
-                    onCancel={() => setIsModalOpen(false)}
+                    onCancel={handleCloseModal}
                     readOnly={editingOrder ? isOrderLocked(editingOrder) : false}
                     defaultVatRate={!editingOrder && selectedTypePrefix === 'IHR' ? 0 : 20}
                 />

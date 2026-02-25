@@ -116,6 +116,7 @@ export function useOrders() {
         }
         
         try {
+            console.log('useOrders updateOrder Payload:', JSON.stringify({ ...data, ...totals }, null, 2));
             const res = await fetch(`${API_URL}/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -124,9 +125,14 @@ export function useOrders() {
             if (res.ok) {
                 const updated = await res.json();
                 setOrders(prev => prev.map(o => o.id === id ? updated : o));
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                console.error('Failed to update order:', res.status, res.statusText, errorData);
+                throw new Error(errorData.error || 'Güncelleme başarısız oldu');
             }
         } catch (err) {
             console.error('Error updating order:', err);
+            throw err;
         }
     };
 

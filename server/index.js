@@ -934,12 +934,14 @@ app.get('/api/customers', (req, res) => {
 app.post('/api/customers', (req, res) => {
   try {
     const { id, companyName, contactName, email, phone, mobile, address, createdAt } = req.body;
+    const finalId = id || crypto.randomUUID();
+    const finalCreatedAt = createdAt || new Date().toISOString();
     const stmt = db.prepare(`
       INSERT INTO customers (id, companyName, contactName, email, phone, mobile, address, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, companyName, contactName, email, phone, mobile, address, createdAt);
-    res.status(201).json(req.body);
+    stmt.run(finalId, companyName, contactName, email, phone, mobile, address, finalCreatedAt);
+    res.status(201).json({ ...req.body, id: finalId, createdAt: finalCreatedAt });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1007,6 +1009,9 @@ app.post('/api/products', (req, res) => {
       details, windowDetails, lidDetails, images, inks, createdAt 
     } = req.body;
 
+    const finalId = id || crypto.randomUUID();
+    const finalCreatedAt = createdAt || new Date().toISOString();
+
     // Generate Auto Increment Code
     const products = db.prepare("SELECT code FROM products WHERE code LIKE 'GMP%'").all();
     let maxNum = 0;
@@ -1027,7 +1032,7 @@ app.post('/api/products', (req, res) => {
     `);
 
     stmt.run(
-      id, 
+      finalId, 
       newCode, 
       name,
       productType,
@@ -1039,9 +1044,9 @@ app.post('/api/products', (req, res) => {
       lidDetails ? JSON.stringify(lidDetails) : null, 
       images ? JSON.stringify(images) : null, 
       inks ? JSON.stringify(inks) : null,
-      createdAt
+      finalCreatedAt
     );
-    res.status(201).json({ ...req.body, code: newCode });
+    res.status(201).json({ ...req.body, id: finalId, code: newCode, createdAt: finalCreatedAt });
   } catch (error) {
     console.error('POST /products error:', error);
     res.status(500).json({ error: error.message });
@@ -1168,6 +1173,19 @@ app.get('/api/orders', (req, res) => {
   }
 });
 
+app.get('/api/orders/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('SELECT * FROM orders WHERE id = ?');
+    const order = stmt.get(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json(parseOrder(order));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/orders', (req, res) => {
   try {
     const { 
@@ -1179,6 +1197,9 @@ app.post('/api/orders', (req, res) => {
       gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
       gofreQuantity, gofreUnitPrice
     } = req.body;
+
+    const finalId = id || crypto.randomUUID();
+    const finalCreatedAt = createdAt || new Date().toISOString();
 
     const stmt = db.prepare(`
       INSERT INTO orders (
@@ -1194,7 +1215,7 @@ app.post('/api/orders', (req, res) => {
     `);
 
     stmt.run(
-      id, 
+      finalId, 
       customerId, 
       customerName, 
       JSON.stringify(items), 
@@ -1205,7 +1226,7 @@ app.post('/api/orders', (req, res) => {
       status, 
       designImages ? JSON.stringify(designImages) : null,
       deadline, 
-      createdAt,
+      finalCreatedAt,
       assignedUserId || null,
       assignedUserName || null,
       assignedRoleName || null,
@@ -1220,7 +1241,7 @@ app.post('/api/orders', (req, res) => {
       gofreQuantity || null,
       gofreUnitPrice || null
     );
-    res.status(201).json(req.body);
+    res.status(201).json({ ...req.body, id: finalId, createdAt: finalCreatedAt });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1230,6 +1251,8 @@ app.patch('/api/orders/:id', (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    console.log(`[PATCH] Order Update for ${id}:`, JSON.stringify(updates, null, 2));
+    
     const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     
     // Notification Logic for Assignment

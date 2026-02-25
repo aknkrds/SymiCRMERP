@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Trash2, CheckCircle, ArrowRight, Plus, Search, ChevronDown } from 'lucide-react';
@@ -15,10 +15,10 @@ const orderSchema = z.object({
     customerId: z.string().min(1, 'Müşteri seçimi zorunludur'),
     customerName: z.string(),
     currency: z.string().default('TRY'),
-    deadline: z.string().optional(),
-    paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap']).optional(),
+    deadline: z.string().nullish(),
+    paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap']).nullish(),
     maturityDays: z.coerce.number().optional(),
-    prepaymentAmount: z.string().optional(),
+    prepaymentAmount: z.string().nullish(),
     gofrePrice: z.coerce.number().optional(),
     gofreQuantity: z.coerce.number().optional(),
     gofreUnitPrice: z.coerce.number().optional(),
@@ -92,7 +92,11 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     // Reset form when initialData changes
     useEffect(() => {
         if (initialData) {
+            console.log('OrderForm: Resetting with initialData', initialData);
             reset(initialData);
+            if (initialData.customerName) {
+                setCustomerSearch(initialData.customerName);
+            }
         }
     }, [initialData, reset]);
 
@@ -139,7 +143,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
         if (nextStep) {
             setValue('status', nextStep.nextStatus as any);
             // Submit immediately to save the state change
-            handleSubmit(onSubmit as any)();
+            handleSubmit(onFormSubmit, onFormError)();
         }
     };
 
@@ -155,10 +159,11 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
         const qty = Number(watchedGofreQuantity) || 0;
         const unitPrice = Number(watchedGofreUnitPrice) || 0;
         const totalBase = qty * unitPrice;
-        if (totalBase !== (watchedGofrePrice || 0)) {
+        if (Math.abs((watchedGofrePrice || 0) - totalBase) > 0.01) {
             setValue('gofrePrice', totalBase);
         }
     }, [watchedGofreQuantity, watchedGofreUnitPrice, watchedGofrePrice, setValue]);
+    
     const watchedGofreVatRate = watch('gofreVatRate');
     const watchedShippingPrice = watch('shippingPrice');
     const watchedShippingVatRate = watch('shippingVatRate');
@@ -181,7 +186,11 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
         if (watchedCustomerId) {
             const customer = customers.find(c => c.id === watchedCustomerId);
             if (customer) {
-                setCustomerSearch(customer.companyName);
+                // Only update search text if it's not currently being typed into (rough heuristic, or just on load)
+                // Actually we update it to ensure it matches the ID
+                if (customer.companyName !== customerSearch) {
+                    setCustomerSearch(customer.companyName);
+                }
             }
         }
     }, [watchedCustomerId, customers]);
@@ -189,9 +198,13 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     // Fetch customer products when customer changes
     useEffect(() => {
         if (watchedCustomerId) {
+            console.log('Fetching products for customer:', watchedCustomerId);
             fetch(`/api/customers/${watchedCustomerId}/products`)
                 .then(res => res.json())
-                .then(data => setCustomerProducts(data))
+                .then(data => {
+                    console.log('Customer products loaded:', data.length);
+                    setCustomerProducts(data);
+                })
                 .catch(err => console.error('Error fetching customer products:', err));
         } else {
             setCustomerProducts([]);
@@ -221,6 +234,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                 
                 // Select it in the active line
                 if (activeLineIndex !== null) {
+                    console.log('Setting new product for index:', activeLineIndex, savedProduct.id);
                     setValue(`items.${activeLineIndex}.productId`, savedProduct.id);
                     // Name sync will happen automatically via the other useEffect
                 }
@@ -254,8 +268,10 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
         // Skip sync if products are not loaded yet to prevent overwriting correct data with empty values
         if (customerProducts.length === 0) return;
 
+        // Calculate totals only
         watchedItems?.forEach((item, index) => {
-            // Calculate Total
+            if (!item) return;
+
             const qty = Number(item.quantity) || 0;
             const price = Number(item.unitPrice) || 0;
             const vat = Number(item.vatRate) || 0;
@@ -264,20 +280,28 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
             if (Math.abs((item.total || 0) - total) > 0.001) {
                 setValue(`items.${index}.total`, total);
             }
-
-            // Sync Product Name
-            if (item.productId) {
-                const product = customerProducts.find(p => p.id === item.productId);
-                if (product) {
-                    const dimStr = product.dimensions ? `${product.dimensions.length}x${product.dimensions.width}x${product.dimensions.depth}` : '';
-                    const expectedName = `${product.code} - ${dimStr} - ${product.name}`;
-                    if (item.productName !== expectedName) {
-                        setValue(`items.${index}.productName`, expectedName);
-                    }
-                }
-            }
         });
-    }, [watchedItems, setValue, customerProducts, readOnly]);
+    }, [watchedItems, setValue, readOnly]);
+
+    const onFormSubmit = (data: OrderFormData) => {
+        console.log('OrderForm Submit Data:', JSON.stringify(data, null, 2));
+        console.log('Items before submit:', data.items);
+        
+        // Validate items uniqueness check (optional debug)
+        const productIds = data.items.map(i => i.productId);
+        const uniqueIds = new Set(productIds);
+        if (productIds.length !== uniqueIds.size) {
+            console.warn('Warning: Duplicate product IDs in submission:', productIds);
+        }
+
+        // Validation passed
+        onSubmit(data);
+    };
+
+    const onFormError = (errors: any) => {
+        console.error("Form Validation Errors:", errors);
+        alert('Lütfen formdaki hataları düzeltiniz.');
+    };
 
     const calculateGrandTotal = () => {
         if (!watchedItems) return 0;
@@ -290,8 +314,10 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
         }, 0);
 
         const gofreQty = Number(watchedGofreQuantity) || 0;
-        const gofreUnit = Number(watchedGofrePrice) || 0;
+        const gofreUnit = Number(watchedGofreUnitPrice) || 0;
+        // recalculate gofreBase to be sure
         const gofreBase = gofreQty * gofreUnit;
+        
         const gofreVatRate = Number(watchedGofreVatRate) || 0;
         const gofreVat = gofreBase * (gofreVatRate / 100);
 
@@ -304,7 +330,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
 
     return (
         <>
-            <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+            <form onSubmit={handleSubmit(onFormSubmit, onFormError)} className="space-y-6">
                 {nextStep && (
                 <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 flex items-center justify-between shadow-sm animate-pulse">
                     <div className="flex items-center gap-3">
@@ -487,35 +513,61 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                 <div className="md:col-span-6 space-y-1">
                                     <label className="text-xs font-medium text-slate-500">Ürün</label>
-                                    <select
-                                        {...register(`items.${index}.productId` as const)}
-                                        disabled={readOnly}
-                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
-                                        aria-label="Ürün Seçimi"
-                                    >
-                                        {!watchedItems?.[index]?.productId && (
-                                            <option value="">Seçiniz</option>
+                                    <Controller
+                                        control={control}
+                                        name={`items.${index}.productId`}
+                                        render={({ field }) => (
+                                            <select
+                                                {...field}
+                                                disabled={readOnly}
+                                                onChange={(e) => {
+                                                    const newProductId = e.target.value;
+                                                    field.onChange(newProductId); // Update react-hook-form state
+                                                    
+                                                    // Find product and update other fields
+                                                    const product = customerProducts.find(p => p.id === newProductId);
+                                                    if (product) {
+                                                        const dimStr = product.dimensions ? `${product.dimensions.length}x${product.dimensions.width}${product.dimensions.depth ? `x${product.dimensions.depth}` : ''}` : '';
+                                                        const productName = `${product.code} ${dimStr ? `- ${dimStr}` : ''} - ${product.name}${product.details ? ` - ${product.details}` : ''}`;
+                                                        
+                                                        setValue(`items.${index}.productName`, productName, { shouldDirty: true });
+                                                        // Reset price if 0 or keep existing? Usually reset to 0 or product price if available
+                                                        // But products don't have price field in this model, so maybe keep 0
+                                                        // Or if product has default price logic, apply it here.
+                                                    }
+                                                }}
+                                                className={cn(
+                                                    "w-full px-3 py-2 text-sm border rounded-md outline-none focus:ring-1 focus:ring-indigo-500 bg-white disabled:bg-slate-100 disabled:text-slate-500",
+                                                    errors.items?.[index]?.productId ? "border-red-500" : "border-slate-300"
+                                                )}
+                                                aria-label="Ürün Seçimi"
+                                            >
+                                                <option value="">Seçiniz</option>
+                                                {customerProducts.map(p => {
+                                                    const dims = p.dimensions;
+                                                    const dimStr = (dims && dims.length && dims.width) 
+                                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
+                                                        : '';
+                                                    const detailsStr = p.details ? ` - ${p.details}` : '';
+                                                    return (
+                                                        <option key={p.id} value={p.id}>
+                                                            {p.code} {dimStr ? `- ${dimStr}` : ''} - {p.name}{detailsStr}
+                                                        </option>
+                                                    );
+                                                })}
+                                                {/* Fallback for selected product not in list */}
+                                                {field.value && 
+                                                 !customerProducts.some(p => p.id === field.value) && (
+                                                    <option value={field.value}>
+                                                        {watchedItems?.[index]?.productName || 'Kayıtlı Ürün'}
+                                                    </option>
+                                                )}
+                                            </select>
                                         )}
-                                        {customerProducts.map(p => {
-                                            const dims = p.dimensions;
-                                            const dimStr = (dims && dims.length && dims.width) 
-                                                ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
-                                                : '';
-                                            const detailsStr = p.details ? ` - ${p.details}` : '';
-                                            return (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.code} {dimStr ? `- ${dimStr}` : ''} - {p.name}{detailsStr}
-                                                </option>
-                                            );
-                                        })}
-                                        {/* Fallback for selected product not in list */}
-                                        {watchedItems?.[index]?.productId && 
-                                         !customerProducts.some(p => p.id === watchedItems[index].productId) && (
-                                            <option value={watchedItems[index].productId}>
-                                                {watchedItems[index].productName || 'Kayıtlı Ürün'}
-                                            </option>
-                                        )}
-                                    </select>
+                                    />
+                                    {errors.items?.[index]?.productId && (
+                                        <p className="text-[10px] text-red-500">{errors.items[index]?.productId?.message}</p>
+                                    )}
                                 </div>
 
                                 <div className="md:col-span-3 space-y-1">
@@ -524,10 +576,16 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                         type="number"
                                         {...register(`items.${index}.quantity` as const)}
                                         disabled={readOnly}
-                                        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                        className={cn(
+                                            "w-full px-3 py-2 text-sm border rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500",
+                                            errors.items?.[index]?.quantity ? "border-red-500" : "border-slate-300"
+                                        )}
                                         aria-label="Adet"
                                         placeholder="0"
                                     />
+                                    {errors.items?.[index]?.quantity && (
+                                        <p className="text-[10px] text-red-500">{errors.items[index]?.quantity?.message}</p>
+                                    )}
                                 </div>
 
                                 <div className="md:col-span-3 space-y-1">
@@ -538,10 +596,16 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                             step="0.01"
                                             {...register(`items.${index}.unitPrice` as const)}
                                             disabled={readOnly}
-                                            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
+                                            className={cn(
+                                                "w-full px-3 py-2 text-sm border rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500",
+                                                errors.items?.[index]?.unitPrice ? "border-red-500" : "border-slate-300"
+                                            )}
                                             aria-label="Fiyat"
                                             placeholder="0.00"
                                         />
+                                        {errors.items?.[index]?.unitPrice && (
+                                            <p className="text-[10px] text-red-500">{errors.items[index]?.unitPrice?.message}</p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
