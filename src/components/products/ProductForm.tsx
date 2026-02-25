@@ -70,7 +70,7 @@ const defaultFeatures = {
 
 export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProps) {
     const { molds } = useMolds();
-    const { register, handleSubmit, watch, setValue, getValues, formState: { errors } } = useForm<ProductFormData>({
+    const { register, handleSubmit, watch, setValue, getValues, reset, formState: { errors } } = useForm<ProductFormData>({
         resolver: zodResolver(productSchema) as any,
         defaultValues: initialData ? {
             ...initialData,
@@ -95,6 +95,19 @@ export function ProductForm({ initialData, onSubmit, onCancel }: ProductFormProp
             images: { customer: [] },
         },
     });
+
+    // Reset form when initialData changes (e.g. selecting a different product in Design page)
+    useEffect(() => {
+        if (initialData) {
+            reset({
+                ...initialData,
+                name: initialData.name || initialData.description || '',
+                productType: initialData.productType || 'percinli',
+                inks: initialData.inks || defaultInks,
+                features: initialData.features || defaultFeatures
+            });
+        }
+    }, [initialData, reset]);
 
     const productType = watch('productType');
     const boxShape = watch('boxShape');
