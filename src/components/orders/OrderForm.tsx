@@ -76,7 +76,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
     const customerDropdownRef = useRef<HTMLDivElement>(null);
 
-    const { register, control, handleSubmit, watch, setValue, formState: { errors } } = useForm<OrderFormData>({
+    const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<OrderFormData>({
         resolver: zodResolver(orderSchema) as any,
         defaultValues: initialData || {
             customerId: '',
@@ -86,6 +86,13 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
             items: [],
         },
     });
+
+    // Reset form when initialData changes
+    useEffect(() => {
+        if (initialData) {
+            reset(initialData);
+        }
+    }, [initialData, reset]);
 
     const { fields, append, remove } = useFieldArray({
         control,
@@ -100,7 +107,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     // Workflow Transition Logic
     const getNextStep = () => {
         if (!user) return null;
-        const role = user.role?.name || '';
+        const role = user.roleName || '';
         
         // Define Handover Logic
         if (watchedStatus === 'offer_accepted' && role === 'Tasarımcı') {
@@ -229,6 +236,11 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
 
     // Auto-calculate totals and sync product names when items change
     useEffect(() => {
+        if (readOnly) return;
+        
+        // Skip sync if products are not loaded yet to prevent overwriting correct data with empty values
+        if (customerProducts.length === 0) return;
+
         watchedItems?.forEach((item, index) => {
             // Calculate Total
             const qty = Number(item.quantity) || 0;
@@ -252,7 +264,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                 }
             }
         });
-    }, [watchedItems, setValue, customerProducts]);
+    }, [watchedItems, setValue, customerProducts, readOnly]);
 
     const calculateGrandTotal = () => {
         if (!watchedItems) return 0;
@@ -472,8 +484,8 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                             <option value="">Seçiniz</option>
                                         )}
                                         {customerProducts.map(p => {
-                                            const dims = p.dimensions || {};
-                                            const dimStr = (dims.length && dims.width) 
+                                            const dims = p.dimensions;
+                                            const dimStr = (dims && dims.length && dims.width) 
                                                 ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
                                                 : '';
                                             const detailsStr = p.details ? ` - ${p.details}` : '';
@@ -714,12 +726,19 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
 
         <Modal
             isOpen={isProductModalOpen}
-            onClose={() => setIsProductModalOpen(false)}
+            onClose={() => {
+                setIsProductModalOpen(false);
+                setActiveLineIndex(null);
+            }}
             title="Yeni Ürün Ekle"
         >
             <ProductForm
+                key={activeLineIndex !== null ? `product-form-${activeLineIndex}` : 'new-product-form'}
                 onSubmit={handleCreateProduct}
-                onCancel={() => setIsProductModalOpen(false)}
+                onCancel={() => {
+                    setIsProductModalOpen(false);
+                    setActiveLineIndex(null);
+                }}
             />
         </Modal>
     </>

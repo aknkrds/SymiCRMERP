@@ -248,6 +248,7 @@ export default function Orders() {
                 title={editingOrder ? (isOrderLocked(editingOrder) ? "Sipariş Görüntüle" : "Sipariş Düzenle") : "Yeni Sipariş Oluştur"}
             >
                 <OrderForm
+                    key={editingOrder?.id || 'new'}
                     initialData={editingOrder}
                     onSubmit={handleSubmit}
                     onCancel={() => setIsModalOpen(false)}
