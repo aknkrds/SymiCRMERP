@@ -12,11 +12,13 @@ import { useAI } from '../context/AIContext';
 
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 
+import { useProducts } from '../hooks/useProducts';
 
 type OrderTypePrefix = 'IHR' | 'ICP' | 'IKA';
 
 export default function Orders() {
     const { orders, addOrder, updateOrder, updateStatus } = useOrders();
+    const { products } = useProducts();
     const { trackAction } = useAI();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
@@ -175,6 +177,7 @@ export default function Orders() {
                             <tr>
                                 <th className="px-6 py-4">Sipariş No</th>
                                 <th className="px-6 py-4">Müşteri</th>
+                                <th className="px-6 py-4">Ürünler</th>
                                 <th className="px-6 py-4">Tarih</th>
                                 <th className="px-6 py-4">Tutar</th>
                                 <th className="px-6 py-4">Durum</th>
@@ -200,6 +203,39 @@ export default function Orders() {
                                     >
                                         <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
                                         <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col gap-1 max-w-[200px]">
+                                                {order.items.map((item, idx) => {
+                                                    const product = products.find(p => p.id === item.productId);
+                                                    const dims = product?.dimensions;
+                                                    const dimStr = (dims && dims.length && dims.width) 
+                                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
+                                                        : '';
+                                                    
+                                                    return (
+                                                        <div key={idx} className="text-xs text-slate-600 truncate" title={product ? `${product.code} - ${product.name} ${dimStr} ${product.details || ''}` : item.productName}>
+                                                            {product ? (
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="font-semibold text-slate-700">{product.name}</span>
+                                                                        {product.productType && (
+                                                                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                                                {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {product.details && <span className="text-slate-500 italic text-[11px]">{product.details}</span>}
+                                                                    {dimStr && <span className="text-slate-600 font-mono text-[10px]">{dimStr}</span>}
+                                                                </div>
+                                                            ) : (
+                                                                <span>{item.productName || 'Bilinmeyen Ürün'}</span>
+                                                            )}
+                                                            <span className="text-xs text-slate-400 mt-0.5">x{item.quantity}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </td>
                                         <td className="px-6 py-4">
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
                                         </td>

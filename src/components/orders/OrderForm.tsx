@@ -565,6 +565,39 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                             </select>
                                         )}
                                     />
+                                    {(() => {
+                                        const selectedProductId = watch(`items.${index}.productId`);
+                                        if (!selectedProductId) return null;
+                                        
+                                        // Try to find in allProducts first (more reliable), then customerProducts
+                                        const product = allProducts.find(p => p.id === selectedProductId) || customerProducts.find(p => p.id === selectedProductId);
+                                        
+                                        if (product) {
+                                             const dims = product.dimensions;
+                                             const dimStr = (dims && dims.length && dims.width) 
+                                                 ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
+                                                 : '';
+                                             
+                                             return (
+                                                  <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200 text-xs text-slate-600">
+                                                      <div className="font-semibold text-slate-800 mb-1 flex items-center gap-2">
+                                                          {product.name}
+                                                          {product.productType && (
+                                                              <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200 font-normal">
+                                                                  {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
+                                                              </span>
+                                                          )}
+                                                      </div>
+                                                      <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                                         {product.code && <div><span className="font-medium">Kod:</span> {product.code}</div>}
+                                                         {dimStr && <div><span className="font-medium">Ölçü:</span> {dimStr}</div>}
+                                                         {product.details && <div className="col-span-2"><span className="font-medium">Açıklama:</span> {product.details}</div>}
+                                                     </div>
+                                                 </div>
+                                             );
+                                        }
+                                        return null;
+                                    })()}
                                     {errors.items?.[index]?.productId && (
                                         <p className="text-[10px] text-red-500">{errors.items[index]?.productId?.message}</p>
                                     )}
