@@ -142,6 +142,8 @@ const initDb = () => {
   try { db.exec('ALTER TABLE orders ADD COLUMN efficiency TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN stockUsage TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN gofrePrice REAL'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN gofreQuantity REAL'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN gofreUnitPrice REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN gofreVatRate REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN shippingPrice REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN shippingVatRate REAL'); } catch (error) {}

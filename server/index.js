@@ -1086,6 +1086,40 @@ app.delete('/api/products/:id', (req, res) => {
   }
 });
 
+app.get('/api/customers/:id/products', (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get all orders for this customer to find their products
+    const orders = db.prepare('SELECT items FROM orders WHERE customerId = ?').all(id);
+    
+    const productIds = new Set();
+    orders.forEach(order => {
+      try {
+        const items = JSON.parse(order.items || '[]');
+        items.forEach(item => {
+          if (item.productId) productIds.add(item.productId);
+        });
+      } catch (e) {
+        // Ignore parse errors
+      }
+    });
+
+    if (productIds.size === 0) {
+      return res.json([]);
+    }
+
+    const placeholders = [...productIds].map(() => '?').join(',');
+    const stmt = db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`);
+    const products = stmt.all(...productIds);
+    
+    const parsedProducts = products.map(parseProduct);
+    res.json(parsedProducts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- ORDERS ---
 
 const parseOrder = (order) => {

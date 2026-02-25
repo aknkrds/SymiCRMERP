@@ -20,6 +20,8 @@ const orderSchema = z.object({
     maturityDays: z.coerce.number().optional(),
     prepaymentAmount: z.string().optional(),
     gofrePrice: z.coerce.number().optional(),
+    gofreQuantity: z.coerce.number().optional(),
+    gofreUnitPrice: z.coerce.number().optional(),
     gofreVatRate: z.coerce.number().optional(),
     shippingPrice: z.coerce.number().optional(),
     shippingVatRate: z.coerce.number().optional(),
@@ -146,6 +148,17 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     const watchedCustomerId = watch('customerId');
     const watchedGofrePrice = watch('gofrePrice');
     const watchedGofreQuantity = watch('gofreQuantity');
+    const watchedGofreUnitPrice = watch('gofreUnitPrice');
+
+    // Calculate Gofre Total Base automatically
+    useEffect(() => {
+        const qty = Number(watchedGofreQuantity) || 0;
+        const unitPrice = Number(watchedGofreUnitPrice) || 0;
+        const totalBase = qty * unitPrice;
+        if (totalBase !== (watchedGofrePrice || 0)) {
+            setValue('gofrePrice', totalBase);
+        }
+    }, [watchedGofreQuantity, watchedGofreUnitPrice, watchedGofrePrice, setValue]);
     const watchedGofreVatRate = watch('gofreVatRate');
     const watchedShippingPrice = watch('shippingPrice');
     const watchedShippingVatRate = watch('shippingVatRate');
@@ -632,7 +645,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                     <input
                                         type="number"
                                         step="0.01"
-                                        {...register('gofrePrice')}
+                                        {...register('gofreUnitPrice')}
                                         disabled={readOnly}
                                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md outline-none focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-100 disabled:text-slate-500"
                                         placeholder="0.00"
@@ -652,7 +665,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                     <label className="text-xs font-medium text-slate-500">Toplam</label>
                                     <div className="w-full px-3 py-2 text-sm font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md">
                                         {(
-                                            ((Number(watchedGofreQuantity) || 0) * (Number(watchedGofrePrice) || 0)) *
+                                            ((Number(watchedGofreQuantity) || 0) * (Number(watchedGofreUnitPrice) || 0)) *
                                             (1 + (Number(watchedGofreVatRate) || 0) / 100)
                                         ).toFixed(2)} {watch('currency')}
                                     </div>
