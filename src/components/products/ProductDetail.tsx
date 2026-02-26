@@ -8,14 +8,20 @@ interface ProductDetailProps {
         boxSize?: string;
         efficiency?: string;
     };
-    designImages?: string[];
+    designImages?: (string | { url: string; productId?: string })[];
 }
 
 export function ProductDetail({ product, onClose, jobDetails, designImages }: ProductDetailProps) {
     const hasCustomerImages = !!product.images?.customer && product.images.customer.length > 0;
+    
+    const relevantDesignImages = (designImages || []).filter(img => {
+        if (typeof img === 'string') return true;
+        return !img.productId || img.productId === product.id;
+    });
+
     const hasDesignImages =
         ((product as any).images?.design && (product as any).images.design.length > 0) ||
-        (designImages && designImages.length > 0);
+        relevantDesignImages.length > 0;
 
     return (
         <div className="space-y-6">
@@ -252,15 +258,18 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                                 {[
                                     ...(((product as any).images?.design as string[] | undefined) || []),
-                                    ...(designImages || []),
-                                ].map((img, idx) => (
-                                    <div
-                                        key={`${img}-${idx}`}
-                                        className="aspect-square rounded-lg overflow-hidden border border-slate-200"
-                                    >
-                                        <img src={img} alt={`Design ${idx + 1}`} className="w-full h-full object-cover" />
-                                    </div>
-                                ))}
+                                    ...relevantDesignImages,
+                                ].map((img, idx) => {
+                                    const url = typeof img === 'string' ? img : img.url;
+                                    return (
+                                        <div
+                                            key={`${url}-${idx}`}
+                                            className="aspect-square rounded-lg overflow-hidden border border-slate-200"
+                                        >
+                                            <img src={url} alt={`Design ${idx + 1}`} className="w-full h-full object-cover" />
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

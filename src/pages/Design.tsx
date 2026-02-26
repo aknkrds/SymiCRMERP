@@ -31,8 +31,9 @@ export default function Design() {
 
     const [uploadOrder, setUploadOrder] = useState<Order | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-    const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+    const [uploadedImages, setUploadedImages] = useState<{ url: string; productId?: string }[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [selectedUploadProductId, setSelectedUploadProductId] = useState<string>('');
 
     // Product Info Entry (Edit) modal
     const [infoOrder, setInfoOrder] = useState<Order | null>(null);
@@ -79,7 +80,18 @@ export default function Design() {
 
     const handleOpenUpload = (order: Order) => {
         setUploadOrder(order);
-        setUploadedImages(order.designImages || []);
+        const images = (order.designImages || []).map(img => 
+            typeof img === 'string' ? { url: img } : img
+        );
+        setUploadedImages(images);
+        setSelectedUploadProductId('');
+        setIsUploadModalOpen(true);
+    };
+
+    const handleOpenNewUpload = () => {
+        setUploadOrder(null);
+        setUploadedImages([]);
+        setSelectedUploadProductId('');
         setIsUploadModalOpen(true);
     };
 
@@ -124,6 +136,12 @@ export default function Design() {
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !uploadOrder) return;
         
+        if (!selectedUploadProductId) {
+            alert('Lütfen önce tasarımın ekleneceği ürünü seçiniz.');
+            e.target.value = '';
+            return;
+        }
+
         const files = Array.from(e.target.files);
         if (uploadedImages.length + files.length > 5) {
             alert('En fazla 5 adet tasarım görseli yükleyebilirsiniz.');
@@ -131,7 +149,7 @@ export default function Design() {
         }
 
         setIsUploading(true);
-        const newUploadedUrls: string[] = [];
+        const newUploadedImages: { url: string; productId: string }[] = [];
 
         for (const file of files) {
             const formData = new FormData();
@@ -146,7 +164,10 @@ export default function Design() {
 
                 if (response.ok) {
                     const data = await response.json();
-                    newUploadedUrls.push(data.url);
+                    newUploadedImages.push({ 
+                        url: data.url, 
+                        productId: selectedUploadProductId 
+                    });
                 } else {
                     console.error('Upload failed');
                     alert(`"${file.name}" yüklenirken hata oluştu.`);
@@ -157,8 +178,8 @@ export default function Design() {
             }
         }
 
-        if (newUploadedUrls.length > 0) {
-            setUploadedImages(prev => [...prev, ...newUploadedUrls]);
+        if (newUploadedImages.length > 0) {
+            setUploadedImages(prev => [...prev, ...newUploadedImages]);
         }
         setIsUploading(false);
         // Clear input
@@ -193,6 +214,13 @@ export default function Design() {
                     <h1 className="text-2xl font-bold text-slate-800">Tasarım</h1>
                     <p className="text-slate-500">Tasarım bekleyen siparişler ve onay işlemleri</p>
                 </div>
+                <button
+                    onClick={handleOpenNewUpload}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                >
+                    <Plus size={20} />
+                    Yeni Tasarım Ekle
+                </button>
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -607,76 +635,119 @@ export default function Design() {
             <Modal
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
-                title="Tasarım Görselleri Ekle"
+                title={uploadOrder ? `Tasarım Ekle: ${uploadOrder.customerName}` : "Yeni Tasarım Ekle"}
             >
                 <div className="space-y-6">
-                    <p className="text-sm text-slate-600">
-                        Bu sipariş için onaylanan tasarım görsellerini yükleyin. 
-                        İşlem tamamlandığında sipariş durumu "Tasarım Onaylandı" olarak güncellenecektir.
-                    </p>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        {uploadedImages.map((img, idx) => (
-                            <div key={idx} className="relative aspect-square group rounded-lg overflow-hidden border border-slate-200">
-                                <img src={img} alt={`Design ${idx + 1}`} className="w-full h-full object-cover" />
-                                <button
-                                    onClick={() => handleRemoveImage(idx)}
-                                    className="absolute top-1 right-1 p-1 bg-white/80 hover:bg-red-500 hover:text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
-                                    title="Resmi Kaldır"
-                                    aria-label="Resmi Kaldır"
-                                    type="button"
+                    {!uploadOrder ? (
+                        <div className="space-y-4">
+                            <p className="text-sm text-slate-600">
+                                Lütfen tasarım eklemek istediğiniz siparişi seçiniz.
+                            </p>
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    Sipariş Seçiniz
+                                </label>
+                                <select
+                                    onChange={(e) => {
+                                        const order = designOrders.find(o => o.id === e.target.value);
+                                        if (order) handleOpenUpload(order);
+                                    }}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                                 >
-                                    <X size={14} />
+                                    <option value="">Sipariş Seçiniz...</option>
+                                    {designOrders.map(order => (
+                                        <option key={order.id} value={order.id}>
+                                            {order.customerName} - #{order.id.slice(0, 8)} ({format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-sm text-slate-600">
+                                Bu sipariş için onaylanan tasarım görsellerini yükleyin. 
+                                Lütfen önce görselin ait olduğu ürünü seçiniz.
+                            </p>
+
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                <label className="block text-sm font-medium text-slate-700 mb-2">
+                                    Hangi Ürün İçin Tasarım Yüklenecek?
+                                </label>
+                                <select
+                                    value={selectedUploadProductId}
+                                    onChange={(e) => setSelectedUploadProductId(e.target.value)}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                >
+                                    <option value="">Ürün Seçiniz...</option>
+                                    {uploadOrder.items.map((item, idx) => {
+                                        const product = products.find(p => p.id === item.productId);
+                                        return (
+                                            <option key={idx} value={item.productId}>
+                                                {product ? product.name : item.productName} ({item.quantity} Adet)
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                {uploadedImages.map((img, idx) => {
+                                    const product = uploadOrder.items.find(i => i.productId === img.productId);
+                                    const productName = product ? (products.find(p => p.id === product.productId)?.name || product.productName) : 'Genel';
+                                    
+                                    return (
+                                        <div key={idx} className="relative aspect-square group rounded-lg overflow-hidden border border-slate-200">
+                                            <img src={img.url} alt={`Design ${idx + 1}`} className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <button
+                                                    onClick={() => handleRemoveImage(idx)}
+                                                    className="p-2 bg-white rounded-full text-red-600 hover:bg-red-50 transition-colors"
+                                                >
+                                                    <X size={20} />
+                                                </button>
+                                            </div>
+                                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-2 py-1 truncate">
+                                                {productName}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                
+                                {uploadedImages.length < 5 && (
+                                    <label className={`
+                                        relative aspect-square rounded-lg border-2 border-dashed border-slate-300
+                                        flex flex-col items-center justify-center gap-2 cursor-pointer
+                                        hover:border-indigo-500 hover:bg-indigo-50 transition-colors
+                                        ${(!selectedUploadProductId || isUploading) ? 'opacity-50 cursor-not-allowed' : ''}
+                                    `}>
+                                        <Upload className="text-slate-400" size={24} />
+                                        <span className="text-xs text-slate-500 font-medium text-center px-2">
+                                            {isUploading ? 'Yükleniyor...' : 'Görsel Yükle'}
+                                        </span>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleImageUpload}
+                                            disabled={!selectedUploadProductId || isUploading}
+                                        />
+                                    </label>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end pt-4 border-t border-slate-100">
+                                <button
+                                    onClick={handleSaveDesign}
+                                    disabled={isUploading}
+                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 font-medium"
+                                >
+                                    Kaydet ve Tamamla
                                 </button>
                             </div>
-                        ))}
-                        
-                        {uploadedImages.length < 5 && (
-                            <label className={`
-                                flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-slate-300 
-                                hover:border-indigo-500 hover:bg-indigo-50 transition-colors cursor-pointer
-                                ${isUploading ? 'opacity-50 pointer-events-none' : ''}
-                            `}>
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    multiple
-                                    className="hidden"
-                                    onChange={handleImageUpload}
-                                    disabled={isUploading}
-                                    aria-label="Görsel Yükle"
-                                />
-                                {isUploading ? (
-                                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
-                                ) : (
-                                    <>
-                                        <Plus className="text-slate-400 mb-2" size={24} />
-                                        <span className="text-xs text-slate-500 font-medium text-center px-2">
-                                            Görsel Ekle<br />(Max 5)
-                                        </span>
-                                    </>
-                                )}
-                            </label>
-                        )}
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                        <button
-                            onClick={() => setIsUploadModalOpen(false)}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            aria-label="İptal"
-                        >
-                            İptal
-                        </button>
-                        <button
-                            onClick={handleSaveDesign}
-                            disabled={uploadedImages.length === 0 || isUploading}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            aria-label="Kaydet ve Onayla"
-                        >
-                            Kaydet ve Onayla
-                        </button>
-                    </div>
+                        </>
+                    )}
                 </div>
             </Modal>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Eye, FileDown, CheckCircle } from 'lucide-react';
+import { Plus, Search, Eye, FileDown, CheckCircle, Edit } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import type { Order, OrderFormData } from '../types';
 import { Modal } from '../components/ui/Modal';
@@ -24,6 +24,7 @@ export default function Orders() {
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
     const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
+    const [isViewOnly, setIsViewOnly] = useState(false);
     const [selectedTypePrefix, setSelectedTypePrefix] = useState<OrderTypePrefix | null>(null);
     const location = useLocation();
 
@@ -46,6 +47,7 @@ export default function Orders() {
 
     const handleAdd = () => {
         setEditingOrder(undefined);
+        setIsViewOnly(false);
         setSelectedTypePrefix(null);
         setIsTypeModalOpen(true);
         trackAction('open_create_order_modal');
@@ -79,6 +81,7 @@ export default function Orders() {
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
+        setIsViewOnly(false);
         // Delay clearing editingOrder to allow animation to finish and prevent content flash
         setTimeout(() => setEditingOrder(undefined), 300);
     };
@@ -157,11 +160,19 @@ export default function Orders() {
                                             <FileDown size={18} />
                                         </button>
                                         <button
-                                            onClick={() => { setEditingOrder(order); setIsModalOpen(true); }}
-                                            className={`p-2 rounded-lg ${isOrderLocked(order) ? 'text-slate-500 bg-slate-100 hover:bg-slate-200' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}
-                                            title={isOrderLocked(order) ? "Görüntüle" : "Düzenle"}
+                                            onClick={() => { setEditingOrder(order); setIsViewOnly(true); setIsModalOpen(true); }}
+                                            className="p-2 text-slate-600 bg-slate-50 rounded-lg hover:bg-slate-100"
+                                            title="Görüntüle"
                                         >
                                             <Eye size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => { setEditingOrder(order); setIsViewOnly(false); setIsModalOpen(true); }}
+                                            disabled={isOrderLocked(order)}
+                                            className={`p-2 rounded-lg ${isOrderLocked(order) ? 'text-slate-300 bg-slate-50 cursor-not-allowed' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}
+                                            title={isOrderLocked(order) ? "Düzenlenemez" : "Düzenle"}
+                                        >
+                                            <Edit size={18} />
                                         </button>
                                     </div>
                                 </div>
@@ -268,11 +279,20 @@ export default function Orders() {
                                                 </button>
                                                 
                                                 <button
-                                                    onClick={() => { setEditingOrder(order); setIsModalOpen(true); }}
-                                                    className={`p-2 rounded-lg transition-colors bg-white/50 ${isOrderLocked(order) ? 'text-slate-500 hover:bg-slate-100' : 'text-slate-600 hover:bg-slate-100 hover:text-indigo-600'}`}
-                                                    title={isOrderLocked(order) ? "Görüntüle" : "Düzenle"}
+                                                    onClick={() => { setEditingOrder(order); setIsViewOnly(true); setIsModalOpen(true); }}
+                                                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors bg-white/50"
+                                                    title="Görüntüle"
                                                 >
                                                     <Eye size={18} />
+                                                </button>
+                                                
+                                                <button
+                                                    onClick={() => { setEditingOrder(order); setIsViewOnly(false); setIsModalOpen(true); }}
+                                                    disabled={isOrderLocked(order)}
+                                                    className={`p-2 rounded-lg transition-colors bg-white/50 ${isOrderLocked(order) ? 'text-slate-300 cursor-not-allowed' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                                                    title={isOrderLocked(order) ? "Düzenlenemez" : "Düzenle"}
+                                                >
+                                                    <Edit size={18} />
                                                 </button>
                                             </div>
                                         </td>
@@ -287,14 +307,14 @@ export default function Orders() {
             <Modal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
-                title={editingOrder ? (isOrderLocked(editingOrder) ? "Sipariş Görüntüle" : "Sipariş Düzenle") : "Yeni Sipariş Oluştur"}
+                title={editingOrder ? ((isViewOnly || isOrderLocked(editingOrder)) ? "Sipariş Görüntüle" : "Sipariş Düzenle") : "Yeni Sipariş Oluştur"}
             >
                 <OrderForm
                     key={editingOrder?.id || 'new'}
                     initialData={editingOrder}
                     onSubmit={handleSubmit}
                     onCancel={handleCloseModal}
-                    readOnly={editingOrder ? isOrderLocked(editingOrder) : false}
+                    readOnly={editingOrder ? (isViewOnly || isOrderLocked(editingOrder)) : false}
                     defaultVatRate={!editingOrder && selectedTypePrefix === 'IHR' ? 0 : 20}
                 />
             </Modal>

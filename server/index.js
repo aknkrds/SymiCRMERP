@@ -855,15 +855,13 @@ app.get('/api/stock-items', (req, res) => {
 
 app.post('/api/stock-items', (req, res) => {
   try {
-    const { id, stockNumber, company, product, quantity, unit, category, notes, minLimit, purchasePrice, date, createdAt } = req.body;
+    const { id, stockNumber, company, product, quantity, unit, category, notes, productId, createdAt } = req.body;
     const stmt = db.prepare(`
-      INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, notes, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, notes, productId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    // Note: minLimit, purchasePrice, date are not in the schema yet based on db.js, 
-    // but category IS in the schema. 
-    // Wait, let me check db.js again for notes. Yes, notes is there.
-    stmt.run(id, stockNumber, company, product, quantity, unit, category, notes, createdAt);
+    
+    stmt.run(id, stockNumber, company, product, quantity, unit, category, notes, productId || null, createdAt);
     res.status(201).json(req.body);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1154,12 +1152,83 @@ const parseOrder = (order) => {
     stockUsage = {};
   }
 
+  let procurementDetails = {};
+  try {
+    procurementDetails = order.procurementDetails ? JSON.parse(order.procurementDetails) : {};
+  } catch (e) {
+    console.error(`Error parsing procurementDetails for order ${order.id}:`, e);
+    procurementDetails = {};
+  }
+
+  let productionApprovedDetails = [];
+  try {
+    productionApprovedDetails = order.productionApprovedDetails ? JSON.parse(order.productionApprovedDetails) : [];
+  } catch (e) {
+    console.error(`Error parsing productionApprovedDetails for order ${order.id}:`, e);
+    productionApprovedDetails = [];
+  }
+
+  let productionDiffs = [];
+  try {
+    productionDiffs = order.productionDiffs ? JSON.parse(order.productionDiffs) : [];
+  } catch (e) {
+    console.error(`Error parsing productionDiffs for order ${order.id}:`, e);
+    productionDiffs = [];
+  }
+
   return {
     ...order,
     items,
     designImages,
-    stockUsage
+    stockUsage,
+    procurementDetails,
+    productionApprovedDetails,
+    productionDiffs
   };
+};
+
+const enrichOrderItems = (orders) => {
+  if (!orders || (Array.isArray(orders) && orders.length === 0)) return orders;
+  
+  const ordersArray = Array.isArray(orders) ? orders : [orders];
+  
+  const productIdsToFetch = new Set();
+  ordersArray.forEach(order => {
+      if (order && order.items && Array.isArray(order.items)) {
+          order.items.forEach(item => {
+              if (item.productId && (!item.productName || item.productName.trim() === '')) {
+                  productIdsToFetch.add(item.productId);
+              }
+          });
+      }
+  });
+
+  if (productIdsToFetch.size === 0) return orders;
+
+  try {
+      const placeholders = [...productIdsToFetch].map(() => '?').join(',');
+      const products = db.prepare(`SELECT id, name, code, details FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
+      
+      const productMap = new Map();
+      products.forEach(p => {
+           const name = `${p.code ? p.code + ' - ' : ''}${p.name}${p.details ? ' - ' + p.details : ''}`;
+           productMap.set(p.id, name);
+      });
+
+      ordersArray.forEach(order => {
+          if (order && order.items && Array.isArray(order.items)) {
+              order.items.forEach(item => {
+                  if (item.productId && (!item.productName || item.productName.trim() === '') && productMap.has(item.productId)) {
+                      item.productName = productMap.get(item.productId);
+                  }
+              });
+          }
+      });
+  } catch (e) {
+      console.error('Error enriching order items:', e);
+  }
+  
+  return orders;
 };
 
 app.get('/api/orders', (req, res) => {
@@ -1167,7 +1236,7 @@ app.get('/api/orders', (req, res) => {
     const stmt = db.prepare('SELECT * FROM orders ORDER BY createdAt DESC');
     const orders = stmt.all();
     const parsedOrders = orders.map(parseOrder);
-    res.json(parsedOrders);
+    res.json(enrichOrderItems(parsedOrders));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1180,7 +1249,8 @@ app.get('/api/orders/:id', (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    res.json(parseOrder(order));
+    const parsedOrder = parseOrder(order);
+    res.json(enrichOrderItems(parsedOrder));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1386,6 +1456,15 @@ app.patch('/api/orders/:id', (req, res) => {
     }
     if (updates.stockUsage) {
       updates.stockUsage = JSON.stringify(updates.stockUsage);
+    }
+    if (updates.procurementDetails) {
+      updates.procurementDetails = JSON.stringify(updates.procurementDetails);
+    }
+    if (updates.productionApprovedDetails) {
+      updates.productionApprovedDetails = JSON.stringify(updates.productionApprovedDetails);
+    }
+    if (updates.productionDiffs) {
+      updates.productionDiffs = JSON.stringify(updates.productionDiffs);
     }
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');

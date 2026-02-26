@@ -509,6 +509,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                 <div className="space-y-4">
                     {fields.map((field, index) => (
                         <div key={field.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200 shadow-sm space-y-4">
+                            <input type="hidden" {...register(`items.${index}.productName`)} />
                             {/* Üst Satır: Ürün Seçimi, Adet, Fiyat */}
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                 <div className="md:col-span-6 space-y-1">

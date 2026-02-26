@@ -9,16 +9,6 @@ import { tr } from 'date-fns/locale';
 import { ProductDetail } from '../components/products/ProductDetail';
 import type { Order, Product, StockItemFormData } from '../types';
 
-const PROCUREMENT_STATUSES = {
-    planned: 'Tedarik Hammadde Planı Yapıldı',
-    ordered: 'Hammadde Siparişi Verildi',
-    supplied: 'Hammadde Tedarik Edildi',
-    printing_started: 'Matbaa Baskısı Yapılıyor',
-    printing_completed: 'Matbaa Baskısı Yapıldı',
-    shipped_to_production: 'Üretim Sevkiyatı Yapıldı',
-    completed: 'Tedarik Tamamlandı'
-};
-
 const STOCK_UNITS = [
     'Adet', 'Gram', 'Koli', 'Kg', 'Metre', 'Ton', 'Litre'
 ];
@@ -63,6 +53,11 @@ export default function Procurement() {
     const [isRawMaterialsModalOpen, setIsRawMaterialsModalOpen] = useState(false);
     const [selectedOrderForMaterials, setSelectedOrderForMaterials] = useState<Order | null>(null);
     
+    // Sheet Details Modal State
+    const [isSheetDetailsModalOpen, setIsSheetDetailsModalOpen] = useState(false);
+    const [sheetDetails, setSheetDetails] = useState<Record<string, { plate: number; body: number; lid: number; bottom: number }>>({});
+    const [orderToComplete, setOrderToComplete] = useState<Order | null>(null);
+
     const [quantityModal, setQuantityModal] = useState<{
         isOpen: boolean;
         item: any | null;
@@ -178,15 +173,66 @@ export default function Procurement() {
 
     const handleProcurementStatusChange = async (orderId: string, status: string) => {
         const order = orders.find(o => o.id === orderId);
-        if ((status === 'shipped_to_production' || status === 'completed') && order && order.designStatus !== 'completed') {
+        
+        if (status === 'completed') {
+            setOrderToComplete(order || null);
+            // Initialize sheetDetails for all products in the order
+            if (order) {
+                const initialDetails: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {};
+                order.items.forEach(item => {
+                    if (item.productId) {
+                        initialDetails[item.productId] = { plate: 0, body: 0, lid: 0, bottom: 0 };
+                    }
+                });
+                setSheetDetails(initialDetails);
+            }
+            setIsSheetDetailsModalOpen(true);
+            return;
+        }
+
+        // For other statuses (legacy support or if re-enabled later)
+        if ((status === 'shipped_to_production') && order && order.designStatus !== 'completed') {
             alert('Tasarım departmanı işi tamamlamadan üretime sevk edemezsiniz.');
             return;
         }
 
         await updateOrder(orderId, { procurementStatus: status } as any);
 
-        if (status === 'shipped_to_production' || status === 'completed') {
+        if (status === 'shipped_to_production') {
             await updateStatus(orderId, 'production_planned');
+        }
+    };
+
+    const handleSaveSheetDetails = async () => {
+        if (!orderToComplete) return;
+
+        // Validation: Ensure all fields are filled for all products
+        const isValid = Object.values(sheetDetails).every(details => 
+            details.plate >= 0 && details.body >= 0 && details.lid >= 0 && details.bottom >= 0
+        );
+
+        if (!isValid) {
+            alert('Lütfen tüm ürünler için adetleri giriniz.');
+            return;
+        }
+        
+        if (!confirm('Sevkiyat yapılacak, onaylıyor musunuz? Onaylanması durumunda sipariş üretime aktarılacaktır.')) {
+            return;
+        }
+
+        try {
+            await updateOrder(orderToComplete.id, {
+                procurementStatus: 'completed',
+                status: 'production_pending', // Special status for Production Incoming table
+                procurementDetails: sheetDetails
+            } as any);
+
+            setIsSheetDetailsModalOpen(false);
+            setOrderToComplete(null);
+            alert('Sipariş başarıyla üretime aktarıldı.');
+        } catch (error) {
+            console.error('Error completing procurement:', error);
+            alert('İşlem sırasında bir hata oluştu.');
         }
     };
 
@@ -343,22 +389,20 @@ export default function Procurement() {
                                         </div>
                                     </div>
                                     
-                                    <div className="text-sm text-slate-600">
-                                        <span className="font-medium">Ürünler:</span> {order.items.map(i => i.productName).join(', ')}
-                                    </div>
-
-                                    <div>
-                                        <select
-                                            value={order.procurementStatus || ''}
-                                            onChange={(e) => handleProcurementStatusChange(order.id, e.target.value)}
-                                            className="w-full text-sm font-medium px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                            aria-label="Tedarik Durumu Seçimi"
-                                        >
-                                            <option value="">Durum Seçin</option>
-                                            {Object.entries(PROCUREMENT_STATUSES).map(([key, label]) => (
-                                                <option key={key} value={key}>{label}</option>
-                                            ))}
-                                        </select>
+                                    <div className="text-sm text-slate-600 space-y-2">
+                                        <span className="font-medium block mb-1">Ürünler:</span>
+                                        {order.items.map((item, idx) => {
+                                            const product = products.find(p => p.id === item.productId);
+                                            const dimensions = product?.dimensions 
+                                                ? `${product.dimensions.length}x${product.dimensions.width}${product.dimensions.depth ? `x${product.dimensions.depth}` : ''} mm`
+                                                : '';
+                                            return (
+                                                <div key={idx} className="bg-slate-50 p-2 rounded border border-slate-100">
+                                                    <div className="font-medium text-slate-800">{product?.name || item.productName}</div>
+                                                    {dimensions && <div className="text-xs text-slate-500 mt-0.5">{dimensions}</div>}
+                                                </div>
+                                            );
+                                        })}
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
@@ -391,11 +435,7 @@ export default function Procurement() {
                                             Hammaddeler
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                if (confirm('Tedarik işlemleri tamamlandı olarak işaretlensin mi? Bu işlem siparişi üretime aktaracaktır.')) {
-                                                    handleProcurementStatusChange(order.id, 'completed');
-                                                }
-                                            }}
+                                            onClick={() => handleProcurementStatusChange(order.id, 'completed')}
                                             className="flex flex-col items-center justify-center gap-1 p-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
                                             aria-label="Tedarik İşlemini Tamamla"
                                         >
@@ -418,7 +458,6 @@ export default function Procurement() {
                                 <th className="px-6 py-4">Müşteri</th>
                                 <th className="px-6 py-4">Ürünler</th>
                                 <th className="px-6 py-4">Tarih</th>
-                                <th className="px-6 py-4">Tedarik Durumu</th>
                                 <th className="px-6 py-4 text-right">İşlemler</th>
                             </tr>
                         </thead>
@@ -435,23 +474,23 @@ export default function Procurement() {
                                         <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
                                         <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
                                         <td className="px-6 py-4 text-sm text-slate-600">
-                                            {order.items.map(i => i.productName).join(', ')}
+                                            <div className="space-y-1">
+                                                {order.items.map((item, idx) => {
+                                                    const product = products.find(p => p.id === item.productId);
+                                                    const dimensions = product?.dimensions 
+                                                        ? `${product.dimensions.length}x${product.dimensions.width}${product.dimensions.depth ? `x${product.dimensions.depth}` : ''} mm`
+                                                        : '';
+                                                    return (
+                                                        <div key={idx} className="flex flex-col">
+                                                            <span className="font-medium text-slate-800">{product?.name || item.productName}</span>
+                                                            {dimensions && <span className="text-xs text-slate-500">{dimensions}</span>}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <select
-                                                value={order.procurementStatus || ''}
-                                                onChange={(e) => handleProcurementStatusChange(order.id, e.target.value)}
-                                                className="w-full text-xs font-medium px-2 py-1.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                                                aria-label="Tedarik Durumu Seçimi"
-                                            >
-                                                <option value="">Durum Seçin</option>
-                                                {Object.entries(PROCUREMENT_STATUSES).map(([key, label]) => (
-                                                    <option key={key} value={key}>{label}</option>
-                                                ))}
-                                            </select>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-2">
@@ -484,11 +523,7 @@ export default function Procurement() {
                                                     Hammaddeler
                                                 </button>
                                                 <button
-                                                    onClick={() => {
-                                                        if (confirm('Tedarik işlemleri tamamlandı olarak işaretlensin mi? Bu işlem siparişi üretime aktaracaktır.')) {
-                                                            handleProcurementStatusChange(order.id, 'completed');
-                                                        }
-                                                    }}
+                                                    onClick={() => handleProcurementStatusChange(order.id, 'completed')}
                                                     className="flex items-center gap-2 px-3 py-1.5 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
                                                     aria-label="Tedarik İşlemini Tamamla"
                                                 >
@@ -677,35 +712,50 @@ export default function Procurement() {
                         <div>
                             <h3 className="font-medium text-slate-800 mb-3 border-b border-slate-200 pb-2">Ürünler</h3>
                             <div className="space-y-3">
-                                {selectedOrder.items.map((item, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                        <div>
-                                            <p className="font-medium text-slate-800">{item.productName}</p>
-                                            <p className="text-xs text-slate-500">Miktar: {item.quantity} {item.unit}</p>
+                                {selectedOrder.items.map((item, idx) => {
+                                    const product = products.find(p => p.id === item.productId);
+                                    const dimensions = product?.dimensions 
+                                        ? `${product.dimensions.length}x${product.dimensions.width}${product.dimensions.depth ? `x${product.dimensions.depth}` : ''} mm`
+                                        : '';
+
+                                    return (
+                                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                            <div>
+                                                <div className="font-mono text-xs text-indigo-600 font-medium mb-0.5">
+                                                    {product?.code || '-'}
+                                                </div>
+                                                <p className="font-medium text-slate-800">{product?.name || item.productName}</p>
+                                                {dimensions && (
+                                                    <p className="text-xs text-slate-600 mt-0.5">
+                                                        {dimensions}
+                                                    </p>
+                                                )}
+                                                <p className="text-xs text-slate-400 mt-1">Miktar: {item.quantity} {item.unit}</p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                {selectedOrder.stockUsage && Object.keys(selectedOrder.stockUsage).length > 0 && (
+                                                    <button
+                                                        onClick={() => handleViewRawMaterials(selectedOrder)}
+                                                        className="text-xs flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 bg-white rounded border border-emerald-100 shadow-sm"
+                                                        title="Kullanılan Hammaddeleri Görüntüle"
+                                                    >
+                                                        <Package size={14} />
+                                                        Hammaddeler
+                                                    </button>
+                                                )}
+                                                {item.productId && (
+                                                    <button
+                                                        onClick={() => handleViewProduct(item.productId!, selectedOrder)}
+                                                        className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 bg-white rounded border border-indigo-100 shadow-sm"
+                                                    >
+                                                        <Eye size={14} />
+                                                        Ürünü Görüntüle
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            {selectedOrder.stockUsage && Object.keys(selectedOrder.stockUsage).length > 0 && (
-                                                <button
-                                                    onClick={() => handleViewRawMaterials(selectedOrder)}
-                                                    className="text-xs flex items-center gap-1 text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 bg-white rounded border border-emerald-100 shadow-sm"
-                                                    title="Kullanılan Hammaddeleri Görüntüle"
-                                                >
-                                                    <Package size={14} />
-                                                    Hammaddeler
-                                                </button>
-                                            )}
-                                            {item.productId && (
-                                                <button
-                                                    onClick={() => handleViewProduct(item.productId!, selectedOrder)}
-                                                    className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 bg-white rounded border border-indigo-100 shadow-sm"
-                                                >
-                                                    <Eye size={14} />
-                                                    Ürünü Görüntüle
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -1076,6 +1126,139 @@ export default function Procurement() {
                         </button>
                     </div>
                 </form>
+            </Modal>
+            {/* Sheet Details Modal */}
+            <Modal
+                isOpen={isSheetDetailsModalOpen}
+                onClose={() => setIsSheetDetailsModalOpen(false)}
+                title="Üretim Sevkiyat Bilgileri Girişi"
+            >
+                <div className="space-y-6">
+                    <p className="text-sm text-slate-500 mb-4 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                        <strong className="text-amber-800">Dikkat:</strong> Lütfen her ürün için üretilen/tedarik edilen levha adetlerini giriniz. 
+                        Bu bilgiler eksiksiz doldurulmadan sevkiyat işlemi yapılamaz.
+                    </p>
+                    
+                    {orderToComplete && orderToComplete.items.map((item, idx) => {
+                        const product = products.find(p => p.id === item.productId);
+                        if (!product || !item.productId) return null;
+                        
+                        const details = sheetDetails[item.productId] || { plate: 0, body: 0, lid: 0, bottom: 0 };
+                        
+                        return (
+                            <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b border-slate-200">
+                                    {product.name} ({product.code})
+                                </h4>
+                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            Levha Adeti
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={details.plate}
+                                            onChange={e => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                setSheetDetails(prev => ({
+                                                    ...prev,
+                                                    [item.productId!]: { ...prev[item.productId!], plate: val }
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="0"
+                                            aria-label={`${product.name} Levha Adeti`}
+                                            title="Levha Adeti"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            Gövde Adeti
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={details.body}
+                                            onChange={e => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                setSheetDetails(prev => ({
+                                                    ...prev,
+                                                    [item.productId!]: { ...prev[item.productId!], body: val }
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="0"
+                                            aria-label={`${product.name} Gövde Adeti`}
+                                            title="Gövde Adeti"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            Kapak Adeti
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={details.lid}
+                                            onChange={e => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                setSheetDetails(prev => ({
+                                                    ...prev,
+                                                    [item.productId!]: { ...prev[item.productId!], lid: val }
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="0"
+                                            aria-label={`${product.name} Kapak Adeti`}
+                                            title="Kapak Adeti"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            Dip Adeti
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={details.bottom}
+                                            onChange={e => {
+                                                const val = parseInt(e.target.value) || 0;
+                                                setSheetDetails(prev => ({
+                                                    ...prev,
+                                                    [item.productId!]: { ...prev[item.productId!], bottom: val }
+                                                }));
+                                            }}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="0"
+                                            aria-label={`${product.name} Dip Adeti`}
+                                            title="Dip Adeti"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                        <button
+                            onClick={() => setIsSheetDetailsModalOpen(false)}
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            İptal
+                        </button>
+                        <button
+                            onClick={handleSaveSheetDetails}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2"
+                        >
+                            <CheckCircle2 size={18} />
+                            Sevkiyatı Onayla ve Gönder
+                        </button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

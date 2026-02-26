@@ -107,6 +107,9 @@ const initDb = () => {
       gofreVatRate REAL,
       shippingPrice REAL,
       shippingVatRate REAL,
+      procurementDetails TEXT, -- JSON
+      productionApprovedDetails TEXT, -- JSON
+      productionDiffs TEXT, -- JSON
       createdAt TEXT NOT NULL,
       FOREIGN KEY (customerId) REFERENCES customers (id)
     )
@@ -147,6 +150,9 @@ const initDb = () => {
   try { db.exec('ALTER TABLE orders ADD COLUMN gofreVatRate REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN shippingPrice REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN shippingVatRate REAL'); } catch (error) {}
+  
+  // Procurement Details Migration
+  try { db.exec('ALTER TABLE orders ADD COLUMN procurementDetails TEXT'); } catch (error) {}
 
   // Stock Items
   db.exec(`
@@ -187,66 +193,30 @@ const initDb = () => {
     )
   `);
 
-  // Messages
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      threadId TEXT NOT NULL,
-      senderId TEXT NOT NULL,
-      senderName TEXT NOT NULL,
-      recipientId TEXT NOT NULL,
-      recipientName TEXT NOT NULL,
-      subject TEXT,
-      content TEXT NOT NULL,
-      relatedOrderId TEXT,
-      isRead INTEGER DEFAULT 0, -- 0: false, 1: true
-      createdAt TEXT NOT NULL
-    )
-  `);
-
   // Shifts
   db.exec(`
     CREATE TABLE IF NOT EXISTS shifts (
       id TEXT PRIMARY KEY,
+      orderId TEXT NOT NULL,
       machineId TEXT NOT NULL,
-      operatorName TEXT NOT NULL,
+      supervisorId TEXT NOT NULL,
+      personnelIds TEXT NOT NULL, -- JSON array
       startTime TEXT NOT NULL,
-      endTime TEXT,
-      producedQuantity REAL DEFAULT 0,
-      scrapQuantity REAL DEFAULT 0,
-      notes TEXT,
+      endTime TEXT NOT NULL,
+      plannedQuantity INTEGER NOT NULL,
+      actualQuantity INTEGER,
+      wasteQuantity INTEGER,
+      status TEXT NOT NULL, -- 'planned', 'active', 'completed'
       createdAt TEXT NOT NULL
     )
   `);
 
-  // Login Logs
+  // Logs
   db.exec(`
-    CREATE TABLE IF NOT EXISTS login_logs (
+    CREATE TABLE IF NOT EXISTS logs (
       id TEXT PRIMARY KEY,
       userId TEXT,
       username TEXT,
-      fullName TEXT,
-      roleId TEXT,
-      roleName TEXT,
-      ipAddress TEXT,
-      userAgent TEXT,
-      isSuccess INTEGER NOT NULL DEFAULT 1,
-      message TEXT,
-      loginAt TEXT NOT NULL,
-      logoutAt TEXT,
-      durationSeconds INTEGER
-    )
-  `);
-
-  // User Action Logs
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS user_actions (
-      id TEXT PRIMARY KEY,
-      userId TEXT,
-      username TEXT,
-      fullName TEXT,
-      roleId TEXT,
-      roleName TEXT,
       ipAddress TEXT,
       path TEXT,
       actionType TEXT NOT NULL,
@@ -298,26 +268,24 @@ const initDb = () => {
 
   // Company Settings
   db.exec(`
-      CREATE TABLE IF NOT EXISTS company_settings (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        companyName TEXT DEFAULT 'Symi CRM',
-        contactName TEXT,
-        address TEXT,
-        phone TEXT,
-        mobile TEXT,
-        logoUrl TEXT,
-        updatedAt TEXT
-      )
-    `);
-
-  // Ensure default company settings exist
-  const existingSettings = db.prepare('SELECT id FROM company_settings WHERE id = 1').get();
-  if (!existingSettings) {
-    db.prepare(`
-      INSERT INTO company_settings (id, companyName, updatedAt) 
-      VALUES (1, 'Symi Satış ve Üretim Takip', ?)
-    `).run(new Date().toISOString());
-  }
+    CREATE TABLE IF NOT EXISTS company_settings (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      logo TEXT,
+      address TEXT,
+      phone TEXT,
+      email TEXT,
+      website TEXT,
+      taxOffice TEXT,
+      taxNumber TEXT,
+      tradeRegistryNumber TEXT,
+      mersisNumber TEXT,
+      bankAccountName TEXT,
+      bankName TEXT,
+      iban TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
 
   // Users
   db.exec(`
@@ -378,133 +346,25 @@ const initDb = () => {
         db.prepare("ALTER TABLE orders ADD COLUMN designImages TEXT").run();
     }
 
-    // Add procurementStatus column if it doesn't exist
-    const hasProcurementStatus = tableInfo.some(col => col.name === 'procurementStatus');
-    if (!hasProcurementStatus) {
-        db.prepare("ALTER TABLE orders ADD COLUMN procurementStatus TEXT").run();
+    // Add procurementDetails column if it doesn't exist
+    const hasProcurementDetails = tableInfo.some(col => col.name === 'procurementDetails');
+    if (!hasProcurementDetails) {
+        db.prepare("ALTER TABLE orders ADD COLUMN procurementDetails TEXT").run();
     }
 
-    // Add productionStatus column if it doesn't exist
-    const hasProductionStatus = tableInfo.some(col => col.name === 'productionStatus');
-    if (!hasProductionStatus) {
-        db.prepare("ALTER TABLE orders ADD COLUMN productionStatus TEXT").run();
+    // Add productionApprovedDetails column if it doesn't exist
+    const hasProductionApprovedDetails = tableInfo.some(col => col.name === 'productionApprovedDetails');
+    if (!hasProductionApprovedDetails) {
+        db.prepare("ALTER TABLE orders ADD COLUMN productionApprovedDetails TEXT").run();
     }
 
-    // Add designStatus column if it doesn't exist
-    const hasDesignStatus = tableInfo.some(col => col.name === 'designStatus');
-    if (!hasDesignStatus) {
-        db.prepare("ALTER TABLE orders ADD COLUMN designStatus TEXT").run();
-    }
-
-    // Add procurementDate column if it doesn't exist
-    const hasProcurementDate = tableInfo.some(col => col.name === 'procurementDate');
-    if (!hasProcurementDate) {
-        db.prepare("ALTER TABLE orders ADD COLUMN procurementDate TEXT").run();
-    }
-
-    // Add invoiceUrl column if it doesn't exist
-    const hasInvoiceUrl = tableInfo.some(col => col.name === 'invoiceUrl');
-    if (!hasInvoiceUrl) {
-        db.prepare("ALTER TABLE orders ADD COLUMN invoiceUrl TEXT").run();
-    }
-
-    // Add waybillUrl column if it doesn't exist
-    const hasWaybillUrl = tableInfo.some(col => col.name === 'waybillUrl');
-    if (!hasWaybillUrl) {
-        db.prepare("ALTER TABLE orders ADD COLUMN waybillUrl TEXT").run();
-    }
-
-    // Add notifications table if it doesn't exist
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS notifications (
-        id TEXT PRIMARY KEY,
-        userId TEXT,
-        roleId TEXT,
-        title TEXT,
-        message TEXT,
-        type TEXT,
-        relatedId TEXT,
-        isRead INTEGER DEFAULT 0,
-        createdAt TEXT
-      )
-    `).run();
-
-    // Add shipment columns
-    const hasPackagingType = tableInfo.some(col => col.name === 'packagingType');
-    if (!hasPackagingType) {
-        db.prepare("ALTER TABLE orders ADD COLUMN packagingType TEXT").run();
-    }
-    const hasPackagingCount = tableInfo.some(col => col.name === 'packagingCount');
-    if (!hasPackagingCount) {
-        db.prepare("ALTER TABLE orders ADD COLUMN packagingCount REAL").run();
-    }
-    const hasPackageNumber = tableInfo.some(col => col.name === 'packageNumber');
-    if (!hasPackageNumber) {
-        db.prepare("ALTER TABLE orders ADD COLUMN packageNumber TEXT").run();
-    }
-    const hasVehiclePlate = tableInfo.some(col => col.name === 'vehiclePlate');
-    if (!hasVehiclePlate) {
-        db.prepare("ALTER TABLE orders ADD COLUMN vehiclePlate TEXT").run();
-    }
-    const hasTrailerPlate = tableInfo.some(col => col.name === 'trailerPlate');
-    if (!hasTrailerPlate) {
-        db.prepare("ALTER TABLE orders ADD COLUMN trailerPlate TEXT").run();
-    }
-    const hasAdditionalDocUrl = tableInfo.some(col => col.name === 'additionalDocUrl');
-    if (!hasAdditionalDocUrl) {
-        db.prepare("ALTER TABLE orders ADD COLUMN additionalDocUrl TEXT").run();
-    }
-
-    // Add logoUrl to company_settings if it doesn't exist
-    const companySettingsInfo = db.prepare("PRAGMA table_info(company_settings)").all();
-    const hasLogoUrl = companySettingsInfo.some(col => col.name === 'logoUrl');
-    if (!hasLogoUrl) {
-        db.prepare("ALTER TABLE company_settings ADD COLUMN logoUrl TEXT").run();
-    }
-    
-    // Assignment columns
-    const hasAssignedUserId = tableInfo.some(col => col.name === 'assignedUserId');
-    if (!hasAssignedUserId) {
-        db.prepare("ALTER TABLE orders ADD COLUMN assignedUserId TEXT").run();
-    }
-    const hasAssignedUserName = tableInfo.some(col => col.name === 'assignedUserName');
-    if (!hasAssignedUserName) {
-        db.prepare("ALTER TABLE orders ADD COLUMN assignedUserName TEXT").run();
-    }
-    const hasAssignedRoleName = tableInfo.some(col => col.name === 'assignedRoleName');
-    if (!hasAssignedRoleName) {
-        db.prepare("ALTER TABLE orders ADD COLUMN assignedRoleName TEXT").run();
-    }
-
-    const hasGofreQuantity = tableInfo.some(col => col.name === 'gofreQuantity');
-    if (!hasGofreQuantity) {
-        db.prepare("ALTER TABLE orders ADD COLUMN gofreQuantity REAL").run();
-    }
-    const hasGofreUnitPrice = tableInfo.some(col => col.name === 'gofreUnitPrice');
-    if (!hasGofreUnitPrice) {
-        db.prepare("ALTER TABLE orders ADD COLUMN gofreUnitPrice REAL").run();
+    // Add productionDiffs column if it doesn't exist
+    const hasProductionDiffs = tableInfo.some(col => col.name === 'productionDiffs');
+    if (!hasProductionDiffs) {
+        db.prepare("ALTER TABLE orders ADD COLUMN productionDiffs TEXT").run();
     }
   } catch (error) {
-    console.error("Migration error:", error);
-  }
-
-  // Migrate stock_items columns if missing
-  try {
-    const stockInfo = db.prepare("PRAGMA table_info(stock_items)").all();
-    const hasCategory = stockInfo.some(col => col.name === 'category');
-    if (!hasCategory) {
-      db.prepare("ALTER TABLE stock_items ADD COLUMN category TEXT").run();
-    }
-    const hasProductId = stockInfo.some(col => col.name === 'productId');
-    if (!hasProductId) {
-      db.prepare("ALTER TABLE stock_items ADD COLUMN productId TEXT").run();
-    }
-    const hasNotes = stockInfo.some(col => col.name === 'notes');
-    if (!hasNotes) {
-      db.prepare("ALTER TABLE stock_items ADD COLUMN notes TEXT").run();
-    }
-  } catch (error) {
-    console.error("Stock migration error:", error);
+    console.error('Migration error:', error);
   }
 };
 

@@ -153,7 +153,25 @@ export interface Order {
     stockUsage?: Record<string, number>; // itemId -> quantity
     productionStatus?: string; // Specific status for production flow
     procurementDate?: string; // When procurement was completed
-    designImages?: string[]; // URLs of uploaded design images
+    procurementDetails?: Record<string, { // productId -> details
+        plate: number;
+        body: number;
+        lid: number;
+        bottom: number;
+    }>;
+    productionApprovedDetails?: Record<string, {
+        plate: number;
+        body: number;
+        lid: number;
+        bottom: number;
+    }>;
+    productionDiffs?: Record<string, {
+        plate: number;
+        body: number;
+        lid: number;
+        bottom: number;
+    }>;
+    designImages?: (string | { url: string; productId?: string })[]; // URLs or objects with product link
     invoiceUrl?: string; // URL of uploaded invoice
     waybillUrl?: string; // URL of uploaded waybill
     // Shipment details

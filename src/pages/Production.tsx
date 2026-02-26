@@ -3,19 +3,21 @@ import {
     Plus, Search, Filter, MoreVertical, Calendar, 
     Clock, CheckCircle2, AlertCircle, X, 
     Users, Settings, Play, Square, Timer,
-    Trash2, Factory
+    Trash2, Factory, Truck, Eye, CheckCircle
 } from 'lucide-react';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Modal } from '../components/ui/Modal';
 import { useStock } from '../hooks/useStock';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
-import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData } from '../types';
+import { useProducts } from '../hooks/useProducts';
+import { ProductDetail } from '../components/products/ProductDetail';
+import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData, Product } from '../types';
 
 const API_URL = '/api';
 
 const PRODUCTION_STATUSES = [
-    { value: 'production_planning', label: 'Üretim Planlaması Yapılıyor' },
+    { value: 'production_planned', label: 'Üretim Planlaması Yapılıyor' },
     { value: 'production_started', label: 'Üretim Başladı' },
     { value: 'production_completed', label: 'Üretim Tamamlandı' },
     { value: 'invoice_pending', label: 'Fatura ve İrsaliye Bekleniyor' }
@@ -36,9 +38,83 @@ export default function Production() {
     const [isPersonnelListModalOpen, setIsPersonnelListModalOpen] = useState(false);
     const [isMachineListModalOpen, setIsMachineListModalOpen] = useState(false);
     
+    // Incoming Orders Modal State
+    const [isStockEntryModalOpen, setIsStockEntryModalOpen] = useState(false);
+    const [incomingOrder, setIncomingOrder] = useState<Order | null>(null);
+    const [stockEntryDetails, setStockEntryDetails] = useState<Record<string, { plate: number; body: number; lid: number; bottom: number }>>({});
+    const [isOrderDetailModalOpen, setIsOrderDetailModalOpen] = useState(false);
+    const [selectedOrderDetail, setSelectedOrderDetail] = useState<Order | null>(null);
+    const { products } = useProducts();
+    const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+    const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+    
     // Start/Resume Shift States
     const [showStartPrompt, setShowStartPrompt] = useState(false);
     const [startProductionQty, setStartProductionQty] = useState<string>('');
+
+    // Start Production Modal State (New)
+    const [isStartProductionModalOpen, setIsStartProductionModalOpen] = useState(false);
+    const [selectedProductionItem, setSelectedProductionItem] = useState<{order: Order, item: any} | null>(null);
+    const [productionFormData, setProductionFormData] = useState({
+        machineId: '',
+        targetQuantity: 0,
+        predictedScrap: 0
+    });
+
+    const handleOpenStartProduction = (order: Order, item: any) => {
+        setSelectedProductionItem({ order, item });
+        setProductionFormData({
+            machineId: '',
+            targetQuantity: item.quantity, // Default to order quantity
+            predictedScrap: 0
+        });
+        setIsStartProductionModalOpen(true);
+    };
+
+    const handleStartProductionSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedProductionItem) return;
+
+        // Logic to start production (e.g., create a planned shift or update status)
+        // For now, we'll just alert as it's a template, or create a shift if that's the intent.
+        // User said: "üretime başla butonu... basıldığında üretim hattı seçilecek... hedef adet... öngörülen fire..."
+        // This maps well to creating a 'Shift' in 'planned' state or 'active' state.
+        // Let's create a Shift.
+        
+        try {
+            await fetch(`${API_URL}/shifts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: crypto.randomUUID(),
+                    orderId: selectedProductionItem.order.id,
+                    machineId: productionFormData.machineId,
+                    // supervisorId: currentUser?.id, // We might need this later
+                    personnelIds: [], // Can be added later
+                    startTime: new Date().toISOString(),
+                    endTime: null, // Open ended
+                    plannedQuantity: productionFormData.targetQuantity,
+                    producedQuantity: 0,
+                    scrapQuantity: 0,
+                    status: 'active', // Immediately active? Or planned? User said "Start Production", implies active.
+                    createdAt: new Date().toISOString()
+                })
+            });
+
+            // Update order status if needed
+            if (selectedProductionItem.order.status === 'production_planned') {
+                await handleProductionStatusChange(selectedProductionItem.order.id, 'production_started');
+            }
+
+            setIsStartProductionModalOpen(false);
+            alert('Üretim başlatıldı.');
+            fetchData();
+        } catch (error) {
+            console.error('Error starting production:', error);
+            alert('Üretim başlatılamadı.');
+        }
+    };
+
 
     // Form States
     const [newPersonnel, setNewPersonnel] = useState<PersonnelFormData>({
@@ -80,6 +156,122 @@ export default function Production() {
             if (shiftsRes.ok) setShifts(await shiftsRes.json());
         } catch (error) {
             console.error('Error fetching data:', error);
+        }
+    };
+
+    // Incoming Orders Logic
+    const incomingOrders = orders.filter(o => o.status === 'production_pending');
+
+    const handleViewIncomingOrder = (order: Order) => {
+        setSelectedOrderDetail(order);
+        setIsOrderDetailModalOpen(true);
+    };
+
+    const handleViewProduct = (productId: string) => {
+        const product = products.find(p => p.id === productId);
+        if (!product) return;
+        setSelectedProduct(product);
+        setIsProductModalOpen(true);
+    };
+    const handleApproveIncomingOrder = (order: Order) => {
+        setIncomingOrder(order);
+        // Initialize with existing procurement details or empty structure for each product
+        const initialDetails: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {};
+        
+        if (order.procurementDetails) {
+            // If we have procurement details (new format), use them
+            // Check if it's the new format (Record) or old format (flat object - legacy support if needed)
+            if (order.procurementDetails.body !== undefined && typeof order.procurementDetails.body === 'number') {
+                 // Legacy format (flat) - map to first product or handle gracefully?
+                 // For now, let's assume new format or migrate old data on the fly if needed.
+                 // Actually, let's just use the new format. The old format won't work well here.
+                 // We can try to map it to the first product if it exists.
+                 if (order.items && order.items.length > 0 && order.items[0].productId) {
+                     initialDetails[order.items[0].productId] = {
+                         plate: (order.procurementDetails as any).plate || 0,
+                         body: (order.procurementDetails as any).body || 0,
+                         lid: (order.procurementDetails as any).lid || 0,
+                         bottom: (order.procurementDetails as any).bottom || 0
+                     };
+                 }
+            } else {
+                // New format (Record<string, ...>)
+                Object.assign(initialDetails, order.procurementDetails);
+            }
+        } else {
+            // Initialize empty for all products
+            order.items.forEach(item => {
+                if (item.productId) {
+                    initialDetails[item.productId] = { plate: 0, body: 0, lid: 0, bottom: 0 };
+                }
+            });
+        }
+        
+        setStockEntryDetails(initialDetails);
+        setIsStockEntryModalOpen(true);
+    };
+
+    const handleSaveStockEntry = async () => {
+        if (!incomingOrder) return;
+
+        try {
+            const productionApprovedDetails: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {};
+            const productionDiffs: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {};
+            // Create Stock Items for each product
+            for (const [productId, details] of Object.entries(stockEntryDetails)) {
+                const product = incomingOrder.items.find(item => item.productId === productId);
+                const productName = product?.productName || 'Bilinmeyen Ürün';
+                const original = (incomingOrder.procurementDetails && incomingOrder.procurementDetails[productId]) || { plate: 0, body: 0, lid: 0, bottom: 0 };
+                productionApprovedDetails[productId] = { ...details };
+                productionDiffs[productId] = {
+                    plate: (details.plate || 0) - (original.plate || 0),
+                    body: (details.body || 0) - (original.body || 0),
+                    lid: (details.lid || 0) - (original.lid || 0),
+                    bottom: (details.bottom || 0) - (original.bottom || 0),
+                };
+                
+                const items = [
+                    { type: 'Levha', quantity: details.plate },
+                    { type: 'Gövde', quantity: details.body },
+                    { type: 'Kapak', quantity: details.lid },
+                    { type: 'Dip', quantity: details.bottom }
+                ];
+
+                for (const item of items) {
+                    if (item.quantity > 0) {
+                        await addStockItem({
+                            stockNumber: `${incomingOrder.id}-${productId}-${item.type}`, // Unique stock number per product component
+                            company: incomingOrder.customerName,
+                            product: `${productName} - ${item.type}`,
+                            quantity: item.quantity,
+                            unit: 'Adet',
+                            category: 'Yarı Mamul', // Changed to 'Yarı Mamul' as it's more appropriate for intermediate goods
+                            productId: productId,
+                            notes: `Sipariş: ${incomingOrder.id} - Tedarikten Gelen ${item.type}`
+                        } as any);
+                    }
+                }
+            }
+
+            // Update Order Status
+            await fetch(`${API_URL}/orders/${incomingOrder.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    status: 'production_planned',
+                    productionStatus: 'production_planned',
+                    productionApprovedDetails,
+                    productionDiffs
+                })
+            });
+
+            setIsStockEntryModalOpen(false);
+            setIncomingOrder(null);
+            fetchData(); // Refresh list
+            alert('Stok girişi yapıldı ve sipariş üretim planlamasına alındı.');
+        } catch (error) {
+            console.error('Error saving stock entry:', error);
+            alert('Stok girişi yapılırken bir hata oluştu.');
         }
     };
 
@@ -297,6 +489,20 @@ export default function Production() {
         }), { produced: 0, scrap: 0 });
     };
 
+    // Flatten orders to items for "Production Stocks" list (New)
+    const productionStockItems = productionOrders.flatMap(order => 
+        order.items.map(item => {
+             const totals = getOrderTotals(order.id);
+             return {
+                 order,
+                 item,
+                 approvedDetails: order.productionApprovedDetails?.[item.productId],
+                 produced: totals.produced, // Currently per order
+                 scrap: totals.scrap // Currently per order
+             };
+        })
+    );
+
     const handleContinueProduction = async (order: Order) => {
         const totals = getOrderTotals(order.id);
         const targetQuantity = order.items.reduce((acc, item) => acc + item.quantity, 0);
@@ -408,7 +614,208 @@ export default function Production() {
                 <h1 className="text-2xl font-bold text-slate-800">Üretim Yönetimi</h1>
             </div>
 
-            {/* Top Section: Incoming Orders */}
+            {/* Incoming Orders Section (From Procurement) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 border-b border-slate-200 bg-amber-50 flex justify-between items-center">
+                    <h2 className="font-semibold text-amber-900 flex items-center gap-2">
+                        <Truck size={20} />
+                        Tedarikten Gelen Siparişler (Onay Bekleyen)
+                    </h2>
+                    <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded-full">
+                        {incomingOrders.length}
+                    </span>
+                </div>
+                
+                {/* Mobile View */}
+                <div className="md:hidden">
+                    {incomingOrders.length === 0 ? (
+                         <div className="p-8 text-center text-slate-500">
+                            Onay bekleyen sipariş bulunmuyor.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-200">
+                            {incomingOrders.map(order => (
+                                <div key={order.id} className="p-4 space-y-3">
+                                    <div className="flex justify-between">
+                                        <span className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</span>
+                                        <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Bekliyor</span>
+                                    </div>
+                                    <h3 className="font-medium text-slate-800">{order.customerName}</h3>
+                                    <div className="flex gap-2 mt-2">
+                                        <button type="button" onClick={() => handleViewIncomingOrder(order)} className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium">Gözat</button>
+                                        <button type="button" onClick={() => handleApproveIncomingOrder(order)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">Onayla & Stok Girişi</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Desktop View */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-600">
+                        <thead className="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th className="px-6 py-4">Sipariş No</th>
+                                <th className="px-6 py-4">Müşteri</th>
+                                <th className="px-6 py-4">Ürün Detayı</th>
+                                <th className="px-6 py-4 text-right">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                            {incomingOrders.map(order => (
+                                <tr key={order.id} className="hover:bg-amber-50/50 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-xs">{order.id.slice(0, 8)}</td>
+                                    <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-2">
+                                            {order.items.map((item, index) => {
+                                                const product = products.find(p => p.id === item.productId);
+                                                // User requested to hide product code and only show name and dimensions
+                                                const rawName = product?.name || item.productName;
+                                                // Try to strip code if it follows pattern "CODE - NAME"
+                                                const nameParts = rawName.split(' - ');
+                                                const displayName = nameParts.length > 1 ? nameParts.slice(1).join(' - ') : rawName;
+                                                
+                                                const dims = product?.dimensions 
+                                                    ? `${product.dimensions.length}x${product.dimensions.width}x${product.dimensions.depth} mm`
+                                                    : item.dimensions || '-';
+                                                    
+                                                return (
+                                                    <div key={index} className="flex flex-col">
+                                                        <span className="font-medium text-slate-900">{displayName}</span>
+                                                        <span className="text-xs text-slate-500">
+                                                            {dims}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleViewIncomingOrder(order)}
+                                                className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                title="Detayları Gör"
+                                            >
+                                                <Eye size={18} />
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleApproveIncomingOrder(order)}
+                                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-xs"
+                                            >
+                                                <CheckCircle size={14} />
+                                                Onayla
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                            {incomingOrders.length === 0 && (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                                        Onay bekleyen tedarik siparişi bulunmuyor.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Production Stocks Section (New) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <h2 className="font-semibold text-slate-800">Üretim İçin Bekleyen Stoklar</h2>
+                </div>
+                
+                {/* Desktop View (Table) */}
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-600">
+                        <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th className="px-6 py-4">No</th>
+                                <th className="px-6 py-4">Ürün Adı</th>
+                                <th className="px-6 py-4">Ölçüler</th>
+                                <th className="px-6 py-4">Adet</th>
+                                <th className="px-6 py-4">Sipariş Kodu</th>
+                                <th className="px-6 py-4">Müşteri</th>
+                                <th className="px-6 py-4">Üretilen</th>
+                                <th className="px-6 py-4">Kalan</th>
+                                <th className="px-6 py-4">Fire</th>
+                                <th className="px-6 py-4">Gövde</th>
+                                <th className="px-6 py-4">Kapak</th>
+                                <th className="px-6 py-4">Dip</th>
+                                <th className="px-6 py-4 text-right">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                            {productionStockItems.map((entry, index) => {
+                                const product = products.find(p => p.id === entry.item.productId);
+                                // User requested to hide product code and only show name
+                                const rawName = product?.name || entry.item.productName;
+                                const nameParts = rawName.split(' - ');
+                                const displayName = nameParts.length > 1 ? nameParts.slice(1).join(' - ') : rawName;
+                                
+                                const dims = product?.dimensions 
+                                    ? `${product.dimensions.length}x${product.dimensions.width}x${product.dimensions.depth} mm`
+                                    : entry.item.dimensions || '-';
+
+                                return (
+                                <tr key={`${entry.order.id}-${entry.item.productId || index}`} className="hover:bg-slate-50">
+                                    <td className="px-6 py-4 font-mono">{index + 1}</td>
+                                    <td className="px-6 py-4 font-medium text-slate-900">{displayName}</td>
+                                    <td className="px-6 py-4 text-xs">{dims}</td>
+                                    <td className="px-6 py-4">{entry.item.quantity}</td>
+                                    <td className="px-6 py-4 font-mono text-xs">#{entry.order.id.slice(0, 8)}</td>
+                                    <td className="px-6 py-4">{entry.order.customerName}</td>
+                                    <td className="px-6 py-4 text-green-600 font-medium">{entry.produced || 0}</td>
+                                    <td className="px-6 py-4 text-amber-600 font-medium">
+                                        {Math.max(0, entry.item.quantity - (entry.produced || 0))}
+                                    </td>
+                                    <td className="px-6 py-4 text-red-600">{entry.scrap || 0}</td>
+                                    <td className="px-6 py-4">{entry.approvedDetails?.body || '-'}</td>
+                                    <td className="px-6 py-4">{entry.approvedDetails?.lid || '-'}</td>
+                                    <td className="px-6 py-4">{entry.approvedDetails?.bottom || '-'}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <div className="flex justify-end gap-2">
+                                            <button 
+                                                type="button"
+                                                onClick={() => entry.item.productId && handleViewProduct(entry.item.productId)}
+                                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                title="Ürünü Görüntüle"
+                                            >
+                                                <Eye size={18} />
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleOpenStartProduction(entry.order, entry.item)}
+                                                className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium"
+                                                title="Üretime Başla"
+                                            >
+                                                <Play size={14} />
+                                                Başla
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )})}
+                            {productionStockItems.length === 0 && (
+                                <tr>
+                                    <td colSpan={13} className="px-6 py-8 text-center text-slate-500">
+                                        Üretim için bekleyen stok bulunmuyor.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Production Orders Section */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
                     <h2 className="font-semibold text-slate-800">Üretim Bekleyen Siparişler</h2>
@@ -440,6 +847,27 @@ export default function Production() {
                                         <div>Tedarik: {order.procurementDate ? format(new Date(order.procurementDate), 'dd MMM yyyy', { locale: tr }) : '-'}</div>
                                     </div>
 
+                                    {/* Approved Details for Mobile */}
+                                    {order.productionApprovedDetails && (
+                                        <div className="bg-slate-50 p-2 rounded-lg text-xs space-y-2">
+                                            <div className="font-medium text-slate-700 border-b border-slate-200 pb-1">Onaylanan Detaylar</div>
+                                            {Object.entries(order.productionApprovedDetails).map(([productId, details]) => {
+                                                const product = order.items.find(i => i.productId === productId);
+                                                return (
+                                                    <div key={productId} className="pl-2 border-l-2 border-indigo-300">
+                                                        <div className="font-medium text-indigo-900 mb-0.5">{product?.productName || 'Ürün'}</div>
+                                                        <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-slate-600">
+                                                            <span>Levha: {details.plate}</span>
+                                                            <span>Gövde: {details.body}</span>
+                                                            <span>Kapak: {details.lid}</span>
+                                                            <span>Dip: {details.bottom}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
                                     <div className="pt-2">
                                         <select
                                             value={order.productionStatus || 'production_planning'}
@@ -466,6 +894,7 @@ export default function Production() {
                                 <th className="px-6 py-4">Sipariş No</th>
                                 <th className="px-6 py-4">Müşteri</th>
                                 <th className="px-6 py-4">Tedarik Tarihi</th>
+                                <th className="px-6 py-4">Onaylanan Detaylar</th>
                                 <th className="px-6 py-4">Durum</th>
                                 <th className="px-6 py-4">Üretim Durumu</th>
                             </tr>
@@ -477,6 +906,28 @@ export default function Production() {
                                     <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
                                     <td className="px-6 py-4">
                                         {order.procurementDate ? format(new Date(order.procurementDate), 'dd MMM yyyy', { locale: tr }) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col gap-2 max-w-xs">
+                                            {order.productionApprovedDetails ? (
+                                                Object.entries(order.productionApprovedDetails).map(([productId, details]) => {
+                                                    const product = order.items.find(i => i.productId === productId);
+                                                    return (
+                                                        <div key={productId} className="text-xs border-l-2 border-indigo-200 pl-2">
+                                                            <div className="font-semibold text-slate-700 mb-0.5">{product?.productName || 'Ürün'}</div>
+                                                            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-slate-500">
+                                                                <span>Levha: {details.plate}</span>
+                                                                <span>Gövde: {details.body}</span>
+                                                                <span>Kapak: {details.lid}</span>
+                                                                <span>Dip: {details.bottom}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })
+                                            ) : (
+                                                <span className="text-slate-400 italic text-xs">Detay bulunamadı</span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
@@ -936,6 +1387,88 @@ export default function Production() {
                     </div>
                 </div>
             </Modal>
+            
+            <div className="space-y-4 mt-8">
+                <h2 className="text-lg font-bold text-slate-800">Üretim Onaylı Ürünler</h2>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Ürün Kodu</th>
+                                    <th className="px-6 py-4">Ürün Adı</th>
+                                    <th className="px-6 py-4">Sipariş Kodu</th>
+                                    <th className="px-6 py-4">Gövde</th>
+                                    <th className="px-6 py-4">Kapak</th>
+                                    <th className="px-6 py-4">Dip</th>
+                                    <th className="px-6 py-4">Toplam Kutu</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {orders.flatMap(order => {
+                                    const pad = order.productionApprovedDetails;
+                                    if (!pad) return [];
+                                    return Object.entries(pad).map(([productId, d]) => {
+                                        const product = products.find(p => p.id === productId);
+                                        const totalBox = Math.min(d.body || 0, d.lid || 0, d.bottom || 0);
+                                        return (
+                                            <tr key={`${order.id}-${productId}`} className="hover:bg-slate-50">
+                                                <td className="px-6 py-4 font-mono text-xs">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleViewProduct(productId)}
+                                                        className="text-indigo-700 hover:text-indigo-900 underline decoration-dotted"
+                                                        aria-label="Ürün detayını aç"
+                                                    >
+                                                        {product?.code || '-'}
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-4">{product?.name || '-'}</td>
+                                                <td className="px-6 py-4 font-mono text-xs">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedOrderDetail(order);
+                                                            setIsOrderDetailModalOpen(true);
+                                                        }}
+                                                        className="text-slate-700 hover:text-slate-900 underline decoration-dotted"
+                                                        aria-label="Sipariş detayını aç"
+                                                    >
+                                                        {order.id.slice(0,8)}
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-4">{d.body || 0}</td>
+                                                <td className="px-6 py-4">{d.lid || 0}</td>
+                                                <td className="px-6 py-4">{d.bottom || 0}</td>
+                                                <td className="px-6 py-4 font-semibold text-slate-800">{totalBox}</td>
+                                            </tr>
+                                        );
+                                    });
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <Modal
+                isOpen={isProductModalOpen}
+                onClose={() => setIsProductModalOpen(false)}
+                title="Ürün Detayları"
+            >
+                {selectedProduct && (
+                    <ProductDetail
+                        product={selectedProduct}
+                        jobDetails={selectedOrderDetail ? {
+                            jobSize: selectedOrderDetail.jobSize,
+                            boxSize: selectedOrderDetail.boxSize,
+                            efficiency: selectedOrderDetail.efficiency
+                        } : undefined}
+                        designImages={selectedOrderDetail?.designImages}
+                        onClose={() => setIsProductModalOpen(false)}
+                    />
+                )}
+            </Modal>
 
             {/* Machine List Modal */}
             <Modal
@@ -1370,6 +1903,329 @@ export default function Production() {
                         )}
                     </div>
                 </Modal>
+            )}
+
+            {/* Incoming Order Detail Modal */}
+            <Modal
+                isOpen={isOrderDetailModalOpen}
+                onClose={() => setIsOrderDetailModalOpen(false)}
+                title="Sipariş Detayları"
+            >
+                {selectedOrderDetail && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span className="text-slate-500 block">Müşteri</span>
+                                <span className="font-medium text-slate-800">{selectedOrderDetail.customerName}</span>
+                            </div>
+                            <div>
+                                <span className="text-slate-500 block">Sipariş No</span>
+                                <span className="font-mono text-slate-800">{selectedOrderDetail.id.slice(0, 8)}</span>
+                            </div>
+                            <div className="col-span-2">
+                                <span className="text-slate-500 block">Notlar</span>
+                                <p className="text-slate-800 bg-slate-50 p-2 rounded">{selectedOrderDetail.notes || '-'}</p>
+                            </div>
+                        </div>
+                        <div className="border-t pt-4">
+                            <h4 className="font-medium text-slate-800 mb-2">Tedarik Bilgileri</h4>
+                            <div className="space-y-3">
+                                {selectedOrderDetail.items.map((item, idx) => {
+                                    const details = selectedOrderDetail.procurementDetails?.[item.productId!] || { plate: 0, body: 0, lid: 0, bottom: 0 };
+                                    // Handle legacy flat structure if needed, but assuming migration or new data
+                                    // If details is empty but flat properties exist on procurementDetails, map them?
+                                    // For display purposes, let's just show what we have.
+                                    
+                                    return (
+                                        <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => item.productId && handleViewProduct(item.productId)}
+                                                    className="font-medium text-indigo-700 hover:text-indigo-900 underline decoration-dotted"
+                                                    aria-label={`${item.productName} ürün detayını aç`}
+                                                >
+                                                    {(products.find(p => p.id === item.productId)?.name) || item.productName}
+                                                </button>
+                                                <span className="text-xs text-slate-600 font-mono">
+                                                    {(() => {
+                                                        const product = products.find(p => p.id === item.productId);
+                                                        return product?.dimensions 
+                                                            ? `${product.dimensions.length || 0}x${product.dimensions.width || 0}${product.dimensions.depth ? `x${product.dimensions.depth}` : ''}`
+                                                            : '-';
+                                                    })()}
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                                                <div className="bg-white p-1 rounded border border-slate-200">
+                                                    <span className="text-slate-500 block">Levha</span>
+                                                    <span className="font-bold text-slate-800">{details.plate || 0}</span>
+                                                </div>
+                                                <div className="bg-white p-1 rounded border border-slate-200">
+                                                    <span className="text-slate-500 block">Gövde</span>
+                                                    <span className="font-bold text-slate-800">{details.body || 0}</span>
+                                                </div>
+                                                <div className="bg-white p-1 rounded border border-slate-200">
+                                                    <span className="text-slate-500 block">Kapak</span>
+                                                    <span className="font-bold text-slate-800">{details.lid || 0}</span>
+                                                </div>
+                                                <div className="bg-white p-1 rounded border border-slate-200">
+                                                    <span className="text-slate-500 block">Dip</span>
+                                                    <span className="font-bold text-slate-800">{details.bottom || 0}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Stock Entry Confirmation Modal */}
+            <Modal
+                isOpen={isStockEntryModalOpen}
+                onClose={() => setIsStockEntryModalOpen(false)}
+                title="Stok Giriş Onayı"
+            >
+                <div className="space-y-6">
+                    <div className="bg-amber-50 p-4 rounded-lg text-sm text-amber-800 border border-amber-100">
+                        <p>Tedarikten gelen ürün adetlerini kontrol edip onaylayınız. Bu işlem sonrası ürünler stoğa eklenecek ve sipariş üretim planlamasına düşecektir.</p>
+                    </div>
+                    
+                    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                        {incomingOrder && incomingOrder.items.map((item, idx) => {
+                             const details = stockEntryDetails[item.productId!] || { plate: 0, body: 0, lid: 0, bottom: 0 };
+                             const original = (incomingOrder.procurementDetails && incomingOrder.procurementDetails[item.productId!]) || { plate: 0, body: 0, lid: 0, bottom: 0 };
+                             
+                             return (
+                                <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                                    <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b border-slate-200">
+                                        {item.productName}
+                                    </h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                Levha Adeti
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={details.plate}
+                                                onChange={e => {
+                                                    const val = parseInt(e.target.value) || 0;
+                                                    setStockEntryDetails(prev => ({
+                                                        ...prev,
+                                                        [item.productId!]: { ...prev[item.productId!], plate: val }
+                                                    }));
+                                                }}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="0"
+                                                aria-label={`${item.productName} Levha Adeti`}
+                                            />
+                                            <div className={`mt-1 text-xs ${details.plate - (original.plate || 0) > 0 ? 'text-emerald-600' : details.plate - (original.plate || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                                {(() => {
+                                                    const diff = (details.plate || 0) - (original.plate || 0);
+                                                    return diff > 0 ? `+${diff}` : `${diff}`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                Gövde Adeti
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={details.body}
+                                                onChange={e => {
+                                                    const val = parseInt(e.target.value) || 0;
+                                                    setStockEntryDetails(prev => ({
+                                                        ...prev,
+                                                        [item.productId!]: { ...prev[item.productId!], body: val }
+                                                    }));
+                                                }}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="0"
+                                                aria-label={`${item.productName} Gövde Adeti`}
+                                            />
+                                            <div className={`mt-1 text-xs ${details.body - (original.body || 0) > 0 ? 'text-emerald-600' : details.body - (original.body || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                                {(() => {
+                                                    const diff = (details.body || 0) - (original.body || 0);
+                                                    return diff > 0 ? `+${diff}` : `${diff}`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                Kapak Adeti
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={details.lid}
+                                                onChange={e => {
+                                                    const val = parseInt(e.target.value) || 0;
+                                                    setStockEntryDetails(prev => ({
+                                                        ...prev,
+                                                        [item.productId!]: { ...prev[item.productId!], lid: val }
+                                                    }));
+                                                }}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="0"
+                                                aria-label={`${item.productName} Kapak Adeti`}
+                                            />
+                                            <div className={`mt-1 text-xs ${details.lid - (original.lid || 0) > 0 ? 'text-emerald-600' : details.lid - (original.lid || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                                {(() => {
+                                                    const diff = (details.lid || 0) - (original.lid || 0);
+                                                    return diff > 0 ? `+${diff}` : `${diff}`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                Dip Adeti
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={details.bottom}
+                                                onChange={e => {
+                                                    const val = parseInt(e.target.value) || 0;
+                                                    setStockEntryDetails(prev => ({
+                                                        ...prev,
+                                                        [item.productId!]: { ...prev[item.productId!], bottom: val }
+                                                    }));
+                                                }}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                placeholder="0"
+                                                aria-label={`${item.productName} Dip Adeti`}
+                                            />
+                                            <div className={`mt-1 text-xs ${details.bottom - (original.bottom || 0) > 0 ? 'text-emerald-600' : details.bottom - (original.bottom || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                                {(() => {
+                                                    const diff = (details.bottom || 0) - (original.bottom || 0);
+                                                    return diff > 0 ? `+${diff}` : `${diff}`;
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                             );
+                        })}
+                    </div>
+
+                    <div className="flex gap-3 pt-4 border-t border-slate-200">
+                        <button 
+                            onClick={() => setIsStockEntryModalOpen(false)}
+                            className="flex-1 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+                        >
+                            İptal
+                        </button>
+                        <button 
+                            onClick={handleSaveStockEntry}
+                            className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+                        >
+                            Onayla ve Stoğa İşle
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Start Production Modal */}
+            <Modal
+                isOpen={isStartProductionModalOpen}
+                onClose={() => setIsStartProductionModalOpen(false)}
+                title="Üretime Başla"
+            >
+                <form onSubmit={handleStartProductionSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Ürün
+                        </label>
+                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                            {selectedProductionItem?.item.productName}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Üretim Hattı (Makine)
+                        </label>
+                        <select
+                            required
+                            aria-label="Üretim Hattı Seçimi"
+                            title="Üretim Hattı Seçimi"
+                            value={productionFormData.machineId}
+                            onChange={e => setProductionFormData({...productionFormData, machineId: e.target.value})}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="">Makine Seçiniz</option>
+                            {machines.map(m => (
+                                <option key={m.id} value={m.id}>
+                                    {m.machineNumber} - {m.features}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                Hedeflenen Adet
+                            </label>
+                            <input
+                                required
+                                type="number"
+                                min="1"
+                                aria-label="Hedeflenen Adet"
+                                title="Hedeflenen Adet"
+                                value={productionFormData.targetQuantity}
+                                onChange={e => setProductionFormData({...productionFormData, targetQuantity: parseInt(e.target.value) || 0})}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">
+                                Öngörülen Fire
+                            </label>
+                            <input
+                                type="number"
+                                min="0"
+                                aria-label="Öngörülen Fire"
+                                title="Öngörülen Fire"
+                                value={productionFormData.predictedScrap}
+                                onChange={e => setProductionFormData({...productionFormData, predictedScrap: parseInt(e.target.value) || 0})}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2"
+                    >
+                        <Play size={18} />
+                        Üretimi Başlat
+                    </button>
+                </form>
+            </Modal>
+
+            {/* Product Detail Modal */}
+            {isProductModalOpen && selectedProduct && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+                        <button 
+                            onClick={() => setIsProductModalOpen(false)}
+                            aria-label="Kapat"
+                            title="Kapat"
+                            className="absolute right-4 top-4 p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 z-10"
+                        >
+                            <X size={20} className="text-slate-500" />
+                        </button>
+                        <ProductDetail product={selectedProduct} onClose={() => setIsProductModalOpen(false)} />
+                    </div>
+                </div>
             )}
         </div>
     );
