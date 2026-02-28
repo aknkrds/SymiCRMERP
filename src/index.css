@@ -1,80 +1,86 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    /* Default variables (Light/Klasik - Indigo) */
-    --bg-main: #f8fafc; /* slate-50 */
+    /* Premium Default variables (Light/Klasik - Indigo/Slate) */
+    --bg-main: #f8fafc; /* slate-50 - softer background */
     --bg-surface: #ffffff; /* white */
-    --border-subtle: #e2e8f0; /* slate-200 */
+    --border-subtle: #f1f5f9; /* slate-100 - softer borders */
     
-    --accent: #6366f1; /* indigo-500 */
-    --accent-strong: #4338ca; /* indigo-700 */
+    /* Vibrant modern primary */
+    --accent: #4f46e5; /* indigo-600 */
+    --accent-strong: #3730a3; /* indigo-800 */
     --accent-soft: #e0e7ff; /* indigo-100 */
+
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+  }
+
+  body {
+    @apply font-sans antialiased text-slate-800 bg-slate-50;
   }
 
   [data-theme='candy'] {
+    --bg-main: #fdf4ff; /* fuchsia-50 */
+    --border-subtle: #fae8ff; /* fuchsia-100 */
     --accent: #d946ef; /* fuchsia-500 */
     --accent-strong: #a21caf; /* fuchsia-700 */
-    --accent-soft: #fae8ff; /* fuchsia-100 */
+    --accent-soft: #fdf4ff; /* fuchsia-50 */
   }
 
   [data-theme='sunset'] {
-    --accent: #f43f5e; /* rose-500 */
+    --bg-main: #fff1f2; /* rose-50 */
+    --border-subtle: #ffe4e6; /* rose-100 */
+    --accent: #e11d48; /* rose-600 */
     --accent-strong: #be123c; /* rose-700 */
-    --accent-soft: #ffe4e6; /* rose-100 */
+    --accent-soft: #fff1f2; /* rose-50 */
   }
 
   [data-theme='forest'] {
-    --accent: #14b8a6; /* teal-500 */
+    --bg-main: #f0fdfa; /* teal-50 */
+    --border-subtle: #ccfbf1; /* teal-100 */
+    --accent: #0d9488; /* teal-600 */
     --accent-strong: #0f766e; /* teal-700 */
-    --accent-soft: #ccfbf1; /* teal-100 */
+    --accent-soft: #f0fdfa; /* teal-50 */
   }
 }
 
 @layer utilities {
   .animate-fade-in-up {
-    animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   }
   
-  .animation-delay-100 {
-    animation-delay: 100ms;
+  .animation-delay-100 { animation-delay: 100ms; }
+  .animation-delay-200 { animation-delay: 200ms; }
+  .animation-delay-300 { animation-delay: 300ms; }
+
+  /* Premium Glassmorphism */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20 shadow-sm;
   }
-  
-  .animation-delay-200 {
-    animation-delay: 200ms;
-  }
-  
-  .animation-delay-300 {
-    animation-delay: 300ms;
+  .glass-card {
+    @apply bg-white/90 backdrop-blur-xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl;
   }
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(15px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Custom scrollbar for better aesthetics */
+/* Elegant sleek scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 4px;
+  border-radius: 10px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }

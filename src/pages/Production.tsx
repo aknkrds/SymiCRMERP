@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Plus, Search, Filter, MoreVertical, Calendar, 
-    Clock, CheckCircle2, AlertCircle, X, 
-    Users, Settings, Play, Square, Timer,
-    Trash2, Factory, Truck, Eye, CheckCircle
+    Plus, Clock, X, 
+    Users, Play, Square, Timer,
+    Factory, Truck, Eye, CheckCircle
 } from 'lucide-react';
-import { format, differenceInMinutes, addMinutes } from 'date-fns';
+import { format, differenceInMinutes } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Modal } from '../components/ui/Modal';
 import { useStock } from '../hooks/useStock';
@@ -22,6 +21,99 @@ const PRODUCTION_STATUSES = [
     { value: 'production_completed', label: 'Üretim Tamamlandı' },
     { value: 'invoice_pending', label: 'Fatura ve İrsaliye Bekleniyor' }
 ];
+
+interface ShiftCardProps {
+    shift: Shift;
+    orders: Order[];
+    machines: Machine[];
+    personnel: Personnel[];
+    onSelect: (shift: Shift) => void;
+}
+
+const ShiftCard = ({ shift, orders, machines, personnel, onSelect }: ShiftCardProps) => {
+    const order = orders.find(o => o.id === shift.orderId);
+    const machine = machines.find(m => m.id === shift.machineId);
+    const supervisor = personnel.find(p => p.id === shift.supervisorId);
+    
+    const isStarted = shift.status === 'active';
+    const isCompleted = shift.status === 'completed';
+
+    // Calculate time remaining or duration
+    const start = new Date(shift.startTime);
+    const end = shift.endTime ? new Date(shift.endTime) : new Date(); // Handle null endTime
+    const now = new Date();
+    
+    // Safety check for invalid dates
+    if (isNaN(start.getTime())) {
+        console.error('Invalid start time for shift:', shift);
+        return null;
+    }
+
+    let timeDisplay = '';
+    if (isStarted) {
+        // Safe check for end date validity if needed, but end is handled above
+        const targetEnd = shift.endTime ? new Date(shift.endTime) : null;
+        if (targetEnd && !isNaN(targetEnd.getTime())) {
+             const minutesLeft = differenceInMinutes(targetEnd, now);
+             const hours = Math.floor(minutesLeft / 60);
+             const mins = minutesLeft % 60;
+             timeDisplay = minutesLeft > 0 ? `${hours}sa ${mins}dk kaldı` : 'Süre doldu';
+        } else {
+             timeDisplay = 'Süre belirsiz';
+        }
+    } else {
+        const endTimeStr = shift.endTime ? format(new Date(shift.endTime), 'HH:mm') : '?';
+        timeDisplay = `${format(start, 'HH:mm')} - ${endTimeStr}`;
+    }
+
+    return (
+        <div 
+            onClick={() => onSelect(shift)}
+            className={`
+                p-4 rounded-xl border cursor-pointer transition-all hover:shadow-md
+                ${isStarted ? 'bg-green-50 border-green-200' : 
+                  isCompleted ? 'bg-slate-50 border-slate-200 opacity-75' : 
+                  'bg-white border-slate-200'}
+            `}
+        >
+            <div className="flex justify-between items-start mb-3">
+                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    isStarted ? 'bg-green-100 text-green-700' : 
+                    isCompleted ? 'bg-slate-200 text-slate-600' : 
+                    'bg-amber-100 text-amber-700'
+                }`}>
+                    {isStarted ? 'Üretimde' : isCompleted ? 'Tamamlandı' : 'Planlandı'}
+                </span>
+                <span className="text-xs text-slate-500 font-mono">
+                    {format(start, 'dd MMM', { locale: tr })}
+                </span>
+            </div>
+            
+            <h4 className="font-medium text-slate-800 mb-1 truncate" title={order?.customerName}>
+                {order?.customerName || 'Bilinmeyen Müşteri'}
+            </h4>
+            <p className="text-sm text-slate-600 mb-3 truncate">
+                {machine?.machineNumber ? `${machine.machineNumber} - ${machine.features}` : 'Makine Seçilmedi'}
+            </p>
+            <div className="text-xs text-slate-500 mb-2 truncate">
+                {supervisor ? `${supervisor.firstName} ${supervisor.lastName}` : 'Atanmamış'}
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-1.5 text-slate-500">
+                    <Clock size={14} />
+                    <span>{timeDisplay}</span>
+                </div>
+                {isStarted && (
+                    <div className="flex items-center gap-1.5 text-green-600 font-medium">
+                        <Timer size={14} />
+                        <span className="animate-pulse">Aktif</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default function Production() {
     // Data State
@@ -150,17 +242,29 @@ export default function Production() {
                 fetch(`${API_URL}/shifts`)
             ]);
 
-            if (ordersRes.ok) setOrders(await ordersRes.json());
-            if (personnelRes.ok) setPersonnel(await personnelRes.json());
-            if (machinesRes.ok) setMachines(await machinesRes.json());
-            if (shiftsRes.ok) setShifts(await shiftsRes.json());
+            if (ordersRes.ok) {
+                const data = await ordersRes.json();
+                setOrders(Array.isArray(data) ? data : []);
+            }
+            if (personnelRes.ok) {
+                const data = await personnelRes.json();
+                setPersonnel(Array.isArray(data) ? data : []);
+            }
+            if (machinesRes.ok) {
+                const data = await machinesRes.json();
+                setMachines(Array.isArray(data) ? data : []);
+            }
+            if (shiftsRes.ok) {
+                const data = await shiftsRes.json();
+                setShifts(Array.isArray(data) ? data : []);
+            }
         } catch (error) {
             console.error('Error fetching data:', error);
         }
     };
 
     // Incoming Orders Logic
-    const incomingOrders = orders.filter(o => o.status === 'production_pending');
+    const incomingOrders = orders.filter(o => o.status === 'production_pending' || o.status === 'supply_completed');
 
     const handleViewIncomingOrder = (order: Order) => {
         setSelectedOrderDetail(order);
@@ -335,12 +439,9 @@ export default function Production() {
                             product: productName,
                             company: order.customerName,
                             stockNumber: orderId, // Reference Order ID
-                            category: 'Mamul',
+                            category: 'finished',
                             quantity: totals.produced,
-                            unit: 'Adet',
-                            minLimit: 0,
-                            purchasePrice: 0,
-                            date: new Date().toISOString()
+                            unit: 'Adet'
                         });
                     }
                 }
@@ -348,7 +449,7 @@ export default function Production() {
                 if (totals.scrap > 0) {
                     // Add Scrap to General Scrap Stock
                     // Find generic 'Hurda' item
-                    const scrapItem = stockItems.find(i => i.product === 'Genel Hurda' || (i.category === 'Hurda' && i.stockNumber === 'HURDA-GENEL'));
+                    const scrapItem = stockItems.find(i => i.product === 'Genel Hurda' || (i.category === 'scrap' && i.stockNumber === 'HURDA-GENEL'));
                     
                     if (scrapItem) {
                         // Add to existing scrap stock
@@ -359,12 +460,9 @@ export default function Production() {
                             stockNumber: 'HURDA-GENEL',
                             company: 'İşletme İçi',
                             product: 'Genel Hurda',
-                            category: 'Hurda',
+                            category: 'scrap',
                             quantity: totals.scrap,
-                            unit: 'Adet',
-                            minLimit: 0,
-                            purchasePrice: 0,
-                            date: new Date().toISOString()
+                            unit: 'Adet'
                         });
                     }
                 }
@@ -379,32 +477,47 @@ export default function Production() {
     const addPersonnel = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await fetch(`${API_URL}/personnel`, {
+            const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+                ? crypto.randomUUID() 
+                : Date.now().toString(36) + Math.random().toString(36).substring(2);
+                
+            const res = await fetch(`${API_URL}/personnel`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...newPersonnel,
-                    id: crypto.randomUUID(),
+                    id: newId,
                     createdAt: new Date().toISOString()
                 })
             });
+
+            if (!res.ok) {
+                throw new Error('Personel eklenemedi');
+            }
+
             setIsPersonnelModalOpen(false);
             setNewPersonnel({ firstName: '', lastName: '', role: '' });
-            fetchData();
+            await fetchData();
+            alert('Personel başarıyla eklendi.');
         } catch (error) {
             console.error('Error adding personnel:', error);
+            alert('Personel eklenirken bir hata oluştu.');
         }
     };
 
     const addMachine = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).substring(2);
+                
             await fetch(`${API_URL}/machines`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...newMachine,
-                    id: crypto.randomUUID(),
+                    id: newId,
                     createdAt: new Date().toISOString()
                 })
             });
@@ -421,12 +534,16 @@ export default function Production() {
         if (!newShift.orderId || !newShift.machineId || !newShift.supervisorId) return;
 
         try {
+            const newId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : Date.now().toString(36) + Math.random().toString(36).substring(2);
+
             await fetch(`${API_URL}/shifts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...newShift,
-                    id: crypto.randomUUID(),
+                    id: newId,
                     status: 'planned',
                     producedQuantity: 0,
                     scrapQuantity: 0,
@@ -536,77 +653,7 @@ export default function Production() {
     };
 
     // Render Helpers
-    const ShiftCard = ({ shift }: { shift: Shift }) => {
-        const order = orders.find(o => o.id === shift.orderId);
-        const machine = machines.find(m => m.id === shift.machineId);
-        const supervisor = personnel.find(p => p.id === shift.supervisorId);
-        
-        const isStarted = shift.status === 'active';
-        const isCompleted = shift.status === 'completed';
 
-        // Calculate time remaining or duration
-        const start = new Date(shift.startTime);
-        const end = new Date(shift.endTime);
-        const now = new Date();
-        
-        let timeDisplay = '';
-        if (isStarted) {
-            const minutesLeft = differenceInMinutes(end, now);
-            const hours = Math.floor(minutesLeft / 60);
-            const mins = minutesLeft % 60;
-            timeDisplay = minutesLeft > 0 ? `${hours}sa ${mins}dk kaldı` : 'Süre doldu';
-        } else {
-            timeDisplay = `${format(start, 'HH:mm')} - ${format(end, 'HH:mm')}`;
-        }
-
-        return (
-            <div 
-                onClick={() => {
-                    setSelectedShift(shift);
-                    setIsShiftDetailModalOpen(true);
-                }}
-                className={`
-                    p-4 rounded-xl border cursor-pointer transition-all hover:shadow-md
-                    ${isStarted ? 'bg-green-50 border-green-200' : 
-                      isCompleted ? 'bg-slate-50 border-slate-200 opacity-75' : 
-                      'bg-white border-slate-200'}
-                `}
-            >
-                <div className="flex justify-between items-start mb-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        isStarted ? 'bg-green-100 text-green-700' : 
-                        isCompleted ? 'bg-slate-200 text-slate-600' : 
-                        'bg-amber-100 text-amber-700'
-                    }`}>
-                        {isStarted ? 'Üretimde' : isCompleted ? 'Tamamlandı' : 'Planlandı'}
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                        {format(new Date(shift.startTime), 'dd MMM', { locale: tr })}
-                    </span>
-                </div>
-                
-                <h4 className="font-medium text-slate-800 mb-1 truncate" title={order?.customerName}>
-                    {order?.customerName}
-                </h4>
-                <p className="text-sm text-slate-600 mb-3 truncate">
-                    {machine?.machineNumber} - {machine?.features}
-                </p>
-
-                <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-1.5 text-slate-500">
-                        <Clock size={14} />
-                        <span>{timeDisplay}</span>
-                    </div>
-                    {isStarted && (
-                        <div className="flex items-center gap-1.5 text-green-600 font-medium">
-                            <Timer size={14} />
-                            <span className="animate-pulse">Aktif</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
 
     return (
         <div className="space-y-8 pb-20">
@@ -679,7 +726,7 @@ export default function Production() {
                                                 
                                                 const dims = product?.dimensions 
                                                     ? `${product.dimensions.length}x${product.dimensions.width}x${product.dimensions.depth} mm`
-                                                    : item.dimensions || '-';
+                                                    : '-';
                                                     
                                                 return (
                                                     <div key={index} className="flex flex-col">
@@ -762,7 +809,7 @@ export default function Production() {
                                 
                                 const dims = product?.dimensions 
                                     ? `${product.dimensions.length}x${product.dimensions.width}x${product.dimensions.depth} mm`
-                                    : entry.item.dimensions || '-';
+                                    : '-';
 
                                 return (
                                 <tr key={`${entry.order.id}-${entry.item.productId || index}`} className="hover:bg-slate-50">
@@ -1274,8 +1321,18 @@ export default function Production() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {shifts.map(shift => (
-                        <ShiftCard key={shift.id} shift={shift} />
+                    {(Array.isArray(shifts) ? shifts : []).map(shift => (
+                        <ShiftCard 
+                            key={shift.id} 
+                            shift={shift} 
+                            orders={orders}
+                            machines={machines}
+                            personnel={personnel}
+                            onSelect={(s) => {
+                                setSelectedShift(s);
+                                setIsShiftDetailModalOpen(true);
+                            }}
+                        />
                     ))}
                     {shifts.length === 0 && (
                         <div className="col-span-full py-12 text-center text-slate-500 bg-white rounded-xl border border-slate-200 border-dashed">
@@ -1376,7 +1433,7 @@ export default function Production() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {personnel.map(p => (
+                                {(Array.isArray(personnel) ? personnel : []).map(p => (
                                     <tr key={p.id}>
                                         <td className="px-4 py-2">{p.firstName} {p.lastName}</td>
                                         <td className="px-4 py-2 text-slate-500">{p.role}</td>
@@ -1495,7 +1552,7 @@ export default function Production() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {machines.map(m => (
+                                {(Array.isArray(machines) ? machines : []).map(m => (
                                     <tr key={m.id}>
                                         <td className="px-4 py-2 font-mono">{m.machineNumber}</td>
                                         <td className="px-4 py-2 text-slate-500">{m.features}</td>
@@ -1924,7 +1981,7 @@ export default function Production() {
                             </div>
                             <div className="col-span-2">
                                 <span className="text-slate-500 block">Notlar</span>
-                                <p className="text-slate-800 bg-slate-50 p-2 rounded">{selectedOrderDetail.notes || '-'}</p>
+                                <p className="text-slate-800 bg-slate-50 p-2 rounded">{'-'}</p>
                             </div>
                         </div>
                         <div className="border-t pt-4">

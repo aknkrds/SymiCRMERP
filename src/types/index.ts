@@ -113,13 +113,15 @@ export type OrderStatus =
     | 'design_pending' 
     | 'design_approved' 
     | 'supply_completed'
+    | 'production_pending'
     | 'production_planned'
     | 'production_started'
     | 'production_completed'
     | 'invoice_added'
     | 'shipping_completed'
     | 'order_completed'
-    | 'order_cancelled';
+    | 'order_cancelled'
+    | 'production_cancelled';
 
 export interface OrderItem {
     id: string; // Product ID or temp ID
@@ -203,7 +205,7 @@ export interface StockItem {
     product: string;
     quantity: number;
     unit: string;
-    category?: 'procurement' | 'finished';
+    category?: 'procurement' | 'finished' | 'scrap';
     productId?: string;
     notes?: string;
     createdAt: string;
@@ -216,6 +218,28 @@ export interface Personnel {
     firstName: string;
     lastName: string;
     role: string;
+    birthDate?: string;
+    birthPlace?: string;
+    tcNumber?: string;
+    address?: string;
+    homePhone?: string;
+    mobilePhone?: string;
+    email?: string;
+    emergencyContactName?: string;
+    emergencyContactRelation?: string;
+    emergencyContactPhone?: string;
+    maritalStatus?: string;
+    sskNumber?: string;
+    department?: string;
+    startDate?: string;
+    recruitmentPlace?: string;
+    endDate?: string;
+    exitReason?: string;
+    childrenCount?: number;
+    childrenAges?: number[];
+    parentsStatus?: string;
+    hasDisability?: boolean;
+    disabilityDescription?: string;
     createdAt: string;
 }
 

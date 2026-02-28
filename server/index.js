@@ -1523,11 +1523,20 @@ app.delete('/api/orders/:id', (req, res) => {
 
 // --- PERSONNEL ---
 
+const parsePersonnel = (person) => {
+  if (!person) return null;
+  return {
+    ...person,
+    childrenAges: JSON.parse(person.childrenAges || '[]'),
+    hasDisability: person.hasDisability === 1,
+  };
+};
+
 app.get('/api/personnel', (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM personnel ORDER BY createdAt DESC');
     const items = stmt.all();
-    res.json(items);
+    res.json(items.map(parsePersonnel));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1535,13 +1544,57 @@ app.get('/api/personnel', (req, res) => {
 
 app.post('/api/personnel', (req, res) => {
   try {
-    const { id, firstName, lastName, role, createdAt } = req.body;
+    const { 
+      id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
+      homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation, 
+      emergencyContactPhone, maritalStatus, sskNumber, department, startDate, 
+      recruitmentPlace, endDate, exitReason, childrenCount, childrenAges, 
+      parentsStatus, hasDisability, disabilityDescription, createdAt 
+    } = req.body;
+
     const stmt = db.prepare(`
-      INSERT INTO personnel (id, firstName, lastName, role, createdAt)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO personnel (
+        id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
+        homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation, 
+        emergencyContactPhone, maritalStatus, sskNumber, department, startDate, 
+        recruitmentPlace, endDate, exitReason, childrenCount, childrenAges, 
+        parentsStatus, hasDisability, disabilityDescription, createdAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, firstName, lastName, role, createdAt);
+
+    stmt.run(
+      id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
+      homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation, 
+      emergencyContactPhone, maritalStatus, sskNumber, department, startDate, 
+      recruitmentPlace, endDate, exitReason, childrenCount, JSON.stringify(childrenAges || []), 
+      parentsStatus, hasDisability ? 1 : 0, disabilityDescription, createdAt
+    );
     res.status(201).json(req.body);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/personnel/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    // Handle JSON fields and booleans
+    if (updates.childrenAges) updates.childrenAges = JSON.stringify(updates.childrenAges);
+    if (updates.hasDisability !== undefined) updates.hasDisability = updates.hasDisability ? 1 : 0;
+
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(updates), id];
+
+    if (fields.length > 0) {
+      const stmt = db.prepare(`UPDATE personnel SET ${fields} WHERE id = ?`);
+      stmt.run(...values);
+    }
+    
+    const updated = db.prepare('SELECT * FROM personnel WHERE id = ?').get(id);
+    res.json(parsePersonnel(updated));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

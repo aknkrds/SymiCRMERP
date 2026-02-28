@@ -41,11 +41,11 @@ export default function Dashboard() {
         const activeProduction = orders.filter(o => ['production_started', 'production_completed'].includes(o.status)).length;
         const pendingOffers = orders.filter(o => o.status === 'offer_sent').length;
         const completed = orders.filter(o => o.status === 'shipping_completed').length;
-        
+
         // Calculate total revenue (rough approximation summing all currencies for now, or just picking one)
         // ideally we should convert, but for now let's sum based on major currency or just display count
         // Let's stick to counts for the cards as they are safer without conversion rates
-        
+
         return [
             {
                 label: 'Toplam Sipariş',
@@ -86,7 +86,7 @@ export default function Dashboard() {
             const statusLabel = ORDER_STATUS_MAP[order.status]?.label || order.status;
             counts[statusLabel] = (counts[statusLabel] || 0) + 1;
         });
-        
+
         return Object.entries(counts)
             .map(([name, value]) => ({ name, value }))
             .sort((a, b) => b.value - a.value);
@@ -125,17 +125,23 @@ export default function Dashboard() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((stat, idx) => (
-                    <div 
-                        key={idx} 
-                        className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 flex items-center justify-between hover:-translate-y-1 transition-all duration-300 animate-fade-in-up group"
+                    <div
+                        key={idx}
+                        className="glass-card p-6 flex flex-col justify-between hover:-translate-y-1.5 transition-all duration-300 animate-fade-in-up group overflow-hidden relative"
                         style={{ animationDelay: `${idx * 100}ms` }}
                     >
-                        <div>
-                            <p className="text-sm font-medium text-slate-500 mb-1 group-hover:text-[var(--accent)] transition-colors">{stat.label}</p>
-                            <h3 className="text-3xl font-bold text-slate-800">{stat.value}</h3>
+                        <div className="absolute -right-6 -top-6 w-32 h-32 bg-gradient-to-br from-white/40 to-white/0 rounded-full blur-2xl group-hover:bg-white/60 transition-colors pointer-events-none"></div>
+                        <div className="flex justify-between items-start mb-4 relative z-10">
+                            <div>
+                                <p className="text-sm font-medium text-slate-500 mb-1 group-hover:text-slate-700 transition-colors uppercase tracking-wider">{stat.label}</p>
+                                <h3 className="text-4xl font-bold text-slate-800 tracking-tight">{stat.value}</h3>
+                            </div>
+                            <div className={`p-3.5 rounded-xl ${stat.bg} ${stat.color} shadow-sm group-hover:scale-110 transition-transform duration-300`}>
+                                <stat.icon size={26} strokeWidth={2.5} />
+                            </div>
                         </div>
-                        <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} shadow-inner group-hover:scale-110 transition-transform duration-300`}>
-                            <stat.icon size={28} />
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mt-2">
+                            <div className={`h-full ${stat.color.replace('text-', 'bg-')} bg-opacity-50 w-[70%]`}></div>
                         </div>
                     </div>
                 ))}
@@ -143,9 +149,9 @@ export default function Dashboard() {
 
             {/* Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up delay-200">
-                
+
                 {/* Status Distribution */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 flex flex-col hover:shadow-xl transition-shadow duration-300">
+                <div className="glass-card p-6 flex flex-col hover:shadow-2xl transition-shadow duration-300">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Activity className="w-5 h-5 text-[var(--accent)]" />
                         Sipariş Durumları
@@ -171,13 +177,13 @@ export default function Dashboard() {
                             </PieChart>
                         </ResponsiveContainer>
                     </div>
-                    
+
                     {/* Custom Legend */}
                     <div className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-3">
                         {statusData.map((entry, index) => (
                             <div key={index} className="flex items-center gap-2 text-sm">
-                                <div 
-                                    className="w-3 h-3 rounded-full flex-shrink-0" 
+                                <div
+                                    className="w-3 h-3 rounded-full flex-shrink-0"
                                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
                                 />
                                 <span className="text-slate-600 font-medium">{entry.name}</span>
@@ -188,26 +194,26 @@ export default function Dashboard() {
                 </div>
 
                 {/* Top Customers */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 hover:shadow-xl transition-shadow duration-300">
+                <div className="glass-card p-6 hover:shadow-2xl transition-shadow duration-300">
                     <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                         <Users className="w-5 h-5 text-purple-500" />
-                        En Çok Sipariş Veren Müşteriler (Top 5)
+                        Popüler Müşteriler
                     </h3>
                     <div className="h-96">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={customerData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                                 <XAxis type="number" hide />
-                                <YAxis 
-                                    dataKey="name" 
-                                    type="category" 
+                                <YAxis
+                                    dataKey="name"
+                                    type="category"
                                     width={150}
-                                    tick={{fill: '#475569', fontSize: 13, fontWeight: 500}}
+                                    tick={{ fill: '#475569', fontSize: 13, fontWeight: 500 }}
                                     axisLine={false}
                                     tickLine={false}
                                 />
-                                <Tooltip 
-                                    cursor={{fill: '#f1f5f9'}}
+                                <Tooltip
+                                    cursor={{ fill: '#f1f5f9' }}
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                 />
                                 <Bar dataKey="value" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={20} />
@@ -218,10 +224,10 @@ export default function Dashboard() {
             </div>
 
             {/* Orders List */}
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-lg shadow-slate-200/50 overflow-hidden animate-fade-in-up delay-300">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <h2 className="text-lg font-bold text-slate-800">Son İşlemler</h2>
-                    <button className="text-sm text-[var(--accent)] hover:text-[var(--accent-strong)] font-medium transition-colors">Tümünü Gör</button>
+            <div className="glass-card overflow-hidden animate-fade-in-up delay-300">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/50">
+                    <h2 className="text-lg font-bold text-slate-800">Son Siparişler</h2>
+                    <button className="text-sm text-[var(--accent)] bg-[var(--accent-soft)]/50 px-3 py-1.5 rounded-lg hover:bg-[var(--accent-soft)] font-medium transition-colors">Tümünü Gör</button>
                 </div>
                 <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
@@ -243,13 +249,12 @@ export default function Dashboard() {
                                 </tr>
                             ) : (
                                 recentOrders.map((order) => (
-                                    <tr 
-                                        key={order.id} 
-                                        className={`transition-colors border-b last:border-0 ${
-                                            order.status === 'created' 
-                                                ? 'bg-white hover:bg-slate-50' 
+                                    <tr
+                                        key={order.id}
+                                        className={`transition-colors border-b last:border-0 ${order.status === 'created'
+                                                ? 'bg-white hover:bg-slate-50'
                                                 : (ORDER_STATUS_MAP[order.status]?.color ? `bg-${ORDER_STATUS_MAP[order.status].color.match(/bg-([a-z]+)-/)?.[1] || 'slate'}-50 hover:bg-${ORDER_STATUS_MAP[order.status].color.match(/bg-([a-z]+)-/)?.[1] || 'slate'}-100` : 'bg-white hover:bg-slate-50')
-                                        }`}
+                                            }`}
                                     >
                                         <td className="px-6 py-4 font-mono text-xs text-slate-600">#{order.id.slice(0, 8)}</td>
                                         <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
@@ -290,12 +295,12 @@ export default function Dashboard() {
                                             {format(new Date(order.createdAt), 'dd MMM', { locale: tr })}
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex justify-between items-center">
                                         <div className="font-semibold text-slate-700 text-sm">
                                             {order.grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {order.currency}
                                         </div>
-                                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-800 border-slate-200'} bg-opacity-10 border-opacity-20`}>
+                                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${ORDER_STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-800 border-slate-200'} bg-opacity-10 border-opacity-20`}>
                                             {ORDER_STATUS_MAP[order.status]?.label || order.status}
                                         </span>
                                     </div>

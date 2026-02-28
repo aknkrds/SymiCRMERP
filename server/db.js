@@ -177,9 +177,55 @@ const initDb = () => {
       firstName TEXT NOT NULL,
       lastName TEXT NOT NULL,
       role TEXT NOT NULL,
+      birthDate TEXT,
+      birthPlace TEXT,
+      tcNumber TEXT,
+      address TEXT,
+      homePhone TEXT,
+      mobilePhone TEXT,
+      email TEXT,
+      emergencyContactName TEXT,
+      emergencyContactRelation TEXT,
+      emergencyContactPhone TEXT,
+      maritalStatus TEXT,
+      sskNumber TEXT,
+      department TEXT,
+      startDate TEXT,
+      recruitmentPlace TEXT,
+      endDate TEXT,
+      exitReason TEXT,
+      childrenCount INTEGER,
+      childrenAges TEXT, -- JSON
+      parentsStatus TEXT,
+      hasDisability INTEGER,
+      disabilityDescription TEXT,
       createdAt TEXT NOT NULL
     )
   `);
+
+  // Personnel Migrations
+  try { db.exec('ALTER TABLE personnel ADD COLUMN birthDate TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN birthPlace TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN tcNumber TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN address TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN homePhone TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN mobilePhone TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN email TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN emergencyContactName TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN emergencyContactRelation TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN emergencyContactPhone TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN maritalStatus TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN sskNumber TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN department TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN startDate TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN recruitmentPlace TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN endDate TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN exitReason TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN childrenCount INTEGER'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN childrenAges TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN parentsStatus TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN hasDisability INTEGER'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN disabilityDescription TEXT'); } catch (e) {}
 
   // Machines
   db.exec(`

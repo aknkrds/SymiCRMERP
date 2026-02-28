@@ -136,7 +136,16 @@ export function DepartmentTasks() {
                                                 #{order.id.slice(0, 8)}
                                             </span>
                                             <span className="text-[10px] text-slate-400">
-                                                {format(new Date(order.updatedAt || order.createdAt), 'dd MMM HH:mm', { locale: tr })}
+                                                {(() => {
+                                                    try {
+                                                        const dateStr = order.updatedAt || order.createdAt;
+                                                        if (!dateStr) return '';
+                                                        const date = new Date(dateStr);
+                                                        return isNaN(date.getTime()) ? '' : format(date, 'dd MMM HH:mm', { locale: tr });
+                                                    } catch {
+                                                        return '';
+                                                    }
+                                                })()}
                                             </span>
                                         </div>
                                         <h4 className="text-sm font-medium text-slate-800 mb-1 line-clamp-1">

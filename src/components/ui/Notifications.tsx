@@ -25,7 +25,7 @@ export function Notifications() {
             const res = await fetch(`/api/notifications?userId=${user.id}&roleId=${user.roleId}`);
             if (res.ok) {
                 const data = await res.json();
-                setNotifications(data);
+                setNotifications(Array.isArray(data) ? data : []);
             }
         } catch (error) {
             console.error('Failed to fetch notifications', error);
@@ -125,7 +125,14 @@ export function Notifications() {
                                     <div className="flex justify-between items-start mb-1">
                                         <p className="text-sm font-medium text-slate-800">{notification.title}</p>
                                         <span className="text-xs text-slate-400">
-                                            {new Date(notification.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {(() => {
+                                                try {
+                                                    const date = new Date(notification.createdAt);
+                                                    return isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                                } catch {
+                                                    return '';
+                                                }
+                                            })()}
                                         </span>
                                     </div>
                                     <p className="text-xs text-slate-500 line-clamp-2">{notification.message}</p>

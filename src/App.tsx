@@ -17,6 +17,7 @@ import Stock from './pages/Stock';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
+import HumanResources from './pages/HumanResources';
 import Dashboard from './pages/Dashboard';
 
 // Protected Route Component
@@ -104,6 +105,11 @@ function App() {
               <Route path="/stock" element={
                 <ProtectedRoute permission="all_except_settings">
                   <Stock />
+                </ProtectedRoute>
+              } />
+              <Route path="/human-resources" element={
+                <ProtectedRoute permission="all_except_settings">
+                  <HumanResources />
                 </ProtectedRoute>
               } />
               <Route path="/reports" element={

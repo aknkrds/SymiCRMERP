@@ -18,9 +18,14 @@ export function useOrders() {
                     setOrders([]);
                     return;
                 }
-                const sorted = data.sort((a: Order, b: Order) => 
-                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
+                // Filter out invalid items
+                const validOrders = data.filter(item => item && typeof item === 'object' && item.id);
+                
+                const sorted = validOrders.sort((a: Order, b: Order) => {
+                    const dateA = new Date(a.createdAt).getTime();
+                    const dateB = new Date(b.createdAt).getTime();
+                    return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+                });
                 setOrders(sorted);
             })
             .catch(err => console.error('Error fetching orders:', err))

@@ -1,7 +1,7 @@
 {
   "name": "symi-crm",
   "private": true,
-  "version": "0.9.5.3",
+  "version": "0.9.5.4",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite\"",

@@ -16,6 +16,7 @@ import {
     LogOut,
     BarChart2,
     Calendar,
+    // UserCog,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../context/AuthContext';
@@ -46,6 +47,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
         { icon: Truck, label: 'Sevkiyat', to: '/logistics', permission: 'logistics' },
         { icon: CheckCircle, label: 'Onaylar', to: '/approvals', permission: 'all_except_settings' },
         { icon: Package, label: 'Stok', to: '/stock', permission: 'all_except_settings' },
+        { icon: Users, label: 'İnsan Kaynakları', to: '/human-resources', permission: 'all_except_settings' },
         { icon: BarChart2, label: 'Raporlar', to: '/reports', permission: 'all_except_settings' },
     ];
 
@@ -53,7 +55,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
         <>
             {/* Mobil Backdrop */}
             {isOpen && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
                     onClick={() => setIsOpen(false)}
                 />
@@ -61,17 +63,17 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
 
             <aside
                 className={cn(
-                    'bg-slate-900 text-white transition-all duration-300 h-screen flex flex-col shadow-xl shadow-slate-900/40',
-                    'fixed md:sticky top-0 left-0 z-50', // Mobile: fixed, Desktop: sticky
+                    'bg-slate-900 border-r border-slate-800 text-white transition-all duration-300 h-screen flex flex-col shadow-2xl',
+                    'fixed md:sticky top-0 left-0 z-50',
                     isOpen ? 'w-64 translate-x-0' : 'w-20 -translate-x-full md:translate-x-0 md:w-20'
                 )}
             >
                 <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/70">
                     {/* Logo her zaman görünsün, kapalıyken sadece icon */}
                     <div className={cn("flex items-center gap-2", !isOpen && "justify-center w-full md:w-auto")}>
-                        <img 
-                            src="/symi.png" 
-                            alt="Symi CRM" 
+                        <img
+                            src="/symi.png"
+                            alt="Symi CRM"
                             className="w-8 h-8 object-contain rounded-md bg-white/10"
                         />
                         {isOpen && (
@@ -81,7 +83,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
                             </div>
                         )}
                     </div>
-                    
+
                     {isOpen && (
                         <button
                             onClick={() => setIsOpen(!isOpen)}
@@ -91,9 +93,9 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
                             <Menu size={20} />
                         </button>
                     )}
-                    
+
                     {/* Mobil için kapatma butonu */}
-                     {isOpen && (
+                    {isOpen && (
                         <button
                             onClick={() => setIsOpen(false)}
                             className="p-2 hover:bg-slate-800/80 rounded-lg transition-colors md:hidden"
@@ -134,10 +136,10 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
                                         onClick={handleLinkClick}
                                         className={({ isActive }) =>
                                             cn(
-                                                'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group text-sm',
+                                                'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group text-sm font-medium',
                                                 isActive
-                                                    ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent)]/40'
-                                                    : 'text-slate-300 hover:text-white hover:bg-slate-800/80',
+                                                    ? 'bg-[var(--accent)] text-white shadow-lg shadow-[var(--accent)]/30 scale-[1.02]'
+                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800/80 hover:scale-[1.02]',
                                                 !isOpen && 'justify-center'
                                             )
                                         }
@@ -184,7 +186,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
 
                     {isOpen && (
                         <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
-                            <p className="font-medium">Symi CRM v.0.9.5.3</p>
+                            <p className="font-medium">Symi CRM v.0.9.5.4</p>
                             <p className="text-[10px] mt-0.5 text-slate-500">
                                 Tasarım & Geliştirme:{' '}
                                 <span className="font-semibold text-slate-200">Akın KARADAŞ - Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti</span>

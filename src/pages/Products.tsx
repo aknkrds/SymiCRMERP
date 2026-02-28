@@ -58,14 +58,14 @@ export default function Products() {
                 </div>
                 <button
                     onClick={handleAdd}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-xl hover:bg-[var(--accent-strong)] hover:shadow-lg hover:shadow-[var(--accent)]/30 transition-all duration-300 transform hover:-translate-y-0.5"
                 >
                     <Plus size={20} />
                     Yeni Ürün
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="glass-card overflow-hidden">
                 <div className="p-4 border-b border-slate-200">
                     <div className="relative max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -74,7 +74,7 @@ export default function Products() {
                             placeholder="Ürün ara..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-slate-300 bg-white text-slate-800 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-all"
                         />
                     </div>
                 </div>
@@ -103,7 +103,7 @@ export default function Products() {
                                             <div className="text-sm text-slate-600 mt-1 line-clamp-2">{product.description}</div>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex flex-wrap gap-2 pt-1">
                                         {product.features.hasLid && (
                                             <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
@@ -126,7 +126,7 @@ export default function Products() {
                                         </button>
                                         <button
                                             onClick={() => handleEdit(product)}
-                                            className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"
+                                            className="p-2 text-[var(--accent-strong)] bg-[var(--accent-soft)] rounded-lg"
                                             title="Düzenle"
                                         >
                                             <Edit2 size={18} />
@@ -148,7 +148,7 @@ export default function Products() {
                 {/* Desktop View (Table) */}
                 <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                        <thead className="bg-slate-50/50 text-slate-800 font-semibold border-b border-slate-100 uppercase tracking-wider text-xs">
                             <tr>
                                 <th className="px-6 py-4">Kod & Açıklama</th>
                                 <th className="px-6 py-4">Boyutlar (mm)</th>
@@ -156,7 +156,7 @@ export default function Products() {
                                 <th className="px-6 py-4 text-right">İşlemler</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-200">
+                        <tbody className="divide-y divide-slate-100">
                             {filteredProducts.length === 0 ? (
                                 <tr>
                                     <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
@@ -168,7 +168,7 @@ export default function Products() {
                                     <tr key={product.id} className="hover:bg-slate-50 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                                                <div className="p-2 bg-[var(--accent-soft)] text-[var(--accent-strong)] rounded-lg">
                                                     <Package size={20} />
                                                 </div>
                                                 <div>
@@ -186,13 +186,13 @@ export default function Products() {
                                             <div className="space-y-2">
                                                 <div className="flex flex-wrap gap-2">
                                                     {product.features.hasLid && (
-                                                    <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
+                                                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
                                                     )}
                                                     {product.features.hasWindow && (
-                                                    <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
+                                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
                                                     )}
                                                     {product.features.extras && (
-                                                    <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full" title={product.features.extras}>+Ekstra</span>
+                                                        <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full" title={product.features.extras}>+Ekstra</span>
                                                     )}
                                                 </div>
                                                 {product.details && (
@@ -206,21 +206,21 @@ export default function Products() {
                                             <div className="flex justify-end gap-2">
                                                 <button
                                                     onClick={() => handleView(product)}
-                                                    className="p-2 text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
                                                     title="Görüntüle"
                                                 >
                                                     <Eye size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleEdit(product)}
-                                                    className="p-2 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-500 hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] rounded-lg transition-colors"
                                                     title="Düzenle"
                                                 >
                                                     <Edit2 size={18} />
                                                 </button>
                                                 <button
                                                     onClick={() => handleDelete(product.id)}
-                                                    className="p-2 text-slate-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
                                                     title="Sil"
                                                 >
                                                     <Trash2 size={18} />
