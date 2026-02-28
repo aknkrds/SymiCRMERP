@@ -1,6 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Eye, Search, User, Phone, Mail, MapPin, Calendar, Briefcase, Heart, AlertCircle, X } from 'lucide-react';
+import { Users, Plus, Eye, Search, User, Phone, Mail, MapPin, Calendar, Briefcase, Heart, AlertCircle, X, FileText, Upload, Trash2 } from 'lucide-react';
 import type { Personnel } from '../types';
+
+const REQUIRED_DOCUMENTS = [
+  'Kimlik Ön Resmi',
+  'Kimlik Arka Resmi',
+  'İşe Başvuru Formu',
+  'Engelli Belgesi',
+  'Askerlik Belgesi',
+  'İşe Giriş Belgesi',
+  'Sağlık Raporu',
+  'İkametgah',
+  'İşkur Evrağı',
+  'Resim',
+  'Diploma',
+  'Adli Sicil Raporu',
+  'Odio İşitme Testi',
+  'Akciğer Grafisi',
+  'EKG',
+  'Kan ve İdrar Tahlili'
+];
 
 export default function HumanResources() {
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
@@ -12,6 +31,11 @@ export default function HumanResources() {
   const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
   const [formData, setFormData] = useState<Partial<Personnel>>({});
   const [formLoading, setFormLoading] = useState(false);
+
+  // Documents Modal State
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
+  const [selectedPersonDocs, setSelectedPersonDocs] = useState<Personnel | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPersonnel();
@@ -56,6 +80,93 @@ export default function HumanResources() {
     setIsModalOpen(false);
     setSelectedPerson(null);
     setFormData({});
+  };
+
+  const handleOpenDocsModal = (person: Personnel) => {
+    setSelectedPersonDocs(person);
+    setIsDocsModalOpen(true);
+  };
+
+  const handleCloseDocsModal = () => {
+    setIsDocsModalOpen(false);
+    setSelectedPersonDocs(null);
+    setUploadingDoc(null);
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, docType: string) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file || !selectedPersonDocs) return;
+
+    try {
+      setUploadingDoc(docType);
+      const formData = new FormData();
+      formData.append('image', file);
+
+      // Upload file
+      const uploadRes = await fetch('/api/upload?folder=doc', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadRes.ok) throw new Error('Dosya yüklenemedi');
+
+      const { url } = await uploadRes.json();
+
+      // Update personnel record
+      const currentDocs = selectedPersonDocs.documents || {};
+      const updatedDocs = { ...currentDocs, [docType]: url };
+
+      const updateRes = await fetch(`/api/personnel/${selectedPersonDocs.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documents: updatedDocs })
+      });
+
+      if (!updateRes.ok) throw new Error('Personel güncellenemedi');
+
+      const updatedPerson = await updateRes.json();
+      
+      // Update local state
+      setSelectedPersonDocs(updatedPerson);
+      setPersonnelList(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
+
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Dosya yüklenirken bir hata oluştu');
+    } finally {
+      setUploadingDoc(null);
+      // Reset input
+      if (input) input.value = '';
+    }
+  };
+
+  const handleDeleteDocument = async (docType: string) => {
+    if (!selectedPersonDocs || !confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
+
+    try {
+      const currentDocs = selectedPersonDocs.documents || {};
+      const updatedDocs = { ...currentDocs };
+      delete updatedDocs[docType];
+
+      const updateRes = await fetch(`/api/personnel/${selectedPersonDocs.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documents: updatedDocs })
+      });
+
+      if (!updateRes.ok) throw new Error('Belge silinemedi');
+
+      const updatedPerson = await updateRes.json();
+      
+      // Update local state
+      setSelectedPersonDocs(updatedPerson);
+      setPersonnelList(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
+
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Belge silinirken bir hata oluştu');
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -231,10 +342,17 @@ export default function HumanResources() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right">
+                  <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                    <button 
+                      onClick={() => handleOpenDocsModal(person)}
+                      className="text-slate-600 hover:text-indigo-600 font-medium text-sm flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-md hover:bg-indigo-50 transition-colors border border-slate-200 hover:border-indigo-200"
+                      title="Evraklar"
+                    >
+                      <FileText size={16} /> Evraklar
+                    </button>
                     <button 
                       onClick={() => handleOpenModal(person)}
-                      className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center justify-end gap-1 ml-auto"
+                      className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center justify-end gap-1"
                     >
                       <Eye size={16} /> Gözat
                     </button>
@@ -487,6 +605,93 @@ export default function HumanResources() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Documents Modal */}
+      {isDocsModalOpen && selectedPersonDocs && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center z-10">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="text-indigo-600" />
+                {selectedPersonDocs.firstName} {selectedPersonDocs.lastName} - Evraklar
+              </h2>
+              <button onClick={handleCloseDocsModal} className="text-slate-500 hover:text-slate-700" aria-label="Kapat" title="Kapat">
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {REQUIRED_DOCUMENTS.map((docName) => {
+                  const docUrl = selectedPersonDocs.documents?.[docName];
+                  const isUploading = uploadingDoc === docName;
+
+                  return (
+                    <div key={docName} className="border rounded-lg p-4 flex flex-col justify-between bg-slate-50 hover:bg-white hover:shadow-md transition-all">
+                      <div className="mb-3">
+                        <h4 className="font-semibold text-slate-700 mb-1">{docName}</h4>
+                        {docUrl ? (
+                          <div className="flex items-center gap-2 text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded w-fit">
+                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                            Yüklendi
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium bg-slate-100 px-2 py-1 rounded w-fit">
+                            <span className="w-2 h-2 rounded-full bg-slate-300"></span>
+                            Eksik
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-auto">
+                        {docUrl ? (
+                          <>
+                            <a 
+                              href={docUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-2 rounded text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                            >
+                              <Eye size={14} /> Görüntüle
+                            </a>
+                            <button
+                              onClick={() => handleDeleteDocument(docName)}
+                              className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded transition-colors"
+                              title="Sil"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <label className={`flex-1 cursor-pointer bg-white border border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded text-sm font-medium flex items-center justify-center gap-2 transition-colors ${isUploading ? 'opacity-50 cursor-wait' : ''}`}>
+                            {isUploading ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-indigo-600"></div>
+                                Yükleniyor...
+                              </>
+                            ) : (
+                              <>
+                                <Upload size={14} /> Yükle
+                                <input 
+                                  type="file" 
+                                  accept=".pdf,.png,.jpg,.jpeg" 
+                                  className="hidden" 
+                                  onChange={(e) => handleFileUpload(e, docName)}
+                                  disabled={isUploading}
+                                />
+                              </>
+                            )}
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}

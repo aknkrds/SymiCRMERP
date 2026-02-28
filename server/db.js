@@ -199,6 +199,7 @@ const initDb = () => {
       parentsStatus TEXT,
       hasDisability INTEGER,
       disabilityDescription TEXT,
+      documents TEXT, -- JSON
       createdAt TEXT NOT NULL
     )
   `);
@@ -226,6 +227,7 @@ const initDb = () => {
   try { db.exec('ALTER TABLE personnel ADD COLUMN parentsStatus TEXT'); } catch (e) {}
   try { db.exec('ALTER TABLE personnel ADD COLUMN hasDisability INTEGER'); } catch (e) {}
   try { db.exec('ALTER TABLE personnel ADD COLUMN disabilityDescription TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE personnel ADD COLUMN documents TEXT'); } catch (e) {}
 
   // Machines
   db.exec(`

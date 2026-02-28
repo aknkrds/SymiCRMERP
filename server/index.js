@@ -1529,6 +1529,7 @@ const parsePersonnel = (person) => {
     ...person,
     childrenAges: JSON.parse(person.childrenAges || '[]'),
     hasDisability: person.hasDisability === 1,
+    documents: JSON.parse(person.documents || '{}'),
   };
 };
 
@@ -1583,6 +1584,7 @@ app.patch('/api/personnel/:id', (req, res) => {
     
     // Handle JSON fields and booleans
     if (updates.childrenAges) updates.childrenAges = JSON.stringify(updates.childrenAges);
+    if (updates.documents) updates.documents = JSON.stringify(updates.documents);
     if (updates.hasDisability !== undefined) updates.hasDisability = updates.hasDisability ? 1 : 0;
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');

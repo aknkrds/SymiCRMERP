@@ -240,6 +240,7 @@ export interface Personnel {
     parentsStatus?: string;
     hasDisability?: boolean;
     disabilityDescription?: string;
+    documents?: Record<string, string>;
     createdAt: string;
 }
 
