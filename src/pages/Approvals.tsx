@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useUsers } from '../hooks/useUsers';
 import { useProducts } from '../hooks/useProducts';
 import { CheckCircle2, FileText, XCircle, Eye, AlertTriangle, Truck, Package, DollarSign, ChevronDown } from 'lucide-react';
 import { format, subMonths, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import type { Order, Product } from '../types';
+import type { Order, Product, ProcurementDispatch, ProcurementDispatchChangeRequest } from '../types';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import { Modal } from '../components/ui/Modal';
 import { ProductDetail } from '../components/products/ProductDetail';
@@ -51,10 +51,50 @@ export default function Approvals() {
     const [productJobDetails, setProductJobDetails] = useState<{ jobSize?: string; boxSize?: string; efficiency?: string } | null>(null);
     const [productDesignImages, setProductDesignImages] = useState<string[] | undefined>(undefined);
 
+    const [dispatchChangeRequests, setDispatchChangeRequests] = useState<ProcurementDispatchChangeRequest[]>([]);
+    const [procurementDispatches, setProcurementDispatches] = useState<ProcurementDispatch[]>([]);
+    const [dispatchChangeModal, setDispatchChangeModal] = useState<{
+        isOpen: boolean;
+        request: ProcurementDispatchChangeRequest | null;
+        dispatch: ProcurementDispatch | null;
+    }>({ isOpen: false, request: null, dispatch: null });
+
+    const fetchDispatchChangeRequests = async () => {
+        try {
+            const res = await fetch('/api/procurement-dispatch-change-requests');
+            if (!res.ok) throw new Error('failed');
+            const data = await res.json();
+            setDispatchChangeRequests(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setDispatchChangeRequests([]);
+        }
+    };
+
+    const fetchProcurementDispatches = async () => {
+        try {
+            const res = await fetch('/api/procurement-dispatches');
+            if (!res.ok) throw new Error('failed');
+            const data = await res.json();
+            setProcurementDispatches(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setProcurementDispatches([]);
+        }
+    };
+
+    useEffect(() => {
+        fetchDispatchChangeRequests();
+        fetchProcurementDispatches();
+    }, []);
+
     // Filter orders
     const gmPendingApprovals = orders.filter(o => o.status === 'waiting_manager_approval');
     const pendingApprovals = orders.filter(o => o.status === 'shipping_completed');
     const completedHistory = orders.filter(o => o.status === 'order_completed' || o.status === 'cancelled');
+
+    const pendingDispatchChangeRequests = useMemo(
+        () => dispatchChangeRequests.filter(r => r.status === 'pending'),
+        [dispatchChangeRequests]
+    );
 
     const handleGMApprove = async (orderId: string) => {
         if (confirm('Siparişi onaylıyor musunuz? Satış personeli artık değişiklik yapamayacak.')) {
@@ -65,6 +105,28 @@ export default function Approvals() {
     const handleGMRequestRevision = async (orderId: string) => {
         if (confirm('Sipariş için revize isteği gönderilsin mi? Satış personeli siparişi düzenleyebilecek.')) {
             await updateStatus(orderId, 'revision_requested');
+        }
+    };
+
+    const handleOpenDispatchChangePreview = (req: ProcurementDispatchChangeRequest) => {
+        const dispatch = procurementDispatches.find(d => d.id === req.dispatchId) || null;
+        setDispatchChangeModal({ isOpen: true, request: req, dispatch });
+    };
+
+    const handleDecideDispatchChangeRequest = async (status: 'approved' | 'rejected') => {
+        const req = dispatchChangeModal.request;
+        if (!req) return;
+        try {
+            const res = await fetch(`/api/procurement-dispatch-change-requests/${req.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            if (!res.ok) throw new Error('failed');
+            await fetchDispatchChangeRequests();
+            setDispatchChangeModal({ isOpen: false, request: null, dispatch: null });
+        } catch (e) {
+            alert('İşlem sırasında hata oluştu.');
         }
     };
 
@@ -523,6 +585,96 @@ export default function Approvals() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-4">
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="text-indigo-600" size={20} />
+                    Sevk Formu Değişiklik Onayı Bekleyenler
+                </h2>
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Fiş No</th>
+                                    <th className="px-6 py-4">Sevk Tarihi</th>
+                                    <th className="px-6 py-4">Açıklama</th>
+                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {pendingDispatchChangeRequests.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
+                                            Sevk formu değişiklik onayı bekleyen kayıt yok.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    pendingDispatchChangeRequests.map((req) => {
+                                        const dispatch = procurementDispatches.find(d => d.id === req.dispatchId);
+                                        return (
+                                            <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                                                <td className="px-6 py-4 font-mono text-xs">{req.dispatchId}</td>
+                                                <td className="px-6 py-4">{dispatch?.dispatchDate || '-'}</td>
+                                                <td className="px-6 py-4">
+                                                    <div className="max-w-[560px] truncate" title={req.reason}>
+                                                        {req.reason}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenDispatchChangePreview(req)}
+                                                        className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-semibold"
+                                                        aria-label="GM Önizleme"
+                                                        title="GM Önizleme"
+                                                    >
+                                                        GM Önizleme
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="md:hidden divide-y divide-slate-200">
+                        {pendingDispatchChangeRequests.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500">
+                                Sevk formu değişiklik onayı bekleyen kayıt yok.
+                            </div>
+                        ) : (
+                            pendingDispatchChangeRequests.map((req) => {
+                                const dispatch = procurementDispatches.find(d => d.id === req.dispatchId);
+                                return (
+                                    <div key={req.id} className="p-4 space-y-2">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                        <div className="font-mono text-xs text-slate-500">#{req.dispatchId}</div>
+                                                <div className="text-sm font-medium text-slate-800">Sevk: {dispatch?.dispatchDate || '-'}</div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleOpenDispatchChangePreview(req)}
+                                                className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-semibold"
+                                                aria-label="GM Önizleme"
+                                                title="GM Önizleme"
+                                            >
+                                                Önizleme
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-3 whitespace-pre-wrap">
+                                            {req.reason}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>
@@ -988,6 +1140,84 @@ export default function Approvals() {
                         onClose={() => setIsProductModalOpen(false)}
                     />
                 )}
+            </Modal>
+
+            <Modal
+                isOpen={dispatchChangeModal.isOpen}
+                onClose={() => setDispatchChangeModal({ isOpen: false, request: null, dispatch: null })}
+                title={`Sevk Formu Değişiklik Onayı #${dispatchChangeModal.request?.dispatchId || ''}`}
+                maxWidthClassName="max-w-5xl"
+            >
+                <div className="space-y-6">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                        <div className="text-xs text-slate-500 mb-1">Değişiklik Açıklaması</div>
+                        <div className="text-slate-800 whitespace-pre-wrap">{dispatchChangeModal.request?.reason || '-'}</div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <div className="text-xs text-slate-500">Sevk Tarihi</div>
+                            <div className="font-semibold text-slate-800">{dispatchChangeModal.dispatch?.dispatchDate || '-'}</div>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-lg p-4">
+                            <div className="text-xs text-slate-500">Araç / Şöför</div>
+                            <div className="font-semibold text-slate-800">
+                                {(dispatchChangeModal.dispatch?.vehiclePlate || '-')}{dispatchChangeModal.dispatch?.driverNames ? ` • ${dispatchChangeModal.dispatch.driverNames}` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 font-semibold text-slate-800">Kalemler</div>
+                        <div className="divide-y divide-slate-200">
+                            {(dispatchChangeModal.dispatch?.lines || []).map((l, idx) => (
+                                <div key={idx} className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                                    <div>
+                                        <div className="text-xs text-slate-500">Sipariş</div>
+                                        <div className="font-mono text-xs text-slate-800">{(l.orderId || '').slice(0, 8) || '-'}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Firma</div>
+                                        <div className="font-medium text-slate-800">{l.customerName || '-'}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Ürün</div>
+                                        <div className="font-medium text-slate-800">{l.productCode ? `${l.productCode} - ${l.productName}` : (l.productName || '-')}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Baskı</div>
+                                        <div className="font-medium text-slate-800">{l.printType || '-'} • {l.plateQuantity} levha • {l.printQuantity} adet • Toplam {l.total}</div>
+                                        {l.plateSize && <div className="text-xs text-slate-500 mt-0.5">Levha Ölçüsü: {l.plateSize}</div>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setDispatchChangeModal({ isOpen: false, request: null, dispatch: null })}
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            Kapat
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleDecideDispatchChangeRequest('rejected')}
+                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                        >
+                            Reddet
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleDecideDispatchChangeRequest('approved')}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium"
+                        >
+                            Onayla
+                        </button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

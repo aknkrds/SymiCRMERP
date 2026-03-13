@@ -273,3 +273,41 @@ export interface Shift {
 }
 
 export type ShiftFormData = Omit<Shift, 'id' | 'createdAt' | 'producedQuantity' | 'scrapQuantity' | 'status'>;
+
+export type ProcurementDispatchPrintType = 'Gövde' | 'Kapak' | 'Dip' | 'Diğer';
+
+export interface ProcurementDispatchLine {
+    orderId: string;
+    customerName: string;
+    productId: string;
+    productCode: string;
+    productName: string;
+    plateQuantity: number;
+    printType: ProcurementDispatchPrintType;
+    printQuantity: number;
+    total: number;
+    plateSize: string;
+}
+
+export interface ProcurementDispatch {
+    id: string;
+    dispatchDate: string;
+    vehiclePlate?: string;
+    driverNames?: string;
+    notes?: string;
+    lines: ProcurementDispatchLine[];
+    productionReceipt?: ProcurementDispatchLine[];
+    productionApprovedAt?: string;
+    createdAt: string;
+}
+
+export type ProcurementDispatchChangeRequestStatus = 'pending' | 'approved' | 'rejected' | 'used';
+
+export interface ProcurementDispatchChangeRequest {
+    id: string;
+    dispatchId: string;
+    reason: string;
+    status: ProcurementDispatchChangeRequestStatus;
+    decidedAt?: string;
+    createdAt: string;
+}

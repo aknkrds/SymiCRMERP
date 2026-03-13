@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
     Plus, Clock, X, 
     Users, Play, Square, Timer,
-    Factory, Truck, Eye, CheckCircle
+    Factory, Truck, Eye, FileText
 } from 'lucide-react';
 import { format, differenceInMinutes } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -11,7 +11,7 @@ import { useStock } from '../hooks/useStock';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import { useProducts } from '../hooks/useProducts';
 import { ProductDetail } from '../components/products/ProductDetail';
-import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData, Product } from '../types';
+import type { Order, Personnel, Machine, Shift, PersonnelFormData, MachineFormData, ShiftFormData, Product, ProcurementDispatch, ProcurementDispatchLine } from '../types';
 
 const API_URL = '/api';
 
@@ -40,7 +40,6 @@ const ShiftCard = ({ shift, orders, machines, personnel, onSelect }: ShiftCardPr
 
     // Calculate time remaining or duration
     const start = new Date(shift.startTime);
-    const end = shift.endTime ? new Date(shift.endTime) : new Date(); // Handle null endTime
     const now = new Date();
     
     // Safety check for invalid dates
@@ -226,6 +225,12 @@ export default function Production() {
     // Stock Management
     const { stockItems, addStockItem, updateStockQuantity } = useStock();
 
+    const [dispatches, setDispatches] = useState<ProcurementDispatch[]>([]);
+    const [dispatchesLoading, setDispatchesLoading] = useState(false);
+    const [isDispatchReceiptModalOpen, setIsDispatchReceiptModalOpen] = useState(false);
+    const [selectedDispatch, setSelectedDispatch] = useState<ProcurementDispatch | null>(null);
+    const [receiptEdits, setReceiptEdits] = useState<Record<number, { plateQuantity?: number; printQuantity?: number }>>({});
+
     // Fetch Data
     useEffect(() => {
         fetchData();
@@ -235,11 +240,13 @@ export default function Production() {
 
     const fetchData = async () => {
         try {
-            const [ordersRes, personnelRes, machinesRes, shiftsRes] = await Promise.all([
+            setDispatchesLoading(true);
+            const [ordersRes, personnelRes, machinesRes, shiftsRes, dispatchesRes] = await Promise.all([
                 fetch(`${API_URL}/orders`),
                 fetch(`${API_URL}/personnel`),
                 fetch(`${API_URL}/machines`),
-                fetch(`${API_URL}/shifts`)
+                fetch(`${API_URL}/shifts`),
+                fetch(`/api/procurement-dispatches`)
             ]);
 
             if (ordersRes.ok) {
@@ -258,8 +265,14 @@ export default function Production() {
                 const data = await shiftsRes.json();
                 setShifts(Array.isArray(data) ? data : []);
             }
+            if (dispatchesRes.ok) {
+                const data = await dispatchesRes.json();
+                setDispatches(Array.isArray(data) ? data : []);
+            }
         } catch (error) {
             console.error('Error fetching data:', error);
+        } finally {
+            setDispatchesLoading(false);
         }
     };
 
@@ -277,42 +290,155 @@ export default function Production() {
         setSelectedProduct(product);
         setIsProductModalOpen(true);
     };
-    const handleApproveIncomingOrder = (order: Order) => {
-        setIncomingOrder(order);
-        // Initialize with existing procurement details or empty structure for each product
-        const initialDetails: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {};
-        
-        if (order.procurementDetails) {
-            // If we have procurement details (new format), use them
-            // Check if it's the new format (Record) or old format (flat object - legacy support if needed)
-            if (order.procurementDetails.body !== undefined && typeof order.procurementDetails.body === 'number') {
-                 // Legacy format (flat) - map to first product or handle gracefully?
-                 // For now, let's assume new format or migrate old data on the fly if needed.
-                 // Actually, let's just use the new format. The old format won't work well here.
-                 // We can try to map it to the first product if it exists.
-                 if (order.items && order.items.length > 0 && order.items[0].productId) {
-                     initialDetails[order.items[0].productId] = {
-                         plate: (order.procurementDetails as any).plate || 0,
-                         body: (order.procurementDetails as any).body || 0,
-                         lid: (order.procurementDetails as any).lid || 0,
-                         bottom: (order.procurementDetails as any).bottom || 0
-                     };
-                 }
-            } else {
-                // New format (Record<string, ...>)
-                Object.assign(initialDetails, order.procurementDetails);
-            }
-        } else {
-            // Initialize empty for all products
-            order.items.forEach(item => {
-                if (item.productId) {
-                    initialDetails[item.productId] = { plate: 0, body: 0, lid: 0, bottom: 0 };
-                }
-            });
+    const pendingDispatches = dispatches.filter(d => !d.productionApprovedAt);
+
+    const handleOpenDispatchReceipt = (dispatch: ProcurementDispatch) => {
+        setSelectedDispatch(dispatch);
+        setReceiptEdits({});
+        setIsDispatchReceiptModalOpen(true);
+    };
+
+    const handleChangeReceipt = (index: number, patch: { plateQuantity?: number; printQuantity?: number }) => {
+        setReceiptEdits(prev => ({ ...prev, [index]: { ...prev[index], ...patch } }));
+    };
+
+    const ensureStockAdd = async (stockNumber: string, delta: number, base: { company: string; product: string; productId?: string; notes?: string }) => {
+        if (!delta || delta <= 0) return;
+        const existing = stockItems.find(s => s.stockNumber === stockNumber);
+        if (existing) {
+            await updateStockQuantity(existing.id, { deduct: -delta });
+            return;
         }
-        
-        setStockEntryDetails(initialDetails);
-        setIsStockEntryModalOpen(true);
+        await addStockItem({
+            stockNumber,
+            company: base.company,
+            product: base.product,
+            quantity: delta,
+            unit: 'Adet',
+            category: 'Yarı Mamul',
+            productId: base.productId,
+            notes: base.notes
+        } as any);
+    };
+
+    const handleApproveDispatchReceipt = async () => {
+        if (!selectedDispatch) return;
+        try {
+            const finalReceipt: ProcurementDispatchLine[] = (selectedDispatch.lines || []).map((l, idx) => {
+                const edit = receiptEdits[idx] || {};
+                const plateQuantity = (edit.plateQuantity !== undefined && edit.plateQuantity !== null && edit.plateQuantity >= 0)
+                    ? edit.plateQuantity
+                    : (Number(l.plateQuantity) || 0);
+                const printQuantity = (edit.printQuantity !== undefined && edit.printQuantity !== null && edit.printQuantity >= 0)
+                    ? edit.printQuantity
+                    : (Number(l.printQuantity) || 0);
+                const total = (Number(plateQuantity) || 0) * (Number(printQuantity) || 0);
+                return { ...l, plateQuantity, printQuantity, total };
+            });
+
+            const byOrder: Record<string, Record<string, { plate: number; body: number; lid: number; bottom: number; other: number }>> = {};
+            finalReceipt.forEach((l) => {
+                const orderId = l.orderId;
+                const productId = l.productId;
+                if (!orderId || !productId) return;
+                const plate = Number(l.plateQuantity) || 0;
+                const total = Number(l.total) || 0;
+                const printType = l.printType;
+
+                if (!byOrder[orderId]) byOrder[orderId] = {};
+                if (!byOrder[orderId][productId]) byOrder[orderId][productId] = { plate: 0, body: 0, lid: 0, bottom: 0, other: 0 };
+
+                byOrder[orderId][productId].plate += plate;
+                if (printType === 'Gövde') byOrder[orderId][productId].body += total;
+                else if (printType === 'Kapak') byOrder[orderId][productId].lid += total;
+                else if (printType === 'Dip') byOrder[orderId][productId].bottom += total;
+                else byOrder[orderId][productId].other += total;
+            });
+
+            for (const [orderId, productsMap] of Object.entries(byOrder)) {
+                const order = orders.find(o => o.id === orderId);
+                if (!order) continue;
+
+                const nextPad: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {
+                    ...(order.productionApprovedDetails || {})
+                };
+                const nextDiffs: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {
+                    ...(order.productionDiffs || {})
+                };
+
+                for (const [productId, add] of Object.entries(productsMap)) {
+                    const prev = nextPad[productId] || { plate: 0, body: 0, lid: 0, bottom: 0 };
+                    nextPad[productId] = {
+                        plate: (prev.plate || 0) + (add.plate || 0),
+                        body: (prev.body || 0) + (add.body || 0),
+                        lid: (prev.lid || 0) + (add.lid || 0),
+                        bottom: (prev.bottom || 0) + (add.bottom || 0),
+                    };
+                    nextDiffs[productId] = {
+                        plate: add.plate || 0,
+                        body: add.body || 0,
+                        lid: add.lid || 0,
+                        bottom: add.bottom || 0,
+                    };
+
+                    const item = order.items.find(i => i.productId === productId);
+                    const baseName = item?.productName || 'Ürün';
+                    const notes = `Fiş: ${selectedDispatch.id} - Tedarikten Gelen`;
+                    await ensureStockAdd(`${orderId}-${productId}-Gövde`, add.body || 0, {
+                        company: order.customerName,
+                        product: `${baseName} - Gövde`,
+                        productId,
+                        notes
+                    });
+                    await ensureStockAdd(`${orderId}-${productId}-Kapak`, add.lid || 0, {
+                        company: order.customerName,
+                        product: `${baseName} - Kapak`,
+                        productId,
+                        notes
+                    });
+                    await ensureStockAdd(`${orderId}-${productId}-Dip`, add.bottom || 0, {
+                        company: order.customerName,
+                        product: `${baseName} - Dip`,
+                        productId,
+                        notes
+                    });
+                    if (add.other && add.other > 0) {
+                        await ensureStockAdd(`${orderId}-${productId}-Diğer`, add.other, {
+                            company: order.customerName,
+                            product: `${baseName} - Diğer`,
+                            productId,
+                            notes
+                        });
+                    }
+                }
+
+                await fetch(`${API_URL}/orders/${orderId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        status: 'production_planned',
+                        productionStatus: 'production_planned',
+                        productionApprovedDetails: nextPad,
+                        productionDiffs: nextDiffs
+                    })
+                });
+            }
+
+            await fetch(`/api/procurement-dispatches/${selectedDispatch.id}/production-receipt`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productionReceipt: finalReceipt })
+            });
+
+            setIsDispatchReceiptModalOpen(false);
+            setSelectedDispatch(null);
+            setReceiptEdits({});
+            fetchData();
+            alert('Üretim teslim alındı ve stok girişleri işlendi.');
+        } catch (error) {
+            console.error('Dispatch approve error:', error);
+            alert('İşlem sırasında bir hata oluştu.');
+        }
     };
 
     const handleSaveStockEntry = async () => {
@@ -334,11 +460,13 @@ export default function Production() {
                     bottom: (details.bottom || 0) - (original.bottom || 0),
                 };
                 
+                // Only add the delta (difference) to stock to prevent duplicate entries
+                const diff = productionDiffs[productId];
                 const items = [
-                    { type: 'Levha', quantity: details.plate },
-                    { type: 'Gövde', quantity: details.body },
-                    { type: 'Kapak', quantity: details.lid },
-                    { type: 'Dip', quantity: details.bottom }
+                    { type: 'Levha', quantity: diff.plate },
+                    { type: 'Gövde', quantity: diff.body },
+                    { type: 'Kapak', quantity: diff.lid },
+                    { type: 'Dip', quantity: diff.bottom }
                 ];
 
                 for (const item of items) {
@@ -690,7 +818,6 @@ export default function Production() {
                                     <h3 className="font-medium text-slate-800">{order.customerName}</h3>
                                     <div className="flex gap-2 mt-2">
                                         <button type="button" onClick={() => handleViewIncomingOrder(order)} className="flex-1 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium">Gözat</button>
-                                        <button type="button" onClick={() => handleApproveIncomingOrder(order)} className="flex-1 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium">Onayla & Stok Girişi</button>
                                     </div>
                                 </div>
                             ))}
@@ -749,14 +876,6 @@ export default function Production() {
                                             >
                                                 <Eye size={18} />
                                             </button>
-                                            <button 
-                                                type="button"
-                                                onClick={() => handleApproveIncomingOrder(order)}
-                                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-xs"
-                                            >
-                                                <CheckCircle size={14} />
-                                                Onayla
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -771,6 +890,71 @@ export default function Production() {
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Tedarikten Gelen Fişler (Üretim Onayı) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+                <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <h2 className="font-semibold text-slate-800 flex items-center gap-2">
+                        <FileText size={20} />
+                        Tedarikten Gelen Fişler (Üretim Onayı)
+                    </h2>
+                    <span className="bg-slate-100 text-slate-700 text-xs font-bold px-2 py-1 rounded-full">
+                        {pendingDispatches.length}
+                    </span>
+                </div>
+
+                {dispatchesLoading ? (
+                    <div className="p-8 text-center text-slate-500">Yükleniyor...</div>
+                ) : pendingDispatches.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">
+                        Üretim onayı bekleyen fiş bulunmuyor.
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Fiş No</th>
+                                    <th className="px-6 py-4">Sevk Tarihi</th>
+                                    <th className="px-6 py-4">Araç / Şöför</th>
+                                    <th className="px-6 py-4">Toplam Levha</th>
+                                    <th className="px-6 py-4">Toplam İş</th>
+                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {pendingDispatches.map((d) => {
+                                    const totalPlate = (d.lines || []).reduce((acc, l) => acc + (Number(l.plateQuantity) || 0), 0);
+                                    const totalPrintQty = (d.lines || []).reduce((acc, l) => acc + (Number(l.printQuantity) || 0), 0);
+                                    const totalJob = totalPlate * totalPrintQty;
+                                    return (
+                                        <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-mono text-xs">{d.id}</td>
+                                            <td className="px-6 py-4">{d.dispatchDate || '-'}</td>
+                                            <td className="px-6 py-4">
+                                                {(d.vehiclePlate || '-')}{d.driverNames ? ` • ${d.driverNames}` : ''}
+                                            </td>
+                                            <td className="px-6 py-4 font-semibold text-slate-800">{totalPlate}</td>
+                                            <td className="px-6 py-4 font-semibold text-slate-800">{totalJob}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenDispatchReceipt(d)}
+                                                    className="px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-xs font-semibold"
+                                                    aria-label="Teslim Al ve Onayla"
+                                                    title="Teslim Al ve Onayla"
+                                                >
+                                                    Teslim Al
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {/* Production Stocks Section (New) */}
@@ -796,6 +980,7 @@ export default function Production() {
                                 <th className="px-6 py-4">Gövde</th>
                                 <th className="px-6 py-4">Kapak</th>
                                 <th className="px-6 py-4">Dip</th>
+                                <th className="px-6 py-4">Üretim Adedi</th>
                                 <th className="px-6 py-4 text-right">İşlemler</th>
                             </tr>
                         </thead>
@@ -827,6 +1012,15 @@ export default function Production() {
                                     <td className="px-6 py-4">{entry.approvedDetails?.body || '-'}</td>
                                     <td className="px-6 py-4">{entry.approvedDetails?.lid || '-'}</td>
                                     <td className="px-6 py-4">{entry.approvedDetails?.bottom || '-'}</td>
+                                    <td className="px-6 py-4 font-semibold text-slate-800">
+                                        {(() => {
+                                            const b = entry.approvedDetails?.body || 0;
+                                            const l = entry.approvedDetails?.lid || 0;
+                                            const d = entry.approvedDetails?.bottom || 0;
+                                            const minVal = Math.min(b, l, d);
+                                            return isFinite(minVal) ? minVal : 0;
+                                        })()}
+                                    </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2">
                                             <button 
@@ -1512,6 +1706,7 @@ export default function Production() {
                 isOpen={isProductModalOpen}
                 onClose={() => setIsProductModalOpen(false)}
                 title="Ürün Detayları"
+                maxWidthClassName="max-w-6xl"
             >
                 {selectedProduct && (
                     <ProductDetail
@@ -2189,6 +2384,118 @@ export default function Production() {
                 </div>
             </Modal>
 
+            <Modal
+                isOpen={isDispatchReceiptModalOpen}
+                onClose={() => setIsDispatchReceiptModalOpen(false)}
+                title={`Tedarik Fişi Teslim Alma - ${selectedDispatch?.id || ''}`}
+            >
+                {selectedDispatch && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <div className="text-xs text-slate-500">Sevk Tarihi</div>
+                                <div className="font-semibold text-slate-800">{selectedDispatch.dispatchDate || '-'}</div>
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <div className="text-xs text-slate-500">Araç / Şöför</div>
+                                <div className="font-semibold text-slate-800">
+                                    {(selectedDispatch.vehiclePlate || '-')}{selectedDispatch.driverNames ? ` • ${selectedDispatch.driverNames}` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+                            {(selectedDispatch.lines || []).map((l, idx) => {
+                                const edit = receiptEdits[idx] || {};
+                                const effectivePlate = (edit.plateQuantity !== undefined && edit.plateQuantity !== null)
+                                    ? edit.plateQuantity
+                                    : (Number(l.plateQuantity) || 0);
+                                const effectivePrint = (edit.printQuantity !== undefined && edit.printQuantity !== null)
+                                    ? edit.printQuantity
+                                    : (Number(l.printQuantity) || 0);
+                                const effectiveTotal = (Number(effectivePlate) || 0) * (Number(effectivePrint) || 0);
+                                return (
+                                    <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-white">
+                                        <div className="flex items-start justify-between gap-3 mb-3">
+                                            <div>
+                                                <div className="text-xs text-slate-500 font-mono">
+                                                    Sipariş #{(l.orderId || '').slice(0, 8)} • {l.customerName || '-'}
+                                                </div>
+                                                <div className="font-semibold text-slate-800">
+                                                    {l.productCode ? `${l.productCode} - ${l.productName}` : (l.productName || '-')}
+                                                </div>
+                                                <div className="text-xs text-slate-500">
+                                                    Baskı Türü: <span className="font-semibold text-slate-700">{l.printType || '-'}</span>
+                                                    {l.plateSize ? ` • Levha Ölçüsü: ${l.plateSize}` : ''}
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-slate-500 font-mono">
+                                                Toplam: <span className="font-semibold text-slate-800">{effectiveTotal}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                    Gelen Levha Adeti
+                                                </label>
+                                                <div className="text-xs text-slate-500 mb-1">
+                                                    Tedarik: <span className="font-semibold">{Number(l.plateQuantity) || 0}</span>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={edit.plateQuantity ?? ''}
+                                                    onChange={(e) => handleChangeReceipt(idx, { plateQuantity: e.target.value === '' ? undefined : (parseInt(e.target.value) || 0) })}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    placeholder="Boş bırakılırsa tedarik değeri kabul edilir"
+                                                    aria-label="Gelen Levha Adeti"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                                    Gelen Baskı Adeti
+                                                </label>
+                                                <div className="text-xs text-slate-500 mb-1">
+                                                    Tedarik: <span className="font-semibold">{Number(l.printQuantity) || 0}</span>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={edit.printQuantity ?? ''}
+                                                    onChange={(e) => handleChangeReceipt(idx, { printQuantity: e.target.value === '' ? undefined : (parseInt(e.target.value) || 0) })}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    placeholder="Boş bırakılırsa tedarik değeri kabul edilir"
+                                                    aria-label="Gelen Baskı Adeti"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex gap-3 pt-4 border-t border-slate-200">
+                            <button
+                                type="button"
+                                onClick={() => setIsDispatchReceiptModalOpen(false)}
+                                className="flex-1 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium"
+                            >
+                                İptal
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleApproveDispatchReceipt}
+                                className="flex-1 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium"
+                            >
+                                Onayla ve Stoğa İşle
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
             {/* Start Production Modal */}
             <Modal
                 isOpen={isStartProductionModalOpen}
@@ -2268,22 +2575,6 @@ export default function Production() {
                 </form>
             </Modal>
 
-            {/* Product Detail Modal */}
-            {isProductModalOpen && selectedProduct && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
-                        <button 
-                            onClick={() => setIsProductModalOpen(false)}
-                            aria-label="Kapat"
-                            title="Kapat"
-                            className="absolute right-4 top-4 p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 z-10"
-                        >
-                            <X size={20} className="text-slate-500" />
-                        </button>
-                        <ProductDetail product={selectedProduct} onClose={() => setIsProductModalOpen(false)} />
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

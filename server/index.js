@@ -503,6 +503,21 @@ app.post('/api/reset-data', (req, res) => {
 app.post('/api/seed-data', (req, res) => {
   try {
     const seedTransaction = db.transaction(() => {
+      const buildInsert = (tableName, row) => {
+        const tableInfo = db.prepare(`PRAGMA table_info(${tableName})`).all();
+        const columns = new Set(tableInfo.map(c => c.name));
+        const entries = Object.entries(row).filter(([k]) => columns.has(k));
+        const keys = entries.map(([k]) => k);
+        const values = entries.map(([, v]) => v);
+        const placeholders = keys.map(() => '?').join(', ');
+        const sql = `INSERT INTO ${tableName} (${keys.join(', ')}) VALUES (${placeholders})`;
+        return { sql, values };
+      };
+
+      const toMoney = (n) => parseFloat((Math.round((Number(n) + Number.EPSILON) * 100) / 100).toFixed(2));
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
       // 1. Generate Customers (10)
       const customers = [];
       const customerNames = [
@@ -511,126 +526,185 @@ app.post('/api/seed-data', (req, res) => {
         'Ay Metal', 'Deniz Kimya'
       ];
 
-      const insertCustomer = db.prepare(`
-        INSERT INTO customers (id, companyName, contactName, email, phone, mobile, address, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
       for (let i = 0; i < 10; i++) {
         const id = crypto.randomUUID();
         const company = customerNames[i];
         const contact = `Yetkili ${i+1}`;
         const email = `info@${company.toLowerCase().replace(/\s+/g, '')}.com`.replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c');
-        
-        insertCustomer.run(
+        const row = {
           id,
-          company,
-          contact,
+          companyName: company,
+          contactName: contact,
           email,
-          `0212 555 00 0${i}`,
-          `0532 555 00 0${i}`,
-          `İstanbul Organize Sanayi Bölgesi, No: ${i+1}`,
-          new Date().toISOString()
-        );
-        customers.push({ id, company });
+          phone: `0212 555 00 0${i}`,
+          mobile: `0532 555 00 0${i}`,
+          address: `İstanbul Organize Sanayi Bölgesi, No: ${i+1}`,
+          createdAt: new Date().toISOString()
+        };
+        const { sql, values } = buildInsert('customers', row);
+        db.prepare(sql).run(...values);
+        customers.push({ id, companyName: company });
       }
 
-      // 2. Generate Products (5)
+      // 2. Generate Products (12)
       const products = [];
-      const productTypes = [
-        { code: 'PRD-001', desc: 'Standart Kutu 20x20x10', dim: { length: 20, width: 20, height: 10 } },
-        { code: 'PRD-002', desc: 'Büyük Koli 50x40x30', dim: { length: 50, width: 40, height: 30 } },
-        { code: 'PRD-003', desc: 'Pizza Kutusu 30x30x4', dim: { length: 30, width: 30, height: 4 } },
-        { code: 'PRD-004', desc: 'Hediye Kutusu 15x15x15', dim: { length: 15, width: 15, height: 15 } },
-        { code: 'PRD-005', desc: 'Dosya Klasörü', dim: { length: 25, width: 5, height: 35 } },
+      const productSeeds = [
+        { code: 'GMP01', name: 'Pasta Kutusu', productType: 'percinli', boxShape: 'Kare', dim: { length: 200, width: 200, depth: 100 } },
+        { code: 'GMP02', name: 'Pizza Kutusu', productType: 'percinli', boxShape: 'Kare', dim: { length: 300, width: 300, depth: 40 } },
+        { code: 'GMP03', name: 'Kutu (Büyük)', productType: 'sivama', boxShape: 'Dikdörtgen', dim: { length: 500, width: 400, depth: 300 } },
+        { code: 'GMP04', name: 'Hediye Kutusu', productType: 'sivama', boxShape: 'Kare', dim: { length: 150, width: 150, depth: 150 } },
+        { code: 'GMP05', name: 'Klasör Kutusu', productType: 'percinli', boxShape: 'Dikdörtgen', dim: { length: 250, width: 50, depth: 350 } },
+        { code: 'GMP06', name: 'Kozmetik Kutusu', productType: 'sivama', boxShape: 'Kare', dim: { length: 120, width: 120, depth: 80 } },
+        { code: 'GMP07', name: 'Bardak Taşıma', productType: 'percinli', boxShape: 'Kare', dim: { length: 180, width: 180, depth: 120 } },
+        { code: 'GMP08', name: 'Kutu (Orta)', productType: 'percinli', boxShape: 'Dikdörtgen', dim: { length: 220, width: 160, depth: 90 } },
+        { code: 'GMP09', name: 'Kurabiye Kutusu', productType: 'sivama', boxShape: 'Kare', dim: { length: 200, width: 200, depth: 60 } },
+        { code: 'GMP10', name: 'Takı Kutusu', productType: 'sivama', boxShape: 'Kare', dim: { length: 90, width: 90, depth: 40 } },
+        { code: 'GMP11', name: 'Tablet Kutusu', productType: 'percinli', boxShape: 'Dikdörtgen', dim: { length: 260, width: 180, depth: 40 } },
+        { code: 'GMP12', name: 'Kupa Kutusu', productType: 'percinli', boxShape: 'Kare', dim: { length: 130, width: 130, depth: 150 } },
       ];
 
-      const insertProduct = db.prepare(`
-        INSERT INTO products (id, code, description, dimensions, features, details, windowDetails, lidDetails, images, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (const p of productTypes) {
+      for (const p of productSeeds) {
         const id = crypto.randomUUID();
-        insertProduct.run(
+        const inks = {
+          cmyk: Math.random() > 0.3,
+          white: Math.random() > 0.7,
+          pantones: Math.random() > 0.6 ? ['PANTONE 186 C'] : [],
+          goldLak: { has: Math.random() > 0.8, code: 'GLD' },
+          emaye: { has: false },
+          astar: { has: false },
+          silverLak: { has: false },
+          mold: Math.random() > 0.5
+        };
+
+        const features = {
+          hasLid: Math.random() > 0.4,
+          hasWindow: Math.random() > 0.85,
+          extras: '',
+          gofre: Math.random() > 0.6,
+          gofreDetails: { count: randInt(1, 3), notes: 'Test gofre' }
+        };
+
+        const row = {
           id,
-          p.code,
-          p.desc,
-          JSON.stringify(p.dim),
-          JSON.stringify({ material: 'Kraft', flute: 'E' }),
-          'Test ürünü detay açıklaması.',
-          JSON.stringify({ type: 'None' }),
-          JSON.stringify({ type: 'Standard' }),
-          JSON.stringify([]),
-          new Date().toISOString()
-        );
-        products.push({ id, ...p });
+          code: p.code,
+          name: p.name,
+          productType: p.productType,
+          boxShape: p.boxShape,
+          dimensions: JSON.stringify(p.dim),
+          inks: JSON.stringify(inks),
+          features: JSON.stringify(features),
+          details: 'Test ürünü',
+          windowDetails: JSON.stringify({ width: 30, height: 30, count: 1 }),
+          lidDetails: JSON.stringify({
+            material: 'Karton',
+            paint: 'Mat',
+            notes: 'Test kapak',
+            hasGofre: false,
+            hasWindow: false
+          }),
+          images: JSON.stringify({ customer: [] }),
+          createdAt: new Date().toISOString()
+        };
+
+        const { sql, values } = buildInsert('products', row);
+        db.prepare(sql).run(...values);
+        products.push({ id, code: p.code, name: p.name });
       }
 
-      // 3. Generate Orders (15)
+      // 3. Generate Orders (25)
       const statuses = [
-        'created', 'offer_sent', 'offer_accepted', 
-        'design_waiting', 'design_approved', 
-        'supply_waiting', 'supply_completed',
-        'production_planned', 'production_started', 'production_completed',
-        'invoice_waiting', 'invoice_added',
-        'shipping_waiting', 'shipping_completed',
+        'created',
+        'offer_sent',
+        'waiting_manager_approval',
+        'manager_approved',
+        'offer_accepted',
+        'supply_design_process',
+        'design_pending',
+        'design_approved',
+        'supply_completed',
+        'production_pending',
+        'production_planned',
+        'production_started',
+        'production_completed',
+        'invoice_added',
+        'shipping_completed',
         'order_completed'
       ];
 
-      const insertOrder = db.prepare(`
-        INSERT INTO orders (id, customerId, customerName, items, currency, subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt, procurementStatus, productionStatus)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 25; i++) {
         const id = crypto.randomUUID();
-        const customer = customers[Math.floor(Math.random() * customers.length)];
-        const product = products[Math.floor(Math.random() * products.length)];
-        const quantity = Math.floor(Math.random() * 5000) + 100;
-        const price = (Math.random() * 10) + 1;
-        const total = quantity * price;
-        
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        
-        // Determine sub-statuses based on main status
-        let procurement = 'Beklemede';
-        let production = 'Beklemede';
-        
-        if (['production_started', 'production_completed', 'shipping_completed', 'order_completed'].includes(status)) {
-          procurement = 'Tamamlandı';
-          production = status === 'production_started' ? 'Devam Ediyor' : 'Tamamlandı';
-        } else if (status === 'production_planned') {
-          procurement = 'Devam Ediyor';
-        }
+        const customer = pick(customers);
+        const lineCount = randInt(1, 3);
+        const chosenProducts = Array.from({ length: lineCount }, () => pick(products));
+        const currency = 'TRY';
+        const vatRates = [10, 20];
 
-        const deadline = new Date();
-        deadline.setDate(deadline.getDate() + Math.floor(Math.random() * 30));
+        const items = chosenProducts.map((p, idx) => {
+          const quantity = randInt(200, 5000);
+          const unitPrice = toMoney(Math.random() * 20 + 2);
+          const vatRate = pick(vatRates);
+          const total = toMoney(quantity * unitPrice * (1 + vatRate / 100));
+          return {
+            id: crypto.randomUUID(),
+            productId: p.id,
+            productName: `${p.code} - ${p.name}`,
+            quantity,
+            unitPrice,
+            vatRate,
+            total
+          };
+        });
 
-        insertOrder.run(
+        const subtotal = toMoney(items.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0));
+        const vatTotal = toMoney(items.reduce((acc, it) => acc + (it.quantity * it.unitPrice * (it.vatRate / 100)), 0));
+        const grandTotal = toMoney(subtotal + vatTotal);
+
+        const status = pick(statuses);
+        const createdAt = new Date(Date.now() - randInt(0, 45) * 24 * 60 * 60 * 1000).toISOString();
+        const deadline = new Date(Date.now() + randInt(3, 40) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        const paymentMethod = pick(['havale_eft', 'cek', 'cari_hesap']);
+        const maturityDays = pick([0, 15, 30, 45, 60]);
+        const prepaymentAmount = Math.random() > 0.5 ? toMoney(grandTotal * 0.3) : null;
+        const prepaymentRate = prepaymentAmount ? toMoney((Number(prepaymentAmount) / grandTotal) * 100) : null;
+
+        const gofrePrice = Math.random() > 0.6 ? toMoney(2500 + Math.random() * 2500) : null;
+        const gofreVatRate = gofrePrice ? 20 : null;
+        const shippingPrice = Math.random() > 0.7 ? toMoney(750 + Math.random() * 750) : null;
+        const shippingVatRate = shippingPrice ? 20 : null;
+
+        const jobSize = pick(['70x100', '64x90', '50x70']);
+        const boxSize = pick(['Küçük', 'Orta', 'Büyük']);
+        const efficiency = pick(['%75', '%80', '%85', '%90']);
+
+        const row = {
           id,
-          customer.id,
-          customer.company,
-          JSON.stringify([{
-            productId: product.id,
-            productCode: product.code,
-            productName: product.desc,
-            quantity: quantity,
-            unitPrice: parseFloat(price.toFixed(2)),
-            totalPrice: parseFloat(total.toFixed(2)),
-            currency: 'TRY'
-          }]),
-          'TRY',
-          parseFloat(total.toFixed(2)),
-          parseFloat((total * 0.20).toFixed(2)),
-          parseFloat((total * 1.20).toFixed(2)),
+          customerId: customer.id,
+          customerName: customer.companyName,
+          items: JSON.stringify(items),
+          currency,
+          subtotal,
+          vatTotal,
+          grandTotal,
           status,
-          JSON.stringify([]),
-          deadline.toISOString().split('T')[0],
-          new Date().toISOString(),
-          procurement,
-          production
-        );
+          designImages: JSON.stringify([]),
+          deadline,
+          paymentMethod,
+          maturityDays,
+          jobSize,
+          boxSize,
+          efficiency,
+          prepaymentAmount,
+          prepaymentRate,
+          gofrePrice,
+          gofreVatRate,
+          shippingPrice,
+          shippingVatRate,
+          createdAt
+        };
+
+        const { sql, values } = buildInsert('orders', row);
+        db.prepare(sql).run(...values);
       }
     });
 
@@ -912,6 +986,215 @@ app.patch('/api/stock-items/:id', (req, res) => {
     }
     
     res.json(updatedItem);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- PROCUREMENT DISPATCHES ---
+
+const reserveProcurementDispatchId = db.transaction(() => {
+  const row = db.prepare('SELECT value FROM counters WHERE name = ?').get('procurement_dispatch');
+  const current = row && typeof row.value === 'number' ? row.value : 0;
+  const next = current + 1;
+  db.prepare(`
+    INSERT INTO counters (name, value)
+    VALUES (?, ?)
+    ON CONFLICT(name) DO UPDATE SET value = excluded.value
+  `).run('procurement_dispatch', next);
+  return `Tedarik${String(next).padStart(2, '0')}`;
+});
+
+const parseProcurementDispatch = (row) => {
+  if (!row) return null;
+  let lines = [];
+  try {
+    lines = row.lines ? JSON.parse(row.lines) : [];
+  } catch (e) {
+    lines = [];
+  }
+  let productionReceipt = null;
+  try {
+    productionReceipt = row.productionReceipt ? JSON.parse(row.productionReceipt) : null;
+  } catch (e) {
+    productionReceipt = null;
+  }
+  return { ...row, lines, productionReceipt };
+};
+
+app.post('/api/procurement-dispatches/reserve-id', (req, res) => {
+  try {
+    const id = reserveProcurementDispatchId();
+    res.json({ id });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/procurement-dispatches', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM procurement_dispatches ORDER BY createdAt DESC').all();
+    res.json(rows.map(parseProcurementDispatch));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/procurement-dispatches', (req, res) => {
+  try {
+    const { id, dispatchDate, vehiclePlate, driverNames, notes, lines, createdAt } = req.body || {};
+    if (!dispatchDate || !Array.isArray(lines) || !createdAt) {
+      return res.status(400).json({ error: 'Eksik alanlar' });
+    }
+
+    const finalId = id || reserveProcurementDispatchId();
+    const existing = db.prepare('SELECT id FROM procurement_dispatches WHERE id = ?').get(finalId);
+    if (existing) {
+      return res.status(409).json({ error: 'Fiş numarası zaten kullanılmış' });
+    }
+
+    db.prepare(`
+      INSERT INTO procurement_dispatches (id, dispatchDate, vehiclePlate, driverNames, notes, lines, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      finalId,
+      dispatchDate,
+      vehiclePlate || null,
+      driverNames || null,
+      notes || null,
+      JSON.stringify(lines),
+      createdAt
+    );
+
+    const inserted = db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(finalId);
+    res.status(201).json(parseProcurementDispatch(inserted));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/procurement-dispatches/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dispatchDate, vehiclePlate, driverNames, notes, lines } = req.body || {};
+    if (!dispatchDate || !Array.isArray(lines)) {
+      return res.status(400).json({ error: 'Eksik alanlar' });
+    }
+
+    const approvedReq = db.prepare(`
+      SELECT id FROM procurement_dispatch_change_requests
+      WHERE dispatchId = ? AND status = 'approved'
+      ORDER BY createdAt DESC
+      LIMIT 1
+    `).get(id);
+
+    if (!approvedReq) {
+      return res.status(403).json({ error: 'Değişiklik için onay bulunamadı' });
+    }
+
+    const updateDispatch = db.prepare(`
+      UPDATE procurement_dispatches
+      SET dispatchDate = ?, vehiclePlate = ?, driverNames = ?, notes = ?, lines = ?
+      WHERE id = ?
+    `);
+    updateDispatch.run(
+      dispatchDate,
+      vehiclePlate || null,
+      driverNames || null,
+      notes || null,
+      JSON.stringify(lines),
+      id
+    );
+
+    db.prepare(`
+      UPDATE procurement_dispatch_change_requests
+      SET status = 'used'
+      WHERE id = ?
+    `).run(approvedReq.id);
+
+    const updated = db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(id);
+    if (!updated) return res.status(404).json({ error: 'Sevk kaydı bulunamadı' });
+    res.json(parseProcurementDispatch(updated));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/procurement-dispatches/:id/production-receipt', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productionReceipt } = req.body || {};
+    if (!Array.isArray(productionReceipt)) {
+      return res.status(400).json({ error: 'productionReceipt gerekli' });
+    }
+
+    const stmt = db.prepare(`
+      UPDATE procurement_dispatches
+      SET productionReceipt = ?, productionApprovedAt = ?
+      WHERE id = ?
+    `);
+    stmt.run(JSON.stringify(productionReceipt), new Date().toISOString(), id);
+
+    const updated = db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(id);
+    if (!updated) return res.status(404).json({ error: 'Sevk kaydı bulunamadı' });
+    res.json(parseProcurementDispatch(updated));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/procurement-dispatch-change-requests', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM procurement_dispatch_change_requests ORDER BY createdAt DESC').all();
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/procurement-dispatch-change-requests', (req, res) => {
+  try {
+    const { id, dispatchId, reason, createdAt } = req.body || {};
+    if (!id || !dispatchId || !reason || !createdAt) {
+      return res.status(400).json({ error: 'Eksik alanlar' });
+    }
+
+    db.prepare(`
+      INSERT INTO procurement_dispatch_change_requests (id, dispatchId, reason, status, decidedAt, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      dispatchId,
+      reason,
+      'pending',
+      null,
+      createdAt
+    );
+
+    const inserted = db.prepare('SELECT * FROM procurement_dispatch_change_requests WHERE id = ?').get(id);
+    res.status(201).json(inserted);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/procurement-dispatch-change-requests/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body || {};
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Geçersiz durum' });
+    }
+
+    db.prepare(`
+      UPDATE procurement_dispatch_change_requests
+      SET status = ?, decidedAt = ?
+      WHERE id = ?
+    `).run(status, new Date().toISOString(), id);
+
+    const updated = db.prepare('SELECT * FROM procurement_dispatch_change_requests WHERE id = ?').get(id);
+    if (!updated) return res.status(404).json({ error: 'Kayıt bulunamadı' });
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
 import { useStock } from '../hooks/useStock';
-import { Eye, Network, CheckCircle2, Plus, Trash2, Package } from 'lucide-react';
+import { Eye, Network, CheckCircle2, Plus, Trash2, Package, FileText, Pencil, AlertTriangle } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { ProductDetail } from '../components/products/ProductDetail';
-import type { Order, Product, StockItemFormData } from '../types';
+import type { Order, Product, ProcurementDispatch, ProcurementDispatchChangeRequest, ProcurementDispatchLine, ProcurementDispatchPrintType, StockItemFormData } from '../types';
 
 const STOCK_UNITS = [
     'Adet', 'Gram', 'Koli', 'Kg', 'Metre', 'Ton', 'Litre'
@@ -52,11 +52,81 @@ export default function Procurement() {
     // Raw Materials Modal State
     const [isRawMaterialsModalOpen, setIsRawMaterialsModalOpen] = useState(false);
     const [selectedOrderForMaterials, setSelectedOrderForMaterials] = useState<Order | null>(null);
-    
-    // Sheet Details Modal State
-    const [isSheetDetailsModalOpen, setIsSheetDetailsModalOpen] = useState(false);
-    const [sheetDetails, setSheetDetails] = useState<Record<string, { plate: number; body: number; lid: number; bottom: number }>>({});
-    const [orderToComplete, setOrderToComplete] = useState<Order | null>(null);
+
+    const [dispatches, setDispatches] = useState<ProcurementDispatch[]>([]);
+    const [dispatchesLoading, setDispatchesLoading] = useState(false);
+    const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+    const [dispatchMode, setDispatchMode] = useState<'create' | 'edit'>('create');
+    const [dispatchViewModal, setDispatchViewModal] = useState<{ isOpen: boolean; dispatch: ProcurementDispatch | null }>({
+        isOpen: false,
+        dispatch: null
+    });
+    const [dispatchChangeRequests, setDispatchChangeRequests] = useState<ProcurementDispatchChangeRequest[]>([]);
+    const [changeRequestModal, setChangeRequestModal] = useState<{ isOpen: boolean; dispatch: ProcurementDispatch | null; reason: string }>({
+        isOpen: false,
+        dispatch: null,
+        reason: ''
+    });
+
+    const createEmptyDispatchLine = (): ProcurementDispatchLine => ({
+        orderId: '',
+        customerName: '',
+        productId: '',
+        productCode: '',
+        productName: '',
+        plateQuantity: 0,
+        printType: 'Gövde',
+        printQuantity: 0,
+        total: 0,
+        plateSize: ''
+    });
+    const [dispatchForm, setDispatchForm] = useState<{
+        id: string;
+        dispatchDate: string;
+        vehiclePlate: string;
+        driverNames: string;
+        notes: string;
+        lines: ProcurementDispatchLine[];
+    }>({
+        id: crypto.randomUUID(),
+        dispatchDate: new Date().toISOString().slice(0, 10),
+        vehiclePlate: '',
+        driverNames: '',
+        notes: '',
+        lines: Array.from({ length: 10 }, () => createEmptyDispatchLine())
+    });
+
+    const fetchDispatches = async () => {
+        try {
+            setDispatchesLoading(true);
+            const res = await fetch('/api/procurement-dispatches');
+            if (!res.ok) throw new Error('Sevk listesi alınamadı');
+            const data = await res.json();
+            setDispatches(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setDispatches([]);
+        } finally {
+            setDispatchesLoading(false);
+        }
+    };
+
+    const fetchDispatchChangeRequests = async () => {
+        try {
+            const res = await fetch('/api/procurement-dispatch-change-requests');
+            if (!res.ok) throw new Error('Sevk değişiklik istekleri alınamadı');
+            const data = await res.json();
+            setDispatchChangeRequests(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setDispatchChangeRequests([]);
+        }
+    };
+
+    useEffect(() => {
+        fetchDispatches();
+        fetchDispatchChangeRequests();
+    }, []);
+
+    const dispatchOrderOptions = useMemo(() => procurementOrders, [procurementOrders]);
 
     const [quantityModal, setQuantityModal] = useState<{
         isOpen: boolean;
@@ -175,18 +245,10 @@ export default function Procurement() {
         const order = orders.find(o => o.id === orderId);
         
         if (status === 'completed') {
-            setOrderToComplete(order || null);
-            // Initialize sheetDetails for all products in the order
-            if (order) {
-                const initialDetails: Record<string, { plate: number; body: number; lid: number; bottom: number }> = {};
-                order.items.forEach(item => {
-                    if (item.productId) {
-                        initialDetails[item.productId] = { plate: 0, body: 0, lid: 0, bottom: 0 };
-                    }
-                });
-                setSheetDetails(initialDetails);
+            if (!confirm('Sipariş üretime gönderilsin mi?')) {
+                return;
             }
-            setIsSheetDetailsModalOpen(true);
+            await updateOrder(orderId, { procurementStatus: 'completed', status: 'production_pending' } as any);
             return;
         }
 
@@ -203,36 +265,175 @@ export default function Procurement() {
         }
     };
 
-    const handleSaveSheetDetails = async () => {
-        if (!orderToComplete) return;
+    const handleOpenDispatchModal = () => {
+        const open = async () => {
+            try {
+                const res = await fetch('/api/procurement-dispatches/reserve-id', { method: 'POST' });
+                if (!res.ok) throw new Error('failed');
+                const data = await res.json();
+                const reservedId = data?.id;
+                if (!reservedId) throw new Error('missing id');
 
-        // Validation: Ensure all fields are filled for all products
-        const isValid = Object.values(sheetDetails).every(details => 
-            details.plate >= 0 && details.body >= 0 && details.lid >= 0 && details.bottom >= 0
-        );
+                setDispatchMode('create');
+                setDispatchForm({
+                    id: reservedId,
+                    dispatchDate: new Date().toISOString().slice(0, 10),
+                    vehiclePlate: '',
+                    driverNames: '',
+                    notes: '',
+                    lines: Array.from({ length: 10 }, () => createEmptyDispatchLine())
+                });
+                setIsDispatchModalOpen(true);
+            } catch (e) {
+                alert('Fiş numarası oluşturulamadı.');
+            }
+        };
+        open();
+    };
 
-        if (!isValid) {
-            alert('Lütfen tüm ürünler için adetleri giriniz.');
-            return;
-        }
-        
-        if (!confirm('Sevkiyat yapılacak, onaylıyor musunuz? Onaylanması durumunda sipariş üretime aktarılacaktır.')) {
+    const handleOpenDispatchView = (dispatch: ProcurementDispatch) => {
+        setDispatchViewModal({ isOpen: true, dispatch });
+    };
+
+    const handleOpenChangeRequestModal = (dispatch: ProcurementDispatch) => {
+        setChangeRequestModal({ isOpen: true, dispatch, reason: '' });
+    };
+
+    const handleSubmitChangeRequest = async () => {
+        const dispatch = changeRequestModal.dispatch;
+        const reason = (changeRequestModal.reason || '').trim();
+        if (!dispatch) return;
+        if (!reason) {
+            alert('Lütfen açıklama giriniz.');
             return;
         }
 
         try {
-            await updateOrder(orderToComplete.id, {
-                procurementStatus: 'completed',
-                status: 'production_pending', // Special status for Production Incoming table
-                procurementDetails: sheetDetails
-            } as any);
+            const payload: ProcurementDispatchChangeRequest = {
+                id: crypto.randomUUID(),
+                dispatchId: dispatch.id,
+                reason,
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            };
 
-            setIsSheetDetailsModalOpen(false);
-            setOrderToComplete(null);
-            alert('Sipariş başarıyla üretime aktarıldı.');
-        } catch (error) {
-            console.error('Error completing procurement:', error);
-            alert('İşlem sırasında bir hata oluştu.');
+            const res = await fetch('/api/procurement-dispatch-change-requests', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('Kayıt başarısız');
+            await fetchDispatchChangeRequests();
+            setChangeRequestModal({ isOpen: false, dispatch: null, reason: '' });
+        } catch (e) {
+            alert('Değişiklik onayı istenirken bir hata oluştu.');
+        }
+    };
+
+    const handleOpenEditDispatch = (dispatch: ProcurementDispatch) => {
+        const normalizedLines = Array.isArray(dispatch.lines) ? dispatch.lines : [];
+        setDispatchMode('edit');
+        setDispatchForm({
+            id: dispatch.id,
+            dispatchDate: dispatch.dispatchDate,
+            vehiclePlate: dispatch.vehiclePlate || '',
+            driverNames: dispatch.driverNames || '',
+            notes: dispatch.notes || '',
+            lines: Array.from({ length: 10 }, (_, i) => normalizedLines[i] ? {
+                ...createEmptyDispatchLine(),
+                ...normalizedLines[i],
+                total: (Number(normalizedLines[i]?.plateQuantity) || 0) * (Number(normalizedLines[i]?.printQuantity) || 0)
+            } : createEmptyDispatchLine())
+        });
+        setIsDispatchModalOpen(true);
+    };
+
+    const handleDispatchLineChange = (
+        index: number,
+        patch: Partial<ProcurementDispatchLine>
+    ) => {
+        setDispatchForm(prev => {
+            const nextLines = prev.lines.map((l, i) => {
+                if (i !== index) return l;
+                const updated: ProcurementDispatchLine = { ...l, ...patch };
+                const plateQuantity = Number(updated.plateQuantity) || 0;
+                const printQuantity = Number(updated.printQuantity) || 0;
+                updated.total = Math.max(0, plateQuantity) * Math.max(0, printQuantity);
+                return updated;
+            });
+            return { ...prev, lines: nextLines };
+        });
+    };
+
+    const handleDispatchOrderSelect = (index: number, orderId: string) => {
+        const order = dispatchOrderOptions.find(o => o.id === orderId);
+        handleDispatchLineChange(index, {
+            orderId,
+            customerName: order?.customerName || '',
+            productId: '',
+            productCode: '',
+            productName: '',
+        });
+    };
+
+    const handleDispatchProductSelect = (index: number, productId: string) => {
+        const product = products.find(p => p.id === productId);
+        handleDispatchLineChange(index, {
+            productId,
+            productCode: product?.code || '',
+            productName: product?.name || '',
+        });
+    };
+
+    const handleSaveDispatch = async () => {
+        const cleanLines = dispatchForm.lines
+            .map(l => ({
+                ...l,
+                plateQuantity: Number(l.plateQuantity) || 0,
+                printQuantity: Number(l.printQuantity) || 0,
+                total: (Number(l.plateQuantity) || 0) * (Number(l.printQuantity) || 0),
+            }))
+            .filter(l => l.orderId && l.productId && l.plateQuantity > 0 && l.printQuantity > 0);
+
+        if (cleanLines.length === 0) {
+            alert('Lütfen en az 1 satır doldurunuz.');
+            return;
+        }
+
+        const payload: ProcurementDispatch = {
+            id: dispatchForm.id,
+            dispatchDate: dispatchForm.dispatchDate,
+            vehiclePlate: dispatchForm.vehiclePlate || undefined,
+            driverNames: dispatchForm.driverNames || undefined,
+            notes: dispatchForm.notes || undefined,
+            lines: cleanLines,
+            createdAt: new Date().toISOString()
+        };
+
+        try {
+            const res = dispatchMode === 'create'
+                ? await fetch('/api/procurement-dispatches', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                : await fetch(`/api/procurement-dispatches/${payload.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        dispatchDate: payload.dispatchDate,
+                        vehiclePlate: payload.vehiclePlate,
+                        driverNames: payload.driverNames,
+                        notes: payload.notes,
+                        lines: payload.lines
+                    })
+                });
+            if (!res.ok) throw new Error('Sevk kaydedilemedi');
+            await fetchDispatches();
+            await fetchDispatchChangeRequests();
+            setIsDispatchModalOpen(false);
+        } catch (e) {
+            alert('Sevk kaydedilirken bir hata oluştu.');
         }
     };
 
@@ -538,6 +739,120 @@ export default function Procurement() {
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* Sevk Edilen Ürünler */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+                    <h2 className="text-lg font-bold text-slate-800">Sevk Edilen Ürünler</h2>
+                    <button
+                        onClick={handleOpenDispatchModal}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                        aria-label="Yeni Sevkiyat"
+                        title="Yeni Sevkiyat"
+                    >
+                        <Plus size={20} />
+                        <span className="hidden md:inline">Yeni Sevkiyat</span>
+                        <span className="md:hidden">Yeni</span>
+                    </button>
+                </div>
+
+                {dispatchesLoading ? (
+                    <div className="p-6 text-slate-500">Yükleniyor...</div>
+                ) : dispatches.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500">Henüz sevk kaydı bulunmuyor.</div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th className="px-6 py-4">Fiş No</th>
+                                    <th className="px-6 py-4">Ürünler</th>
+                                    <th className="px-6 py-4">Sipariş Kodları</th>
+                                    <th className="px-6 py-4">Sevk Tarihi</th>
+                                    <th className="px-6 py-4">Toplam Levha</th>
+                                    <th className="px-6 py-4">Toplam İş</th>
+                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                                {dispatches.map(d => {
+                                    const uniqProductNames = Array.from(new Set((d.lines || []).map(l => l.productName).filter(Boolean)));
+                                    const uniqOrderCodes = Array.from(new Set((d.lines || []).map(l => l.orderId).filter(Boolean))).map(id => id.slice(0, 8));
+                                    const totalPlate = (d.lines || []).reduce((acc, l) => acc + (Number(l.plateQuantity) || 0), 0);
+                                    const totalPrintQty = (d.lines || []).reduce((acc, l) => acc + (Number(l.printQuantity) || 0), 0);
+                                    const totalJob = totalPlate * totalPrintQty;
+                                    const reqs = dispatchChangeRequests
+                                        .filter(r => r.dispatchId === d.id)
+                                        .slice()
+                                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                                    const hasPending = reqs.some(r => r.status === 'pending');
+                                    const hasApproved = reqs.some(r => r.status === 'approved');
+                                    const canEdit = hasApproved;
+
+                                    return (
+                                        <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="px-6 py-4 font-mono text-xs">{d.id}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="max-w-[420px] truncate" title={uniqProductNames.join(', ')}>
+                                                    {uniqProductNames.join(', ') || '-'}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="font-mono text-xs max-w-[280px] truncate" title={uniqOrderCodes.join(', ')}>
+                                                    {uniqOrderCodes.join(', ') || '-'}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">{d.dispatchDate || '-'}</td>
+                                            <td className="px-6 py-4 font-semibold text-slate-800">{totalPlate}</td>
+                                            <td className="px-6 py-4 font-semibold text-slate-800">{totalJob}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleOpenDispatchView(d)}
+                                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        title="Görüntüle"
+                                                        aria-label="Görüntüle"
+                                                    >
+                                                        <FileText size={18} />
+                                                    </button>
+
+                                                    {canEdit ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenEditDispatch(d)}
+                                                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                                            title="Düzenle"
+                                                            aria-label="Düzenle"
+                                                        >
+                                                            <Pencil size={18} />
+                                                        </button>
+                                                    ) : hasPending ? (
+                                                        <span className="px-3 py-2 text-xs font-semibold bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
+                                                            Onay Bekliyor
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenChangeRequestModal(d)}
+                                                            className="px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-2"
+                                                            title="Değişiklik Onayı İste"
+                                                            aria-label="Değişiklik Onayı İste"
+                                                        >
+                                                            <AlertTriangle size={16} />
+                                                            Değişiklik Onayı İste
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
             {/* Stock Management Section */}
@@ -1127,135 +1442,321 @@ export default function Procurement() {
                     </div>
                 </form>
             </Modal>
-            {/* Sheet Details Modal */}
             <Modal
-                isOpen={isSheetDetailsModalOpen}
-                onClose={() => setIsSheetDetailsModalOpen(false)}
-                title="Üretim Sevkiyat Bilgileri Girişi"
+                isOpen={isDispatchModalOpen}
+                onClose={() => setIsDispatchModalOpen(false)}
+                title="Yeni Sevkiyat"
+                maxWidthClassName="max-w-6xl"
             >
                 <div className="space-y-6">
-                    <p className="text-sm text-slate-500 mb-4 bg-amber-50 p-3 rounded-lg border border-amber-100">
-                        <strong className="text-amber-800">Dikkat:</strong> Lütfen her ürün için üretilen/tedarik edilen levha adetlerini giriniz. 
-                        Bu bilgiler eksiksiz doldurulmadan sevkiyat işlemi yapılamaz.
-                    </p>
-                    
-                    {orderToComplete && orderToComplete.items.map((item, idx) => {
-                        const product = products.find(p => p.id === item.productId);
-                        if (!product || !item.productId) return null;
-                        
-                        const details = sheetDetails[item.productId] || { plate: 0, body: 0, lid: 0, bottom: 0 };
-                        
-                        return (
-                            <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                                <h4 className="font-semibold text-slate-800 mb-3 pb-2 border-b border-slate-200">
-                                    {product.name} ({product.code})
-                                </h4>
-                                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Levha Adeti
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={details.plate}
-                                            onChange={e => {
-                                                const val = parseInt(e.target.value) || 0;
-                                                setSheetDetails(prev => ({
-                                                    ...prev,
-                                                    [item.productId!]: { ...prev[item.productId!], plate: val }
-                                                }));
-                                            }}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="0"
-                                            aria-label={`${product.name} Levha Adeti`}
-                                            title="Levha Adeti"
-                                        />
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Fiş No</label>
+                                <input
+                                    type="text"
+                                    value={dispatchForm.id}
+                                    readOnly
+                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 font-mono text-sm"
+                                    aria-label="Fiş Numarası"
+                                    title="Fiş Numarası"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Sevk Araç Plakası</label>
+                                <input
+                                    type="text"
+                                    value={dispatchForm.vehiclePlate}
+                                    onChange={e => setDispatchForm(prev => ({ ...prev, vehiclePlate: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="34 ABC 123"
+                                    aria-label="Sevk Araç Plakası"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Şöför İsimleri</label>
+                                <input
+                                    type="text"
+                                    value={dispatchForm.driverNames}
+                                    onChange={e => setDispatchForm(prev => ({ ...prev, driverNames: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Ad Soyad"
+                                    aria-label="Şöför İsimleri"
+                                />
+                            </div>
+                        </div>
+                        <div className="w-full lg:w-56">
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Sevk Tarihi</label>
+                            <input
+                                type="date"
+                                value={dispatchForm.dispatchDate}
+                                onChange={e => setDispatchForm(prev => ({ ...prev, dispatchDate: e.target.value }))}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                aria-label="Sevk Tarihi"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {dispatchForm.lines.map((line, idx) => {
+                            const order = dispatchOrderOptions.find(o => o.id === line.orderId);
+                            const orderItems = order?.items || [];
+                            const productOptions = Array.from(new Set(orderItems.map(i => i.productId))).filter(Boolean);
+                            return (
+                                <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-white">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="font-semibold text-slate-800">Satır {idx + 1}</div>
+                                        <div className="text-xs text-slate-500 font-mono">Toplam: {line.total || 0}</div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Gövde Adeti
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={details.body}
-                                            onChange={e => {
-                                                const val = parseInt(e.target.value) || 0;
-                                                setSheetDetails(prev => ({
-                                                    ...prev,
-                                                    [item.productId!]: { ...prev[item.productId!], body: val }
-                                                }));
-                                            }}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="0"
-                                            aria-label={`${product.name} Gövde Adeti`}
-                                            title="Gövde Adeti"
-                                        />
-                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Sipariş Numarası</label>
+                                            <select
+                                                value={line.orderId}
+                                                onChange={e => handleDispatchOrderSelect(idx, e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                aria-label="Sipariş Numarası"
+                                            >
+                                                <option value="">Seçiniz</option>
+                                                {dispatchOrderOptions.map(o => (
+                                                    <option key={o.id} value={o.id}>
+                                                        #{o.id.slice(0, 8)} - {o.customerName}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Kapak Adeti
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={details.lid}
-                                            onChange={e => {
-                                                const val = parseInt(e.target.value) || 0;
-                                                setSheetDetails(prev => ({
-                                                    ...prev,
-                                                    [item.productId!]: { ...prev[item.productId!], lid: val }
-                                                }));
-                                            }}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="0"
-                                            aria-label={`${product.name} Kapak Adeti`}
-                                            title="Kapak Adeti"
-                                        />
-                                    </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Firma</label>
+                                            <input
+                                                type="text"
+                                                value={line.customerName}
+                                                readOnly
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50"
+                                                aria-label="Firma Adı"
+                                            />
+                                        </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">
-                                            Dip Adeti
-                                        </label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={details.bottom}
-                                            onChange={e => {
-                                                const val = parseInt(e.target.value) || 0;
-                                                setSheetDetails(prev => ({
-                                                    ...prev,
-                                                    [item.productId!]: { ...prev[item.productId!], bottom: val }
-                                                }));
-                                            }}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                                            placeholder="0"
-                                            aria-label={`${product.name} Dip Adeti`}
-                                            title="Dip Adeti"
-                                        />
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Ürün Kodu</label>
+                                            <select
+                                                value={line.productId}
+                                                onChange={e => handleDispatchProductSelect(idx, e.target.value)}
+                                                disabled={!line.orderId}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
+                                                aria-label="Ürün Kodu"
+                                            >
+                                                <option value="">Seçiniz</option>
+                                                {productOptions.map(pid => {
+                                                    const p = products.find(pr => pr.id === pid);
+                                                    return (
+                                                        <option key={pid} value={pid}>
+                                                            {p?.code || '-'}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </select>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Ürün Adı</label>
+                                            <input
+                                                type="text"
+                                                value={line.productName}
+                                                readOnly
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50"
+                                                aria-label="Ürün Adı"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Baskılı Levha Adeti</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={line.plateQuantity || ''}
+                                                onChange={e => handleDispatchLineChange(idx, { plateQuantity: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                aria-label="Baskılı Levha Adeti"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Baskı Türü</label>
+                                            <select
+                                                value={line.printType}
+                                                onChange={e => handleDispatchLineChange(idx, { printType: e.target.value as ProcurementDispatchPrintType })}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                aria-label="Baskı Türü"
+                                            >
+                                                <option value="Gövde">Gövde</option>
+                                                <option value="Kapak">Kapak</option>
+                                                <option value="Dip">Dip</option>
+                                                <option value="Diğer">Diğer</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Baskı Adeti</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={line.printQuantity || ''}
+                                                onChange={e => handleDispatchLineChange(idx, { printQuantity: parseInt(e.target.value) || 0 })}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                aria-label="Baskı Adeti"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Toplam</label>
+                                            <input
+                                                type="number"
+                                                value={line.total || 0}
+                                                readOnly
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 font-semibold text-slate-800"
+                                                aria-label="Toplam"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-600 mb-1">Levha Ölçüsü</label>
+                                            <input
+                                                type="text"
+                                                value={line.plateSize}
+                                                onChange={e => handleDispatchLineChange(idx, { plateSize: e.target.value })}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                aria-label="Levha Ölçüsü"
+                                                placeholder="Örn: 70x100"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Açıklamalar</label>
+                        <textarea
+                            value={dispatchForm.notes}
+                            onChange={e => setDispatchForm(prev => ({ ...prev, notes: e.target.value }))}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-24"
+                            placeholder="Notlar..."
+                            aria-label="Açıklamalar"
+                        />
+                    </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                         <button
-                            onClick={() => setIsSheetDetailsModalOpen(false)}
+                            type="button"
+                            onClick={() => setIsDispatchModalOpen(false)}
                             className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
                         >
                             İptal
                         </button>
                         <button
-                            onClick={handleSaveSheetDetails}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2"
+                            type="button"
+                            onClick={handleSaveDispatch}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
                         >
-                            <CheckCircle2 size={18} />
-                            Sevkiyatı Onayla ve Gönder
+                            Gönder
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={dispatchViewModal.isOpen}
+                onClose={() => setDispatchViewModal({ isOpen: false, dispatch: null })}
+                title={`Sevk Fişi #${dispatchViewModal.dispatch?.id || ''}`}
+                maxWidthClassName="max-w-5xl"
+            >
+                {dispatchViewModal.dispatch && (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <div className="text-xs text-slate-500">Sevk Tarihi</div>
+                                <div className="font-semibold text-slate-800">{dispatchViewModal.dispatch.dispatchDate}</div>
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <div className="text-xs text-slate-500">Araç / Şöför</div>
+                                <div className="font-semibold text-slate-800">
+                                    {(dispatchViewModal.dispatch.vehiclePlate || '-')}{dispatchViewModal.dispatch.driverNames ? ` • ${dispatchViewModal.dispatch.driverNames}` : ''}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 font-semibold text-slate-800">Kalemler</div>
+                            <div className="divide-y divide-slate-200">
+                                {(dispatchViewModal.dispatch.lines || []).map((l, idx) => (
+                                    <div key={idx} className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                                        <div>
+                                            <div className="text-xs text-slate-500">Sipariş</div>
+                                            <div className="font-mono text-xs text-slate-800">{(l.orderId || '').slice(0, 8) || '-'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500">Firma</div>
+                                            <div className="font-medium text-slate-800">{l.customerName || '-'}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500">Ürün</div>
+                                            <div className="font-medium text-slate-800">{l.productCode ? `${l.productCode} - ${l.productName}` : (l.productName || '-')}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500">Baskı</div>
+                                            <div className="font-medium text-slate-800">{l.printType || '-'} • {l.plateQuantity} levha • {l.printQuantity} adet • Toplam {l.total}</div>
+                                            {l.plateSize && <div className="text-xs text-slate-500 mt-0.5">Levha Ölçüsü: {l.plateSize}</div>}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                            <div className="text-xs text-slate-500 mb-1">Açıklamalar</div>
+                            <div className="text-slate-800 whitespace-pre-wrap">{dispatchViewModal.dispatch.notes || '-'}</div>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            <Modal
+                isOpen={changeRequestModal.isOpen}
+                onClose={() => setChangeRequestModal({ isOpen: false, dispatch: null, reason: '' })}
+                title={`Değişiklik Onayı İste #${changeRequestModal.dispatch?.id || ''}`}
+                maxWidthClassName="max-w-2xl"
+            >
+                <div className="space-y-4">
+                    <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 text-sm">
+                        Bu form değişikliği için Genel Müdür onayı gereklidir. Onay gelmeden düzenleme yapılamaz.
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Açıklama</label>
+                        <textarea
+                            value={changeRequestModal.reason}
+                            onChange={(e) => setChangeRequestModal(prev => ({ ...prev, reason: e.target.value }))}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-28"
+                            placeholder="Neden değiştirmek istiyorsunuz?"
+                            aria-label="Değişiklik Açıklaması"
+                        />
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setChangeRequestModal({ isOpen: false, dispatch: null, reason: '' })}
+                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        >
+                            İptal
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSubmitChangeRequest}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                        >
+                            Gönder
                         </button>
                     </div>
                 </div>

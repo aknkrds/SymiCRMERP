@@ -24,40 +24,40 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
         relevantDesignImages.length > 0;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-full min-w-0">
             {/* Job Details moved to bottom */}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 min-w-0">
                 {/* Basic Info */}
-                <div className="space-y-4">
+                <div className="space-y-4 min-w-0">
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Ürün Kodu</h4>
-                        <p className="text-lg font-semibold text-slate-800">{product.code}</p>
+                        <p className="text-lg font-semibold text-slate-800 break-words">{product.code}</p>
                     </div>
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Ürün Adı</h4>
-                        <p className="text-slate-800">{product.name || product.description}</p>
+                        <p className="text-slate-800 break-words">{product.name || product.description}</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+                        <div className="min-w-0">
                             <h4 className="text-sm font-medium text-slate-500">Ürün Tipi</h4>
                             <p className="text-slate-800 capitalize">{product.productType || '-'}</p>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <h4 className="text-sm font-medium text-slate-500">Kutu Şekli</h4>
                             <p className="text-slate-800">{product.boxShape || '-'}</p>
                         </div>
                     </div>
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Boyutlar (mm)</h4>
-                        <p className="text-slate-800">
+                        <p className="text-slate-800 break-words">
                             {product.dimensions?.length || 0} x {product.dimensions?.width || 0} x {product.dimensions?.depth || 0}
                         </p>
                     </div>
                 </div>
 
                 {/* Features & Inks */}
-                <div className="space-y-4">
+                <div className="space-y-4 min-w-0">
                     <div>
                         <h4 className="text-sm font-medium text-slate-500">Özellikler</h4>
                         <div className="flex flex-wrap gap-2 mt-1">
@@ -90,11 +90,11 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
                                 {product.inks.pantones && product.inks.pantones.length > 0 && (
                                     <div className="text-sm">
                                         <span className="text-slate-500">Pantone: </span>
-                                        <span className="text-slate-800">{product.inks.pantones.join(', ')}</span>
+                                        <span className="text-slate-800 break-words">{product.inks.pantones.join(', ')}</span>
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm min-w-0">
                                     {product.inks.goldLak?.has && (
                                         <>
                                             <span className="text-slate-500">Gold Lak:</span>
@@ -127,7 +127,7 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
                     {product.details && (
                         <div>
                             <h4 className="text-sm font-medium text-slate-500">Ürün Detayları</h4>
-                            <p className="text-slate-700 whitespace-pre-wrap">{product.details}</p>
+                            <p className="text-slate-700 whitespace-pre-wrap break-words">{product.details}</p>
                         </div>
                     )}
                 </div>
@@ -218,7 +218,7 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
             {jobDetails && (jobDetails.jobSize || jobDetails.boxSize || jobDetails.efficiency) && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 pt-4 border-t border-slate-100">
                     <h4 className="font-medium text-blue-800 mb-2 border-b border-blue-200 pb-2">Levha Bilgileri (Tasarım)</h4>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                         <div>
                             <span className="block text-xs font-medium text-blue-500 mb-1">Levha Ebadı</span>
                             <span className="font-medium text-blue-900">{jobDetails.jobSize || '-'}</span>
@@ -242,7 +242,7 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
                     {hasCustomerImages && product.images && product.images.customer && (
                         <div className="space-y-2">
                             <h5 className="text-sm text-slate-500">Müşteri Görselleri</h5>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {product.images.customer.map((img, idx) => (
                                     <div key={idx} className="aspect-square rounded-lg overflow-hidden border border-slate-200">
                                         <img src={img} alt={`Customer ${idx + 1}`} className="w-full h-full object-cover" />
@@ -255,7 +255,7 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
                     {hasDesignImages && (
                         <div className="space-y-2">
                             <h5 className="text-sm text-slate-500">Tasarım Görselleri</h5>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {[
                                     ...(((product as any).images?.design as string[] | undefined) || []),
                                     ...relevantDesignImages,

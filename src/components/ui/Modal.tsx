@@ -6,9 +6,10 @@ interface ModalProps {
     onClose: () => void;
     title: string;
     children: React.ReactNode;
+    maxWidthClassName?: string;
 }
 
-export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, maxWidthClassName }: ModalProps) {
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
@@ -27,7 +28,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-opacity">
-            <div className="glass-card shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 mx-2 md:mx-0 border-white/20">
+            <div className={`glass-card shadow-2xl w-full ${maxWidthClassName || 'max-w-2xl'} max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 mx-2 md:mx-0 border-white/20`}>
                 <div className="flex items-center justify-between p-4 border-b border-slate-100/50 shrink-0">
                     <h3 className="text-lg font-semibold text-slate-800 line-clamp-1">{title}</h3>
                     <button
@@ -37,7 +38,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
                         <X size={20} />
                     </button>
                 </div>
-                <div className="p-4 md:p-6 overflow-y-auto">
+                <div className="p-4 md:p-6 overflow-y-auto overflow-x-hidden min-w-0">
                     {children}
                 </div>
             </div>

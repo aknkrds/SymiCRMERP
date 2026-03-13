@@ -154,6 +154,54 @@ const initDb = () => {
   // Procurement Details Migration
   try { db.exec('ALTER TABLE orders ADD COLUMN procurementDetails TEXT'); } catch (error) {}
 
+  // Procurement Dispatches (Sevk Edilen Ürünler)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS procurement_dispatches (
+      id TEXT PRIMARY KEY,
+      dispatchDate TEXT NOT NULL,
+      vehiclePlate TEXT,
+      driverNames TEXT,
+      notes TEXT,
+      lines TEXT NOT NULL, -- JSON
+      productionReceipt TEXT, -- JSON
+      productionApprovedAt TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  try { db.exec('ALTER TABLE procurement_dispatches ADD COLUMN productionReceipt TEXT'); } catch (e) {}
+  try { db.exec('ALTER TABLE procurement_dispatches ADD COLUMN productionApprovedAt TEXT'); } catch (e) {}
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS procurement_dispatch_change_requests (
+      id TEXT PRIMARY KEY,
+      dispatchId TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL,
+      decidedAt TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS counters (
+      name TEXT PRIMARY KEY,
+      value INTEGER NOT NULL
+    )
+  `);
+
+  try {
+    const existing = db.prepare("SELECT id FROM procurement_dispatches WHERE id LIKE 'Tedarik%'").all();
+    let maxVal = 0;
+    for (const row of existing) {
+      const m = /^Tedarik(\d+)$/.exec(row.id || '');
+      if (!m) continue;
+      const n = parseInt(m[1], 10);
+      if (!Number.isNaN(n) && n > maxVal) maxVal = n;
+    }
+    db.prepare('INSERT OR IGNORE INTO counters (name, value) VALUES (?, ?)').run('procurement_dispatch', maxVal);
+  } catch (e) {}
+
   // Stock Items
   db.exec(`
     CREATE TABLE IF NOT EXISTS stock_items (
