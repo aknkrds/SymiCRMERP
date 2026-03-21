@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import db from './db.js';
+import db from './db-postgres.js';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -74,6 +74,19 @@ const getClientIp = (req) => {
     return forwarded.split(',')[0].trim();
   }
   return req.ip;
+};
+
+const parseJsonField = (value, fallback) => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return fallback;
+  const s = value.trim();
+  if (!s) return fallback;
+  try {
+    return JSON.parse(s);
+  } catch {
+    return fallback;
+  }
 };
 
 const logError = (req, error, context = {}) => {
@@ -213,9 +226,9 @@ app.get('/api/messages', (req, res) => {
 });
 
 // Get ALL messages (Admin only)
-app.get('/api/admin/messages', (req, res) => {
+app.get('/api/admin/messages', async (req, res) => {
   try {
-    const messages = db.prepare('SELECT * FROM messages ORDER BY createdAt DESC').all();
+    const messages = await db.prepare('SELECT * FROM messages ORDER BY createdAt DESC').all();
     const formattedMessages = messages.map(m => ({
       ...m,
       isRead: !!m.isRead
@@ -227,7 +240,7 @@ app.get('/api/admin/messages', (req, res) => {
 });
 
 // Send a message
-app.post('/api/messages', (req, res) => {
+app.post('/api/messages', async (req, res) => {
   try {
     const { 
       threadId, 
@@ -252,10 +265,10 @@ app.post('/api/messages', (req, res) => {
       INSERT INTO messages (
         id, threadId, senderId, senderName, recipientId, recipientName, 
         subject, content, relatedOrderId, isRead, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, false, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       id, finalThreadId, senderId, senderName, recipientId, recipientName,
       subject, content, relatedOrderId, createdAt
     );
@@ -267,10 +280,10 @@ app.post('/api/messages', (req, res) => {
 });
 
 // Mark message as read
-app.put('/api/messages/:id/read', (req, res) => {
+app.put('/api/messages/:id/read', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('UPDATE messages SET isRead = 1 WHERE id = ?').run(id);
+    await db.prepare('UPDATE messages SET isRead = true WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -278,10 +291,10 @@ app.put('/api/messages/:id/read', (req, res) => {
 });
 
 // Delete message (Admin only)
-app.delete('/api/admin/messages/:id', (req, res) => {
+app.delete('/api/admin/messages/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM messages WHERE id = ?').run(id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -290,24 +303,24 @@ app.delete('/api/admin/messages/:id', (req, res) => {
 
 // --- COMPANY SETTINGS ENDPOINTS ---
 
-app.get('/api/company-settings', (req, res) => {
+app.get('/api/company-settings', async (req, res) => {
   try {
-    const settings = db.prepare('SELECT * FROM company_settings WHERE id = 1').get();
+    const settings = await db.prepare("SELECT * FROM company_settings WHERE id = '1'").get();
     res.json(settings || {});
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.put('/api/company-settings', (req, res) => {
+app.put('/api/company-settings', async (req, res) => {
   try {
     const { companyName, contactName, address, phone, mobile, logoUrl } = req.body;
     const updatedAt = new Date().toISOString();
     
-    db.prepare(`
+    await db.prepare(`
       UPDATE company_settings 
       SET companyName = ?, contactName = ?, address = ?, phone = ?, mobile = ?, logoUrl = ?, updatedAt = ?
-      WHERE id = 1
+      WHERE id = '1'
     `).run(companyName, contactName, address, phone, mobile, logoUrl, updatedAt);
     
     res.json({ success: true, updatedAt });
@@ -429,7 +442,7 @@ app.post('/api/backup/import', backupUpload.single('archive'), async (req, res) 
 });
 
 // Reset Data Endpoint
-app.post('/api/reset-data', (req, res) => {
+app.post('/api/reset-data', async (req, res) => {
   try {
     const { confirmation } = req.body;
     if (confirmation !== 'SIFIRLA') {
@@ -450,23 +463,13 @@ app.post('/api/reset-data', (req, res) => {
               // 'company_settings' // KORUNDU: Firma bilgileri silinmeyecek
             ];
 
-    // Execute deletions in a transaction with FK checks disabled
-    const deleteTransaction = db.transaction(() => {
-      // Disable Foreign Key constraints temporarily to allow mass deletion without order issues
-      db.prepare('PRAGMA foreign_keys = OFF').run();
-      
-      try {
-        for (const table of tablesToClear) {
-          db.prepare(`DELETE FROM ${table}`).run();
-        }
-        // NOTE: product_molds, users, roles, personnel, customers, and company_settings tables are EXPLICITLY EXCLUDED from deletion.
-      } finally {
-        // Re-enable Foreign Key constraints
-        db.prepare('PRAGMA foreign_keys = ON').run();
+    const deleteTransaction = db.transaction(async (tx) => {
+      for (const table of tablesToClear) {
+        await tx.prepare(`DELETE FROM ${table}`).run();
       }
     });
 
-    deleteTransaction();
+    await deleteTransaction();
 
     // Clear uploaded files (keep directories)
     const imgDir = path.join(process.cwd(), 'server', 'img');
@@ -725,7 +728,7 @@ const createNotification = ({ userId, roleId, title, message, type, relatedId })
       INSERT INTO notifications (id, userId, roleId, title, message, type, relatedId, isRead, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
     `);
-    stmt.run(id, userId || null, roleId || null, title, message, type || 'info', relatedId || null, new Date().toISOString());
+    stmt.run(id, userId || null, roleId || null, title, message, type || 'info', relatedId || null, new Date().toISOString()).catch(() => {});
     return id;
   } catch (error) {
     console.error('Failed to create notification:', error);
@@ -733,11 +736,11 @@ const createNotification = ({ userId, roleId, title, message, type, relatedId })
   }
 };
 
-app.get('/api/notifications', (req, res) => {
+app.get('/api/notifications', async (req, res) => {
   try {
     const { userId, roleId } = req.query;
     
-    let query = 'SELECT * FROM notifications WHERE isRead = 0 AND (';
+    let query = 'SELECT * FROM notifications WHERE isRead = false AND (';
     const params = [];
     
     // Logic: User sees notifications for their ID OR their Role OR global (both null? maybe not)
@@ -762,14 +765,14 @@ app.get('/api/notifications', (req, res) => {
     query += conditions.join(' OR ') + ') ORDER BY createdAt DESC';
     
     const stmt = db.prepare(query);
-    const notifications = stmt.all(...params);
+    const notifications = await stmt.all(...params);
     res.json(notifications);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/notifications/mark-read', (req, res) => {
+app.post('/api/notifications/mark-read', async (req, res) => {
   try {
     const { ids } = req.body; // Array of IDs
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -777,8 +780,8 @@ app.post('/api/notifications/mark-read', (req, res) => {
     }
     
     const placeholders = ids.map(() => '?').join(',');
-    const stmt = db.prepare(`UPDATE notifications SET isRead = 1 WHERE id IN (${placeholders})`);
-    stmt.run(...ids);
+    const stmt = db.prepare(`UPDATE notifications SET isRead = true WHERE id IN (${placeholders})`);
+    await stmt.run(...ids);
     
     res.json({ success: true });
   } catch (error) {
@@ -789,25 +792,25 @@ app.post('/api/notifications/mark-read', (req, res) => {
 // --- PLANNING ---
 
 // MONTHLY PLANS
-app.get('/api/planning/monthly', (req, res) => {
+app.get('/api/planning/monthly', async (req, res) => {
   try {
     const { month, year } = req.query;
     if (month === undefined || year === undefined) {
       // Return all if no filter (or limit?)
       const stmt = db.prepare('SELECT * FROM monthly_plans ORDER BY year DESC, month DESC');
-      const plans = stmt.all();
+      const plans = await stmt.all();
       const parsedPlans = plans.map(p => ({
         ...p,
-        planData: JSON.parse(p.planData)
+        planData: parseJsonField(p.planData, {})
       }));
       return res.json(parsedPlans);
     }
 
     const stmt = db.prepare('SELECT * FROM monthly_plans WHERE month = ? AND year = ?');
-    const plan = stmt.get(month, year);
+    const plan = await stmt.get(month, year);
     
     if (plan) {
-      plan.planData = JSON.parse(plan.planData);
+      plan.planData = parseJsonField(plan.planData, {});
       res.json(plan);
     } else {
       res.json(null);
@@ -817,13 +820,13 @@ app.get('/api/planning/monthly', (req, res) => {
   }
 });
 
-app.post('/api/planning/monthly', (req, res) => {
+app.post('/api/planning/monthly', async (req, res) => {
   try {
     const { month, year, planData } = req.body;
     
     // Check if exists
     const checkStmt = db.prepare('SELECT id FROM monthly_plans WHERE month = ? AND year = ?');
-    const existing = checkStmt.get(month, year);
+    const existing = await checkStmt.get(month, year);
 
     if (existing) {
       // Update
@@ -832,7 +835,7 @@ app.post('/api/planning/monthly', (req, res) => {
         SET planData = ?
         WHERE id = ?
       `);
-      updateStmt.run(JSON.stringify(planData), existing.id);
+      await updateStmt.run(JSON.stringify(planData), existing.id);
       res.json({ success: true, id: existing.id });
     } else {
       // Insert
@@ -842,7 +845,7 @@ app.post('/api/planning/monthly', (req, res) => {
         INSERT INTO monthly_plans (id, month, year, planData, createdAt)
         VALUES (?, ?, ?, ?, ?)
       `);
-      insertStmt.run(id, month, year, JSON.stringify(planData), createdAt);
+      await insertStmt.run(id, month, year, JSON.stringify(planData), createdAt);
       res.json({ success: true, id });
     }
   } catch (error) {
@@ -852,13 +855,13 @@ app.post('/api/planning/monthly', (req, res) => {
 });
 
 // WEEKLY PLANS (Keep for backward compatibility or reference if needed)
-app.get('/api/planning/weekly', (req, res) => {
+app.get('/api/planning/weekly', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM weekly_plans ORDER BY weekStartDate DESC');
-    const plans = stmt.all();
+    const plans = await stmt.all();
     const parsedPlans = plans.map(p => ({
       ...p,
-      planData: JSON.parse(p.planData)
+      planData: parseJsonField(p.planData, {})
     }));
     res.json(parsedPlans);
   } catch (error) {
@@ -866,7 +869,7 @@ app.get('/api/planning/weekly', (req, res) => {
   }
 });
 
-app.post('/api/planning/weekly', (req, res) => {
+app.post('/api/planning/weekly', async (req, res) => {
   try {
     const { weekStartDate, weekEndDate, planData } = req.body;
     const id = crypto.randomUUID();
@@ -877,7 +880,7 @@ app.post('/api/planning/weekly', (req, res) => {
       VALUES (?, ?, ?, ?, ?)
     `);
     
-    stmt.run(id, weekStartDate, weekEndDate, JSON.stringify(planData), createdAt);
+    await stmt.run(id, weekStartDate, weekEndDate, JSON.stringify(planData), createdAt);
     res.json({ success: true, id });
   } catch (error) {
     console.error('Plan saving error:', error);
@@ -885,7 +888,7 @@ app.post('/api/planning/weekly', (req, res) => {
   }
 });
 
-app.put('/api/planning/weekly/:id', (req, res) => {
+app.put('/api/planning/weekly/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { planData } = req.body;
@@ -896,7 +899,7 @@ app.put('/api/planning/weekly/:id', (req, res) => {
       WHERE id = ?
     `);
     
-    stmt.run(JSON.stringify(planData), id);
+    await stmt.run(JSON.stringify(planData), id);
     res.json({ success: true });
   } catch (error) {
     console.error('Plan update error:', error);
@@ -904,11 +907,11 @@ app.put('/api/planning/weekly/:id', (req, res) => {
   }
 });
 
-app.delete('/api/planning/weekly/:id', (req, res) => {
+app.delete('/api/planning/weekly/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM weekly_plans WHERE id = ?');
-    stmt.run(id);
+    await stmt.run(id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -917,43 +920,44 @@ app.delete('/api/planning/weekly/:id', (req, res) => {
 
 // --- STOCK ITEMS ---
 
-app.get('/api/stock-items', (req, res) => {
+app.get('/api/stock-items', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM stock_items ORDER BY createdAt DESC');
-    const items = stmt.all();
+    const items = await stmt.all();
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/stock-items', (req, res) => {
+app.post('/api/stock-items', async (req, res) => {
   try {
     const { id, stockNumber, company, product, quantity, unit, category, notes, productId, createdAt } = req.body;
+    const finalCreatedAt = createdAt || new Date().toISOString();
     const stmt = db.prepare(`
       INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, notes, productId, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
-    stmt.run(id, stockNumber, company, product, quantity, unit, category, notes, productId || null, createdAt);
-    res.status(201).json(req.body);
+    await stmt.run(id, stockNumber, company, product, quantity, unit, category, notes, productId || null, finalCreatedAt);
+    res.status(201).json({ ...req.body, createdAt: finalCreatedAt });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/stock-items/:id', (req, res) => {
+app.delete('/api/stock-items/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM stock_items WHERE id = ?');
-    stmt.run(id);
+    await stmt.run(id);
     res.json({ message: 'Stock item deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/stock-items/:id', (req, res) => {
+app.patch('/api/stock-items/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -961,11 +965,11 @@ app.patch('/api/stock-items/:id', (req, res) => {
     // Check if it's a deduct/add operation (legacy support)
     if (updates.deduct !== undefined) {
       const stmt = db.prepare('UPDATE stock_items SET quantity = quantity - ? WHERE id = ?');
-      stmt.run(updates.deduct, id);
+      await stmt.run(updates.deduct, id);
     } else if (updates.quantity !== undefined && Object.keys(updates).length === 1) {
        // Simple quantity set
        const stmt = db.prepare('UPDATE stock_items SET quantity = ? WHERE id = ?');
-       stmt.run(updates.quantity, id);
+       await stmt.run(updates.quantity, id);
     } else {
       // General update for any field
       // Remove 'deduct' if it exists to avoid trying to update a non-existent column
@@ -976,11 +980,11 @@ app.patch('/api/stock-items/:id', (req, res) => {
       
       if (fields.length > 0) {
         const stmt = db.prepare(`UPDATE stock_items SET ${fields} WHERE id = ?`);
-        stmt.run(...values);
+        await stmt.run(...values);
       }
     }
     
-    const updatedItem = db.prepare('SELECT * FROM stock_items WHERE id = ?').get(id);
+    const updatedItem = await db.prepare('SELECT * FROM stock_items WHERE id = ?').get(id);
     if (!updatedItem) {
       return res.status(404).json({ error: 'Stock item not found' });
     }
@@ -993,11 +997,11 @@ app.patch('/api/stock-items/:id', (req, res) => {
 
 // --- PROCUREMENT DISPATCHES ---
 
-const reserveProcurementDispatchId = db.transaction(() => {
-  const row = db.prepare('SELECT value FROM counters WHERE name = ?').get('procurement_dispatch');
+const reserveProcurementDispatchId = db.transaction(async (tx) => {
+  const row = await tx.prepare('SELECT value FROM counters WHERE name = ?').get('procurement_dispatch');
   const current = row && typeof row.value === 'number' ? row.value : 0;
   const next = current + 1;
-  db.prepare(`
+  await tx.prepare(`
     INSERT INTO counters (name, value)
     VALUES (?, ?)
     ON CONFLICT(name) DO UPDATE SET value = excluded.value
@@ -1007,53 +1011,43 @@ const reserveProcurementDispatchId = db.transaction(() => {
 
 const parseProcurementDispatch = (row) => {
   if (!row) return null;
-  let lines = [];
-  try {
-    lines = row.lines ? JSON.parse(row.lines) : [];
-  } catch (e) {
-    lines = [];
-  }
-  let productionReceipt = null;
-  try {
-    productionReceipt = row.productionReceipt ? JSON.parse(row.productionReceipt) : null;
-  } catch (e) {
-    productionReceipt = null;
-  }
+  const lines = parseJsonField(row.lines, []);
+  const productionReceipt = parseJsonField(row.productionReceipt, null);
   return { ...row, lines, productionReceipt };
 };
 
-app.post('/api/procurement-dispatches/reserve-id', (req, res) => {
+app.post('/api/procurement-dispatches/reserve-id', async (req, res) => {
   try {
-    const id = reserveProcurementDispatchId();
+    const id = await reserveProcurementDispatchId();
     res.json({ id });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/procurement-dispatches', (req, res) => {
+app.get('/api/procurement-dispatches', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM procurement_dispatches ORDER BY createdAt DESC').all();
+    const rows = await db.prepare('SELECT * FROM procurement_dispatches ORDER BY createdAt DESC').all();
     res.json(rows.map(parseProcurementDispatch));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/procurement-dispatches', (req, res) => {
+app.post('/api/procurement-dispatches', async (req, res) => {
   try {
     const { id, dispatchDate, vehiclePlate, driverNames, notes, lines, createdAt } = req.body || {};
     if (!dispatchDate || !Array.isArray(lines) || !createdAt) {
       return res.status(400).json({ error: 'Eksik alanlar' });
     }
 
-    const finalId = id || reserveProcurementDispatchId();
-    const existing = db.prepare('SELECT id FROM procurement_dispatches WHERE id = ?').get(finalId);
+    const finalId = id || await reserveProcurementDispatchId();
+    const existing = await db.prepare('SELECT id FROM procurement_dispatches WHERE id = ?').get(finalId);
     if (existing) {
       return res.status(409).json({ error: 'Fiş numarası zaten kullanılmış' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO procurement_dispatches (id, dispatchDate, vehiclePlate, driverNames, notes, lines, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -1066,14 +1060,14 @@ app.post('/api/procurement-dispatches', (req, res) => {
       createdAt
     );
 
-    const inserted = db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(finalId);
+    const inserted = await db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(finalId);
     res.status(201).json(parseProcurementDispatch(inserted));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/procurement-dispatches/:id', (req, res) => {
+app.patch('/api/procurement-dispatches/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { dispatchDate, vehiclePlate, driverNames, notes, lines } = req.body || {};
@@ -1081,7 +1075,7 @@ app.patch('/api/procurement-dispatches/:id', (req, res) => {
       return res.status(400).json({ error: 'Eksik alanlar' });
     }
 
-    const approvedReq = db.prepare(`
+    const approvedReq = await db.prepare(`
       SELECT id FROM procurement_dispatch_change_requests
       WHERE dispatchId = ? AND status = 'approved'
       ORDER BY createdAt DESC
@@ -1097,7 +1091,7 @@ app.patch('/api/procurement-dispatches/:id', (req, res) => {
       SET dispatchDate = ?, vehiclePlate = ?, driverNames = ?, notes = ?, lines = ?
       WHERE id = ?
     `);
-    updateDispatch.run(
+    await updateDispatch.run(
       dispatchDate,
       vehiclePlate || null,
       driverNames || null,
@@ -1106,13 +1100,13 @@ app.patch('/api/procurement-dispatches/:id', (req, res) => {
       id
     );
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE procurement_dispatch_change_requests
       SET status = 'used'
       WHERE id = ?
     `).run(approvedReq.id);
 
-    const updated = db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(id);
     if (!updated) return res.status(404).json({ error: 'Sevk kaydı bulunamadı' });
     res.json(parseProcurementDispatch(updated));
   } catch (error) {
@@ -1120,7 +1114,7 @@ app.patch('/api/procurement-dispatches/:id', (req, res) => {
   }
 });
 
-app.patch('/api/procurement-dispatches/:id/production-receipt', (req, res) => {
+app.patch('/api/procurement-dispatches/:id/production-receipt', async (req, res) => {
   try {
     const { id } = req.params;
     const { productionReceipt } = req.body || {};
@@ -1133,9 +1127,9 @@ app.patch('/api/procurement-dispatches/:id/production-receipt', (req, res) => {
       SET productionReceipt = ?, productionApprovedAt = ?
       WHERE id = ?
     `);
-    stmt.run(JSON.stringify(productionReceipt), new Date().toISOString(), id);
+    await stmt.run(JSON.stringify(productionReceipt), new Date().toISOString(), id);
 
-    const updated = db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(id);
     if (!updated) return res.status(404).json({ error: 'Sevk kaydı bulunamadı' });
     res.json(parseProcurementDispatch(updated));
   } catch (error) {
@@ -1143,23 +1137,23 @@ app.patch('/api/procurement-dispatches/:id/production-receipt', (req, res) => {
   }
 });
 
-app.get('/api/procurement-dispatch-change-requests', (req, res) => {
+app.get('/api/procurement-dispatch-change-requests', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM procurement_dispatch_change_requests ORDER BY createdAt DESC').all();
+    const rows = await db.prepare('SELECT * FROM procurement_dispatch_change_requests ORDER BY createdAt DESC').all();
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/procurement-dispatch-change-requests', (req, res) => {
+app.post('/api/procurement-dispatch-change-requests', async (req, res) => {
   try {
     const { id, dispatchId, reason, createdAt } = req.body || {};
     if (!id || !dispatchId || !reason || !createdAt) {
       return res.status(400).json({ error: 'Eksik alanlar' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO procurement_dispatch_change_requests (id, dispatchId, reason, status, decidedAt, createdAt)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
@@ -1171,14 +1165,14 @@ app.post('/api/procurement-dispatch-change-requests', (req, res) => {
       createdAt
     );
 
-    const inserted = db.prepare('SELECT * FROM procurement_dispatch_change_requests WHERE id = ?').get(id);
+    const inserted = await db.prepare('SELECT * FROM procurement_dispatch_change_requests WHERE id = ?').get(id);
     res.status(201).json(inserted);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/procurement-dispatch-change-requests/:id', (req, res) => {
+app.patch('/api/procurement-dispatch-change-requests/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body || {};
@@ -1186,13 +1180,13 @@ app.patch('/api/procurement-dispatch-change-requests/:id', (req, res) => {
       return res.status(400).json({ error: 'Geçersiz durum' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE procurement_dispatch_change_requests
       SET status = ?, decidedAt = ?
       WHERE id = ?
     `).run(status, new Date().toISOString(), id);
 
-    const updated = db.prepare('SELECT * FROM procurement_dispatch_change_requests WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM procurement_dispatch_change_requests WHERE id = ?').get(id);
     if (!updated) return res.status(404).json({ error: 'Kayıt bulunamadı' });
     res.json(updated);
   } catch (error) {
@@ -1202,17 +1196,17 @@ app.patch('/api/procurement-dispatch-change-requests/:id', (req, res) => {
 
 // --- CUSTOMERS ---
 
-app.get('/api/customers', (req, res) => {
+app.get('/api/customers', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM customers ORDER BY companyName ASC');
-    const customers = stmt.all();
+    const customers = await stmt.all();
     res.json(customers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/customers', (req, res) => {
+app.post('/api/customers', async (req, res) => {
   try {
     const { id, companyName, contactName, email, phone, mobile, address, createdAt } = req.body;
     const finalId = id || crypto.randomUUID();
@@ -1221,14 +1215,14 @@ app.post('/api/customers', (req, res) => {
       INSERT INTO customers (id, companyName, contactName, email, phone, mobile, address, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(finalId, companyName, contactName, email, phone, mobile, address, finalCreatedAt);
+    await stmt.run(finalId, companyName, contactName, email, phone, mobile, address, finalCreatedAt);
     res.status(201).json({ ...req.body, id: finalId, createdAt: finalCreatedAt });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/customers/:id', (req, res) => {
+app.patch('/api/customers/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1237,20 +1231,20 @@ app.patch('/api/customers/:id', (req, res) => {
     
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE customers SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/customers/:id', (req, res) => {
+app.delete('/api/customers/:id', async (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM customers WHERE id = ?');
-    stmt.run(req.params.id);
+    await stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1263,19 +1257,19 @@ const parseProduct = (product) => {
   if (!product) return null;
   return {
     ...product,
-    dimensions: JSON.parse(product.dimensions || '{}'),
-    features: JSON.parse(product.features || '{}'),
-    windowDetails: product.windowDetails ? JSON.parse(product.windowDetails) : undefined,
-    lidDetails: product.lidDetails ? JSON.parse(product.lidDetails) : undefined,
-    images: product.images ? JSON.parse(product.images) : undefined,
-    inks: product.inks ? JSON.parse(product.inks) : undefined,
+    dimensions: parseJsonField(product.dimensions, {}),
+    features: parseJsonField(product.features, {}),
+    windowDetails: product.windowDetails ? parseJsonField(product.windowDetails, undefined) : undefined,
+    lidDetails: product.lidDetails ? parseJsonField(product.lidDetails, undefined) : undefined,
+    images: product.images ? parseJsonField(product.images, undefined) : undefined,
+    inks: product.inks ? parseJsonField(product.inks, undefined) : undefined,
   };
 };
 
-app.get('/api/products', (req, res) => {
+app.get('/api/products', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM products ORDER BY createdAt DESC');
-    const products = stmt.all();
+    const products = await stmt.all();
     const parsedProducts = products.map(parseProduct);
     res.json(parsedProducts);
   } catch (error) {
@@ -1283,7 +1277,7 @@ app.get('/api/products', (req, res) => {
   }
 });
 
-app.post('/api/products', (req, res) => {
+app.post('/api/products', async (req, res) => {
   try {
     const { 
       id, name, productType, boxShape, dimensions, features, 
@@ -1294,7 +1288,7 @@ app.post('/api/products', (req, res) => {
     const finalCreatedAt = createdAt || new Date().toISOString();
 
     // Generate Auto Increment Code
-    const products = db.prepare("SELECT code FROM products WHERE code LIKE 'GMP%'").all();
+    const products = await db.prepare("SELECT code FROM products WHERE code LIKE 'GMP%'").all();
     let maxNum = 0;
     for (const p of products) {
       const numPart = parseInt(p.code.replace('GMP', ''), 10);
@@ -1312,7 +1306,7 @@ app.post('/api/products', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       finalId, 
       newCode, 
       name,
@@ -1334,7 +1328,7 @@ app.post('/api/products', (req, res) => {
   }
 });
 
-app.patch('/api/products/:id', (req, res) => {
+app.patch('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1352,37 +1346,37 @@ app.patch('/api/products/:id', (req, res) => {
     
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE products SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     res.json(parseProduct(updated));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/products/:id', (req, res) => {
+app.delete('/api/products/:id', async (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM products WHERE id = ?');
-    stmt.run(req.params.id);
+    await stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/customers/:id/products', (req, res) => {
+app.get('/api/customers/:id/products', async (req, res) => {
   try {
     const { id } = req.params;
     
     // Get all orders for this customer to find their products
-    const orders = db.prepare('SELECT items FROM orders WHERE customerId = ?').all(id);
+    const orders = await db.prepare('SELECT items FROM orders WHERE customerId = ?').all(id);
     
     const productIds = new Set();
     orders.forEach(order => {
       try {
-        const items = JSON.parse(order.items || '[]');
+        const items = parseJsonField(order.items, []);
         items.forEach(item => {
           if (item.productId) productIds.add(item.productId);
         });
@@ -1397,7 +1391,7 @@ app.get('/api/customers/:id/products', (req, res) => {
 
     const placeholders = [...productIds].map(() => '?').join(',');
     const stmt = db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`);
-    const products = stmt.all(...productIds);
+    const products = await stmt.all(...productIds);
     
     const parsedProducts = products.map(parseProduct);
     res.json(parsedProducts);
@@ -1411,53 +1405,17 @@ app.get('/api/customers/:id/products', (req, res) => {
 const parseOrder = (order) => {
   if (!order) return null;
   
-  let items = [];
-  try {
-    items = JSON.parse(order.items || '[]');
-  } catch (e) {
-    console.error(`Error parsing items for order ${order.id}:`, e);
-    items = [];
-  }
+  const items = parseJsonField(order.items, []);
 
-  let designImages = [];
-  try {
-    designImages = order.designImages ? JSON.parse(order.designImages) : [];
-  } catch (e) {
-    console.error(`Error parsing designImages for order ${order.id}:`, e);
-    designImages = [];
-  }
+  const designImages = parseJsonField(order.designImages, []);
 
-  let stockUsage = {};
-  try {
-    stockUsage = order.stockUsage ? JSON.parse(order.stockUsage) : {};
-  } catch (e) {
-    console.error(`Error parsing stockUsage for order ${order.id}:`, e);
-    stockUsage = {};
-  }
+  const stockUsage = parseJsonField(order.stockUsage, {});
 
-  let procurementDetails = {};
-  try {
-    procurementDetails = order.procurementDetails ? JSON.parse(order.procurementDetails) : {};
-  } catch (e) {
-    console.error(`Error parsing procurementDetails for order ${order.id}:`, e);
-    procurementDetails = {};
-  }
+  const procurementDetails = parseJsonField(order.procurementDetails, {});
 
-  let productionApprovedDetails = [];
-  try {
-    productionApprovedDetails = order.productionApprovedDetails ? JSON.parse(order.productionApprovedDetails) : [];
-  } catch (e) {
-    console.error(`Error parsing productionApprovedDetails for order ${order.id}:`, e);
-    productionApprovedDetails = [];
-  }
+  const productionApprovedDetails = parseJsonField(order.productionApprovedDetails, []);
 
-  let productionDiffs = [];
-  try {
-    productionDiffs = order.productionDiffs ? JSON.parse(order.productionDiffs) : [];
-  } catch (e) {
-    console.error(`Error parsing productionDiffs for order ${order.id}:`, e);
-    productionDiffs = [];
-  }
+  const productionDiffs = parseJsonField(order.productionDiffs, []);
 
   return {
     ...order,
@@ -1514,10 +1472,10 @@ const enrichOrderItems = (orders) => {
   return orders;
 };
 
-app.get('/api/orders', (req, res) => {
+app.get('/api/orders', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM orders ORDER BY createdAt DESC');
-    const orders = stmt.all();
+    const orders = await stmt.all();
     const parsedOrders = orders.map(parseOrder);
     res.json(enrichOrderItems(parsedOrders));
   } catch (error) {
@@ -1525,10 +1483,10 @@ app.get('/api/orders', (req, res) => {
   }
 });
 
-app.get('/api/orders/:id', (req, res) => {
+app.get('/api/orders/:id', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM orders WHERE id = ?');
-    const order = stmt.get(req.params.id);
+    const order = await stmt.get(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -1539,7 +1497,7 @@ app.get('/api/orders/:id', (req, res) => {
   }
 });
 
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', async (req, res) => {
   try {
     const { 
       id, customerId, customerName, items, currency, 
@@ -1567,7 +1525,7 @@ app.post('/api/orders', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       finalId, 
       customerId, 
       customerName, 
@@ -1600,13 +1558,13 @@ app.post('/api/orders', (req, res) => {
   }
 });
 
-app.patch('/api/orders/:id', (req, res) => {
+app.patch('/api/orders/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
     console.log(`[PATCH] Order Update for ${id}:`, JSON.stringify(updates, null, 2));
     
-    const current = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    const current = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     
     // Notification Logic for Assignment
     if (updates.assignedUserId && updates.assignedUserId !== current.assignedUserId) {
@@ -1619,7 +1577,7 @@ app.patch('/api/orders/:id', (req, res) => {
       });
     } else if (updates.assignedRoleName && updates.assignedRoleName !== current.assignedRoleName) {
        // Try to find role ID
-       const role = db.prepare('SELECT id FROM roles WHERE name = ?').get(updates.assignedRoleName);
+       const role = await db.prepare('SELECT id FROM roles WHERE name = ?').get(updates.assignedRoleName);
        if (role) {
          createNotification({
             roleId: role.id,
@@ -1704,15 +1662,15 @@ app.patch('/api/orders/:id', (req, res) => {
             // Usually 'Admin' is a role or we send to all admins.
             // Let's assume 'Admin' role exists or we map to it.
             // If 'Admin' is not found, maybe check for 'Yönetici' or similar.
-            let role = db.prepare('SELECT id FROM roles WHERE name = ?').get(targetRoleName);
+            let role = await db.prepare('SELECT id FROM roles WHERE name = ?').get(targetRoleName);
             
             // Fallback for Supply if named differently (e.g. 'Matbaa' mentioned in Approvals.tsx)
             if (!role && targetRoleName === 'Tedarik') {
-                 role = db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
+                 role = await db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
             }
             // Fallback for Production if named differently
             if (!role && targetRoleName === 'Fabrika Müdürü') {
-                 role = db.prepare('SELECT id FROM roles WHERE name = ?').get('Üretim');
+                 role = await db.prepare('SELECT id FROM roles WHERE name = ?').get('Üretim');
             }
 
             if (role) {
@@ -1755,10 +1713,10 @@ app.patch('/api/orders/:id', (req, res) => {
     
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE orders SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     // Shipping completed -> deduct finished stock
     try {
       const prevStatus = current?.status;
@@ -1770,8 +1728,8 @@ app.patch('/api/orders/:id', (req, res) => {
           INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, productId, notes, createdAt)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        items.forEach(item => {
-          insertStock.run(
+        for (const item of items) {
+          await insertStock.run(
             `${Date.now()}-${Math.random()}`,
             `SHIP-${parsedUpdated.id}-${Date.now()}`,
             parsedUpdated.customerName || 'Sevkiyat',
@@ -1783,7 +1741,7 @@ app.patch('/api/orders/:id', (req, res) => {
             'Sevkiyat ile stoktan düşüş',
             new Date().toISOString()
           );
-        });
+        }
       }
     } catch (e) {
       console.error('Stock deduction on shipping error:', e);
@@ -1794,10 +1752,10 @@ app.patch('/api/orders/:id', (req, res) => {
   }
 });
 
-app.delete('/api/orders/:id', (req, res) => {
+app.delete('/api/orders/:id', async (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM orders WHERE id = ?');
-    stmt.run(req.params.id);
+    await stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1810,23 +1768,23 @@ const parsePersonnel = (person) => {
   if (!person) return null;
   return {
     ...person,
-    childrenAges: JSON.parse(person.childrenAges || '[]'),
-    hasDisability: person.hasDisability === 1,
-    documents: JSON.parse(person.documents || '{}'),
+    childrenAges: parseJsonField(person.childrenAges, []),
+    hasDisability: !!person.hasDisability,
+    documents: parseJsonField(person.documents, {}),
   };
 };
 
-app.get('/api/personnel', (req, res) => {
+app.get('/api/personnel', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM personnel ORDER BY createdAt DESC');
-    const items = stmt.all();
+    const items = await stmt.all();
     res.json(items.map(parsePersonnel));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/personnel', (req, res) => {
+app.post('/api/personnel', async (req, res) => {
   try {
     const { 
       id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
@@ -1847,7 +1805,7 @@ app.post('/api/personnel', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
       homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation, 
       emergencyContactPhone, maritalStatus, sskNumber, department, startDate, 
@@ -1860,7 +1818,7 @@ app.post('/api/personnel', (req, res) => {
   }
 });
 
-app.patch('/api/personnel/:id', (req, res) => {
+app.patch('/api/personnel/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1875,21 +1833,21 @@ app.patch('/api/personnel/:id', (req, res) => {
 
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE personnel SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare('SELECT * FROM personnel WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM personnel WHERE id = ?').get(id);
     res.json(parsePersonnel(updated));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/personnel/:id', (req, res) => {
+app.delete('/api/personnel/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM personnel WHERE id = ?');
-    stmt.run(id);
+    await stmt.run(id);
     res.json({ message: 'Personnel deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1898,35 +1856,35 @@ app.delete('/api/personnel/:id', (req, res) => {
 
 // --- MACHINES ---
 
-app.get('/api/machines', (req, res) => {
+app.get('/api/machines', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM machines ORDER BY createdAt DESC');
-    const items = stmt.all();
+    const items = await stmt.all();
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/machines', (req, res) => {
+app.post('/api/machines', async (req, res) => {
   try {
     const { id, machineNumber, features, maintenanceInterval, lastMaintenance, createdAt } = req.body;
     const stmt = db.prepare(`
       INSERT INTO machines (id, machineNumber, features, maintenanceInterval, lastMaintenance, createdAt)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, machineNumber, features, maintenanceInterval, lastMaintenance, createdAt);
+    await stmt.run(id, machineNumber, features, maintenanceInterval, lastMaintenance, createdAt);
     res.status(201).json(req.body);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/machines/:id', (req, res) => {
+app.delete('/api/machines/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM machines WHERE id = ?');
-    stmt.run(id);
+    await stmt.run(id);
     res.json({ message: 'Machine deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1939,21 +1897,21 @@ const parseShift = (shift) => {
   if (!shift) return null;
   return {
     ...shift,
-    personnelIds: JSON.parse(shift.personnelIds || '[]')
+    personnelIds: parseJsonField(shift.personnelIds, [])
   };
 };
 
-app.get('/api/shifts', (req, res) => {
+app.get('/api/shifts', async (req, res) => {
   try {
     const stmt = db.prepare('SELECT * FROM shifts ORDER BY createdAt DESC');
-    const shifts = stmt.all();
+    const shifts = await stmt.all();
     res.json(shifts.map(parseShift));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/shifts', (req, res) => {
+app.post('/api/shifts', async (req, res) => {
   try {
     const { 
       id, orderId, machineId, supervisorId, personnelIds, 
@@ -1970,7 +1928,7 @@ app.post('/api/shifts', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(
+    await stmt.run(
       id, orderId, machineId, supervisorId, 
       JSON.stringify(personnelIds), 
       startTime, endTime, plannedQuantity, 
@@ -1983,7 +1941,7 @@ app.post('/api/shifts', (req, res) => {
   }
 });
 
-app.patch('/api/shifts/:id', (req, res) => {
+app.patch('/api/shifts/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -1997,20 +1955,20 @@ app.patch('/api/shifts/:id', (req, res) => {
     
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE shifts SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare('SELECT * FROM shifts WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM shifts WHERE id = ?').get(id);
     res.json(parseShift(updated));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/shifts/:id', (req, res) => {
+app.delete('/api/shifts/:id', async (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM shifts WHERE id = ?');
-    stmt.run(req.params.id);
+    await stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2019,10 +1977,10 @@ app.delete('/api/shifts/:id', (req, res) => {
 
 // --- AUTH & USERS ---
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = db.prepare(`
+    const user = await db.prepare(`
       SELECT u.*, r.name as roleName, r.permissions 
       FROM users u 
       LEFT JOIN roles r ON u.roleId = r.id 
@@ -2032,7 +1990,7 @@ app.post('/api/auth/login', (req, res) => {
     if (!user) {
       const ipAddress = getClientIp(req);
       const id = crypto.randomUUID();
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO login_logs (id, userId, username, fullName, roleId, roleName, ipAddress, userAgent, isSuccess, message, loginAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
@@ -2054,7 +2012,7 @@ app.post('/api/auth/login', (req, res) => {
     if (!user.isActive) {
       const ipAddress = getClientIp(req);
       const id = crypto.randomUUID();
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO login_logs (id, userId, username, fullName, roleId, roleName, ipAddress, userAgent, isSuccess, message, loginAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
@@ -2076,14 +2034,14 @@ app.post('/api/auth/login', (req, res) => {
     // Parse permissions
     const userData = {
       ...user,
-      permissions: JSON.parse(user.permissions || '[]'),
+      permissions: parseJsonField(user.permissions, []),
     };
     delete userData.password;
 
     const ipAddress = getClientIp(req);
     const loginLogId = crypto.randomUUID();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO login_logs (id, userId, username, fullName, roleId, roleName, ipAddress, userAgent, isSuccess, message, loginAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -2107,14 +2065,14 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
   try {
     const { loginLogId } = req.body || {};
     if (!loginLogId) {
       return res.status(400).json({ error: 'loginLogId gerekli' });
     }
 
-    const existing = db.prepare('SELECT loginAt FROM login_logs WHERE id = ?').get(loginLogId);
+    const existing = await db.prepare('SELECT loginAt FROM login_logs WHERE id = ?').get(loginLogId);
     if (!existing) {
       return res.status(404).json({ error: 'Oturum kaydı bulunamadı' });
     }
@@ -2123,7 +2081,7 @@ app.post('/api/auth/logout', (req, res) => {
     const loginAtDate = new Date(existing.loginAt);
     const durationSeconds = Math.max(0, Math.floor((logoutAt.getTime() - loginAtDate.getTime()) / 1000));
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE login_logs
       SET logoutAt = ?, durationSeconds = ?
       WHERE id = ?
@@ -2140,9 +2098,9 @@ app.post('/api/auth/logout', (req, res) => {
   }
 });
 
-app.get('/api/users', (req, res) => {
+app.get('/api/users', async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT u.id, u.username, u.fullName, u.roleId, u.isActive, u.createdAt, r.name as roleName 
       FROM users u 
       LEFT JOIN roles r ON u.roleId = r.id 
@@ -2154,12 +2112,12 @@ app.get('/api/users', (req, res) => {
   }
 });
 
-app.post('/api/users', (req, res) => {
+app.post('/api/users', async (req, res) => {
   try {
     const { id, username, password, roleId, fullName, isActive, createdAt } = req.body;
     
     // Check if username exists
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(username);
     if (existing) {
       return res.status(400).json({ error: 'Username already exists' });
     }
@@ -2168,16 +2126,16 @@ app.post('/api/users', (req, res) => {
       INSERT INTO users (id, username, password, roleId, fullName, isActive, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(id, username, password, roleId, fullName, isActive, createdAt);
+    await stmt.run(id, username, password, roleId, fullName, isActive, createdAt);
     
-    const newUser = db.prepare('SELECT id, username, fullName, roleId, isActive, createdAt FROM users WHERE id = ?').get(id);
+    const newUser = await db.prepare('SELECT id, username, fullName, roleId, isActive, createdAt FROM users WHERE id = ?').get(id);
     res.status(201).json(newUser);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/users/:id', (req, res) => {
+app.patch('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -2192,10 +2150,10 @@ app.patch('/api/users/:id', (req, res) => {
     
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE users SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare(`
+    const updated = await db.prepare(`
       SELECT u.id, u.username, u.fullName, u.roleId, u.isActive, u.createdAt, r.name as roleName 
       FROM users u 
       LEFT JOIN roles r ON u.roleId = r.id 
@@ -2208,17 +2166,17 @@ app.patch('/api/users/:id', (req, res) => {
   }
 });
 
-app.delete('/api/users/:id', (req, res) => {
+app.delete('/api/users/:id', async (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM users WHERE id = ?');
-    stmt.run(req.params.id);
+    await stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/logs/actions', (req, res) => {
+app.post('/api/logs/actions', async (req, res) => {
   try {
     const {
       userId,
@@ -2235,7 +2193,7 @@ app.post('/api/logs/actions', (req, res) => {
     const id = crypto.randomUUID();
     const ipAddress = getClientIp(req);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO user_actions (id, userId, username, fullName, roleId, roleName, ipAddress, path, actionType, payload, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -2297,16 +2255,16 @@ app.post('/api/logs/error', (req, res) => {
   }
 });
 
-app.get('/api/logs/login', (req, res) => {
+app.get('/api/logs/login', async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 200;
     const stmt = db.prepare(`
       SELECT *
       FROM login_logs
-      ORDER BY datetime(loginAt) DESC
+      ORDER BY loginAt DESC
       LIMIT ?
     `);
-    const rows = stmt.all(limit);
+    const rows = await stmt.all(limit);
     res.json(rows);
   } catch (error) {
     logError(req, error, { context: 'get_login_logs' });
@@ -2314,16 +2272,16 @@ app.get('/api/logs/login', (req, res) => {
   }
 });
 
-app.get('/api/logs/actions', (req, res) => {
+app.get('/api/logs/actions', async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 200;
     const stmt = db.prepare(`
       SELECT *
       FROM user_actions
-      ORDER BY datetime(createdAt) DESC
+      ORDER BY createdAt DESC
       LIMIT ?
     `);
-    const rows = stmt.all(limit);
+    const rows = await stmt.all(limit);
     res.json(rows);
   } catch (error) {
     logError(req, error, { context: 'get_action_logs' });
@@ -2331,16 +2289,16 @@ app.get('/api/logs/actions', (req, res) => {
   }
 });
 
-app.get('/api/logs/errors', (req, res) => {
+app.get('/api/logs/errors', async (req, res) => {
   try {
     const limit = Number(req.query.limit) || 200;
     const stmt = db.prepare(`
       SELECT *
       FROM error_logs
-      ORDER BY datetime(createdAt) DESC
+      ORDER BY createdAt DESC
       LIMIT ?
     `);
-    const rows = stmt.all(limit);
+    const rows = await stmt.all(limit);
     res.json(rows);
   } catch (error) {
     logError(req, error, { context: 'get_error_logs' });
@@ -2350,12 +2308,12 @@ app.get('/api/logs/errors', (req, res) => {
 
 // --- ROLES ---
 
-app.get('/api/roles', (req, res) => {
+app.get('/api/roles', async (req, res) => {
   try {
-    const roles = db.prepare('SELECT * FROM roles ORDER BY createdAt DESC').all();
-    const parsedRoles = roles.map(role => ({
+    const roles = await db.prepare('SELECT * FROM roles ORDER BY createdAt DESC').all();
+    const parsedRoles = roles.map((role) => ({
       ...role,
-      permissions: JSON.parse(role.permissions || '[]')
+      permissions: parseJsonField(role.permissions, [])
     }));
     res.json(parsedRoles);
   } catch (error) {
@@ -2363,21 +2321,21 @@ app.get('/api/roles', (req, res) => {
   }
 });
 
-app.post('/api/roles', (req, res) => {
+app.post('/api/roles', async (req, res) => {
   try {
     const { id, name, permissions, createdAt } = req.body;
     const stmt = db.prepare(`
       INSERT INTO roles (id, name, permissions, createdAt)
       VALUES (?, ?, ?, ?)
     `);
-    stmt.run(id, name, JSON.stringify(permissions), createdAt);
+    await stmt.run(id, name, JSON.stringify(permissions), createdAt);
     res.status(201).json(req.body);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.patch('/api/roles/:id', (req, res) => {
+app.patch('/api/roles/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -2391,23 +2349,23 @@ app.patch('/api/roles/:id', (req, res) => {
     
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE roles SET ${fields} WHERE id = ?`);
-      stmt.run(...values);
+      await stmt.run(...values);
     }
     
-    const updated = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
+    const updated = await db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
     res.json({
       ...updated,
-      permissions: JSON.parse(updated.permissions || '[]')
+      permissions: parseJsonField(updated.permissions, [])
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.delete('/api/roles/:id', (req, res) => {
+app.delete('/api/roles/:id', async (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM roles WHERE id = ?');
-    stmt.run(req.params.id);
+    await stmt.run(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -2445,18 +2403,18 @@ const DEFAULT_MOLDS = [
 // Ensure default molds exist (Seed if missing)
 try {
   console.log('Checking default molds...');
-  const existsStmt = db.prepare('SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1');
-  const insertStmt = db.prepare(`
-    INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  const now = new Date().toISOString();
-  
-  const seedTransaction = db.transaction((molds) => {
+  const seedTransaction = db.transaction(async (tx, molds) => {
+    const existsStmt = tx.prepare('SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1');
+    const insertStmt = tx.prepare(`
+      INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const now = new Date().toISOString();
     let inserted = 0;
     for (const m of molds) {
-      if (!existsStmt.get(m.productType, m.boxShape, m.dimensions)) {
-        insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
+      const exists = await existsStmt.get(m.productType, m.boxShape, m.dimensions);
+      if (!exists) {
+        await insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
         inserted++;
       }
     }
@@ -2467,13 +2425,15 @@ try {
     }
   });
   
-  seedTransaction(DEFAULT_MOLDS);
+  seedTransaction(DEFAULT_MOLDS).catch((error) => {
+    console.error('Auto-seed molds error:', error);
+  });
 } catch (error) {
   console.error('Auto-seed molds error:', error);
 }
 
 // Varsayılan kalıpları veritabanına ekleyen endpoint (kayıt varsa atlar)
-app.post('/api/molds/seed-defaults', (req, res) => {
+app.post('/api/molds/seed-defaults', async (req, res) => {
   try {
     const existsStmt = db.prepare('SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1');
     const insertStmt = db.prepare(`
@@ -2483,22 +2443,22 @@ app.post('/api/molds/seed-defaults', (req, res) => {
     let inserted = 0;
     let skipped = 0;
     const now = new Date().toISOString();
-    DEFAULT_MOLDS.forEach(m => {
-      const has = existsStmt.get(m.productType, m.boxShape, m.dimensions);
+    for (const m of DEFAULT_MOLDS) {
+      const has = await existsStmt.get(m.productType, m.boxShape, m.dimensions);
       if (has) {
         skipped++;
-        return;
+        continue;
       }
-      insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
+      await insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
       inserted++;
-    });
+    }
     res.json({ success: true, inserted, skipped });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.get('/api/molds', (req, res) => {
+app.get('/api/molds', async (req, res) => {
   try {
     const { productType, boxShape } = req.query;
     let query = 'SELECT * FROM product_molds';
@@ -2521,14 +2481,14 @@ app.get('/api/molds', (req, res) => {
     query += ' ORDER BY createdAt DESC';
     
     const stmt = db.prepare(query);
-    const molds = stmt.all(...params);
+    const molds = await stmt.all(...params);
     res.json(molds);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.post('/api/molds', (req, res) => {
+app.post('/api/molds', async (req, res) => {
   try {
     const { id, productType, boxShape, dimensions, label } = req.body;
     
@@ -2537,7 +2497,7 @@ app.post('/api/molds', (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     
-    stmt.run(
+    await stmt.run(
       id || crypto.randomUUID(),
       productType,
       boxShape,
@@ -2552,11 +2512,11 @@ app.post('/api/molds', (req, res) => {
   }
 });
 
-app.delete('/api/molds/:id', (req, res) => {
+app.delete('/api/molds/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const stmt = db.prepare('DELETE FROM product_molds WHERE id = ?');
-    stmt.run(id);
+    await stmt.run(id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+.pgdata
+.pgdump
+server-backups
+local-backups
+crm.db*
 
 # Editor directories and files
 .vscode/*
