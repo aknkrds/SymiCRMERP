@@ -54,8 +54,9 @@ const main = async () => {
 
   const agent = process.env.SSH_AUTH_SOCK;
   const password = process.env.DEPLOY_PASSWORD || null;
-  const canSudo = !!password;
-  const safeCmd = canSudo ? safeCmdFull : safeCmdFast;
+  const fullDeploy = process.env.DEPLOY_FULL === '1';
+  const canSudo = fullDeploy && !!password;
+  const safeCmd = fullDeploy ? safeCmdFull : safeCmdFast;
   if (!password && !agent) {
     throw new Error('DEPLOY_PASSWORD yok ve SSH_AUTH_SOCK yok. Deploy için en az birini sağlamalısınız.');
   }
