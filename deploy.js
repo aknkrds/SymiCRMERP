@@ -1,27 +1,24 @@
 
 import { Client } from 'ssh2';
-import readline from 'node:readline';
 
-const askHidden = (question) => new Promise((resolve) => {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  rl.stdoutMuted = true;
-  rl._writeToOutput = function _writeToOutput(stringToWrite) {
-    if (rl.stdoutMuted) {
-      if (stringToWrite.trim().length === 0) rl.output.write(stringToWrite);
-      else rl.output.write('*');
-    } else {
-      rl.output.write(stringToWrite);
-    }
-  };
-  rl.question(question, (answer) => {
-    rl.stdoutMuted = false;
-    rl.output.write('\n');
-    rl.close();
-    resolve(answer);
-  });
-});
+const safeCmdFast =
+  'set -e; ' +
+  'cd SymiCRMERP; ' +
+  'TS=$(date +%s); ' +
+  'BACKUP_DIR=/tmp/symicrm_backup_$TS; ' +
+  'mkdir -p $BACKUP_DIR; ' +
+  'tar -czf $BACKUP_DIR/uploads.tgz server/img server/doc 2>/dev/null || true; ' +
+  'git fetch --all; ' +
+  'git reset --hard origin/main; ' +
+  'tar -xzf $BACKUP_DIR/uploads.tgz -C . 2>/dev/null || true; ' +
+  'export PUPPETEER_SKIP_DOWNLOAD=1; ' +
+  '(npm ci || npm install); ' +
+  'npm run build; ' +
+  'pm2 restart symi-crm || (DATABASE_URL=postgresql://symicrm:postgres@localhost:5432/symicrm NODE_ENV=production pm2 start npm --name symi-crm -- run start); ' +
+  'pm2 save; ' +
+  'pm2 list;';
 
-const safeCmd =
+const safeCmdFull =
   'set -e; ' +
   'read -r SUDO_PASS; ' +
   'sudo_pw() { echo "$SUDO_PASS" | sudo -S -p "" "$@"; }; ' +
@@ -33,6 +30,7 @@ const safeCmd =
   'git fetch --all; ' +
   'git reset --hard origin/main; ' +
   'tar -xzf $BACKUP_DIR/uploads.tgz -C . 2>/dev/null || true; ' +
+  'export PUPPETEER_SKIP_DOWNLOAD=1; ' +
   '(npm ci || npm install); ' +
   'npm run build; ' +
   'if ! command -v psql >/dev/null 2>&1; then ' +
@@ -55,7 +53,12 @@ const main = async () => {
   const username = process.env.DEPLOY_USER || 'aknkrds';
 
   const agent = process.env.SSH_AUTH_SOCK;
-  const password = process.env.DEPLOY_PASSWORD || await askHidden('SSH Password: ');
+  const password = process.env.DEPLOY_PASSWORD || null;
+  const canSudo = !!password;
+  const safeCmd = canSudo ? safeCmdFull : safeCmdFast;
+  if (!password && !agent) {
+    throw new Error('DEPLOY_PASSWORD yok ve SSH_AUTH_SOCK yok. Deploy için en az birini sağlamalısınız.');
+  }
 
   const conn = new Client();
   conn.on('ready', () => {
@@ -67,7 +70,9 @@ const main = async () => {
         conn.end();
         process.exit(1);
       }
-      stream.write(`${password}\n`);
+      if (canSudo) {
+        stream.write(`${password}\n`);
+      }
       stream.on('close', (code, signal) => {
         console.log('Stream :: close :: code: ' + code + ', signal: ' + signal);
         conn.end();
@@ -85,8 +90,8 @@ const main = async () => {
     host,
     port,
     username,
-    password,
-    agent
+    ...(password ? { password } : {}),
+    ...(agent ? { agent } : {})
   });
 };
 

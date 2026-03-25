@@ -20,6 +20,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/img', express.static(path.join(process.cwd(), 'server/img')));
 app.use('/doc', express.static(path.join(process.cwd(), 'server/doc')));
+app.use('/users', express.static(path.join(process.cwd(), 'server/users')));
 
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
@@ -324,6 +325,95 @@ app.put('/api/company-settings', async (req, res) => {
     `).run(companyName, contactName, address, phone, mobile, logoUrl, updatedAt);
     
     res.json({ success: true, updatedAt });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- USER DESKTOP DATA & UPLOADS ---
+
+const ensureUserDir = (username) => {
+  const userDir = path.join(process.cwd(), 'server', 'users', username);
+  const userFilesDir = path.join(userDir, 'files');
+  if (!fs.existsSync(userDir)) {
+    fs.mkdirSync(userDir, { recursive: true });
+  }
+  if (!fs.existsSync(userFilesDir)) {
+    fs.mkdirSync(userFilesDir, { recursive: true });
+  }
+  return { userDir, userFilesDir };
+};
+
+app.get('/api/users/:username/desktop-data', (req, res) => {
+  try {
+    const { username } = req.params;
+    const { userDir } = ensureUserDir(username);
+    const dataFile = path.join(userDir, 'data.json');
+    if (fs.existsSync(dataFile)) {
+      const data = fs.readFileSync(dataFile, 'utf8');
+      res.json(JSON.parse(data));
+    } else {
+      res.json(null);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/users/:username/desktop-data', (req, res) => {
+  try {
+    const { username } = req.params;
+    const { userDir } = ensureUserDir(username);
+    const dataFile = path.join(userDir, 'data.json');
+    let existingData = {};
+    if (fs.existsSync(dataFile)) {
+      try {
+        existingData = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
+      } catch (e) {
+        console.error('Error parsing existing data.json', e);
+      }
+    }
+    const mergedData = { ...existingData, ...req.body };
+    fs.writeFileSync(dataFile, JSON.stringify(mergedData, null, 2));
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const userUploadStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const { username } = req.params;
+    const { userFilesDir } = ensureUserDir(username);
+    cb(null, userFilesDir);
+  },
+  filename: function (req, file, cb) {
+    let originalName = file.originalname.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.\-_]/g, '');
+    let name = path.parse(originalName).name;
+    let ext = path.parse(originalName).ext;
+    let finalName = originalName;
+    let counter = 1;
+    const { userFilesDir } = ensureUserDir(req.params.username);
+    while (fs.existsSync(path.join(userFilesDir, finalName))) {
+      finalName = `${name}-${counter}${ext}`;
+      counter++;
+    }
+    cb(null, finalName);
+  }
+});
+
+const userUpload = multer({ storage: userUploadStorage });
+
+app.post('/api/users/:username/upload', userUpload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const { username } = req.params;
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const fileUrl = `${protocol}://${host}/users/${username}/files/${req.file.filename}`;
+    res.json({ url: fileUrl, filename: req.file.filename });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
