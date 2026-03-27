@@ -170,5 +170,6 @@ const createApi = (runner) => ({
 
 const db = createApi((text, params) => pool.query(text, params));
 
+export { pool };
 export default db;
 

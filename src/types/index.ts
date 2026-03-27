@@ -44,24 +44,23 @@ export interface Product {
     inks: {
         cmyk: boolean;
         white: boolean;
-        pantones: string[]; // Array of codes
+        pantones: string[]; 
         goldLak: { has: boolean; code?: string };
         emaye: { has: boolean; code?: string };
         astar: { has: boolean; code?: string };
         silverLak: { has: boolean; code?: string };
-        mold: boolean; // Kalıp
+        mold: boolean; 
+        printType: { value: string; note?: string };
     };
 
     features: {
-        hasLid: boolean;
-        hasWindow: boolean;
-        extras: string;
-        gofre: boolean;
-        gofreDetails?: {
-            count: number;
-            notes: string;
-        };
-        // foodGrade removed
+        window?: { selected: boolean; value?: string; note?: string };
+        lid?: { selected: boolean; value?: string; note?: string };
+        gofre?: { selected: boolean; value?: string; note?: string };
+        bottom?: { selected: boolean; value?: string; note?: string };
+        accessory?: { selected: boolean; value?: string; note?: string };
+        packaging?: { selected: boolean; value?: string; note?: string };
+        extras?: string;
     };
     
     details?: string;
@@ -129,6 +128,7 @@ export interface OrderItem {
     productName: string;
     quantity: number;
     unitPrice: number;
+    unit: string;
     vatRate: number; // Percentage like 18 or 20
     total: number; // quantity * unitPrice * (1 + vatRate/100)
 }
@@ -147,6 +147,7 @@ export interface Order {
     jobSize?: string;       // İşin ebadı
     boxSize?: string;       // Kutu boyutu
     efficiency?: string;    // Verim
+    designJobDetails?: Record<string, { jobSize?: string; boxSize?: string; efficiency?: string }>;
     assignedUserId?: string;
     assignedUserName?: string;
     assignedRoleName?: string;
@@ -208,6 +209,7 @@ export interface StockItem {
     category?: 'procurement' | 'finished' | 'scrap';
     productId?: string;
     notes?: string;
+    minStock?: number;
     createdAt: string;
 }
 
@@ -310,4 +312,14 @@ export interface ProcurementDispatchChangeRequest {
     status: ProcurementDispatchChangeRequestStatus;
     decidedAt?: string;
     createdAt: string;
+}
+export interface WindowState {
+    id: string;
+    title: string;
+    isOpen: boolean;
+    isMinimized: boolean;
+    isMaximized: boolean;
+    zIndex: number;
+    position: { x: number; y: number } | null;
+    size: { width: string | number; height: string | number } | null;
 }

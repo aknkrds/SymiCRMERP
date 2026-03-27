@@ -6,6 +6,7 @@ export interface DesktopItem {
     name: string;
     x: number;
     y: number;
+    parentId?: string;
     content?: string; // base64 for files (legacy), or url (new)
     mimeType?: string;
     extension?: string;
@@ -67,7 +68,7 @@ export const useDesktopStore = create<DesktopStore>()((set) => ({
         return { items: newItems };
     }),
     deleteItem: (id) => set((state) => {
-        const newItems = state.items.filter(i => i.id !== id);
+        const newItems = state.items.filter(i => i.id !== id && i.parentId !== id);
         syncToServer(state.username, newItems);
         return { items: newItems };
     }),

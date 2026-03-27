@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Phone, Mail, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Phone, Mail, User, ChevronLeft, ChevronRight, Filter, Star, Menu } from 'lucide-react';
 import { useCustomers } from '../hooks/useCustomers';
 import type { Customer, CustomerFormData } from '../types';
 import { Modal } from '../components/ui/Modal';
 import { CustomerForm } from '../components/customers/CustomerForm';
+import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
 
 export default function Customers() {
     const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomers();
@@ -24,294 +25,138 @@ export default function Customers() {
     const paginatedCustomers = filteredCustomers.slice(startIndex, startIndex + itemsPerPage);
 
     const handlePageChange = (newPage: number) => {
-        if (newPage >= 1 && newPage <= totalPages) {
-            setCurrentPage(newPage);
-        }
+        if (newPage >= 1 && newPage <= totalPages) setCurrentPage(newPage);
     };
 
-    const handleAdd = () => {
-        setEditingCustomer(undefined);
-        setIsModalOpen(true);
-    };
-
-    const handleEdit = (customer: Customer) => {
-        setEditingCustomer(customer);
-        setIsModalOpen(true);
-    };
-
+    const handleAdd = () => { setEditingCustomer(undefined); setIsModalOpen(true); };
+    const handleEdit = (customer: Customer) => { setEditingCustomer(customer); setIsModalOpen(true); };
     const handleSubmit = (data: CustomerFormData) => {
-        if (editingCustomer) {
-            updateCustomer(editingCustomer.id, data);
-        } else {
-            addCustomer(data);
-        }
+        if (editingCustomer) updateCustomer(editingCustomer.id, data);
+        else addCustomer(data);
         setIsModalOpen(false);
     };
-
     const handleDelete = (id: string) => {
-        if (confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) {
-            deleteCustomer(id);
-        }
+        if (confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) deleteCustomer(id);
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Müşteriler</h1>
-                    <p className="text-slate-500">Müşteri listesi ve yönetimi</p>
-                </div>
-                <button
-                    onClick={handleAdd}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-xl hover:bg-[var(--accent-strong)] hover:shadow-lg hover:shadow-[var(--accent)]/30 transition-all duration-300 transform hover:-translate-y-0.5"
-                >
-                    <Plus size={20} />
-                    Yeni Müşteri
-                </button>
-            </div>
-
-            <div className="glass-card overflow-hidden">
-                <div className="p-4 border-b border-slate-200">
-                    <div className="relative max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <>
+            <ERPPageLayout
+                breadcrumbs={[
+                    { label: 'CRM' },
+                    { label: 'Müşteri İlişkileri' },
+                    { label: 'Müşteriler', active: true },
+                ]}
+                toolbar={
+                    <>
+                        <ToolbarBtn icon={<Plus size={13} />} label="Yeni" variant="primary" onClick={handleAdd} />
+                        <ToolbarBtn icon={<Filter size={13} />} label="Filtrele" />
+                        <ToolbarBtn icon={<Star size={13} />} />
+                        <ToolbarBtn icon={<Menu size={13} />} />
+                    </>
+                }
+                toolbarRight={
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
                         <input
                             type="text"
                             placeholder="Müşteri ara..."
                             value={searchTerm}
-                            onChange={(e) => {
-                                setSearchTerm(e.target.value);
-                                setCurrentPage(1); // Reset to first page on search
-                            }}
-                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-all"
-                            aria-label="Müşteri ara"
+                            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                            className="pl-8 pr-3 py-1 text-xs bg-white border border-slate-200 rounded outline-none focus:ring-1 focus:ring-blue-400 w-48"
                         />
                     </div>
-                </div>
-
-                {/* Mobile View (Cards) */}
-                <div className="md:hidden">
-                    {paginatedCustomers.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500">
-                            Kayıtlı müşteri bulunamadı.
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-200">
-                            {paginatedCustomers.map((customer) => (
-                                <div key={customer.id} className="p-4 space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <div className="font-semibold text-slate-800">{customer.companyName}</div>
-                                            <div className="flex items-center gap-1 text-sm text-slate-500 mt-1">
-                                                <User size={14} />
-                                                {customer.contactName}
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-1">
-                                            <button
-                                                onClick={() => handleEdit(customer)}
-                                                className="p-2 text-indigo-600 bg-indigo-50 rounded-lg"
-                                                aria-label="Düzenle"
-                                            >
-                                                <Edit2 size={18} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(customer.id)}
-                                                className="p-2 text-red-600 bg-red-50 rounded-lg"
-                                                aria-label="Sil"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
+                }
+            >
+                <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                            <th className="w-8 px-2 py-2 text-center border-r border-slate-200 text-[11px]">#</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Firma</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">İletişim Kişisi</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Telefon</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">E-posta</th>
+                            <th className="px-3 py-2 text-[11px] uppercase tracking-wide">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {paginatedCustomers.length === 0 ? (
+                            <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-400">Kayıtlı müşteri bulunamadı.</td></tr>
+                        ) : paginatedCustomers.map((customer, idx) => (
+                            <tr key={customer.id} className="border-b border-slate-100 hover:bg-blue-50/40 transition-colors">
+                                <td className="px-2 py-2 text-center text-slate-400 border-r border-slate-100 font-mono">{startIndex + idx + 1}</td>
+                                <td className="px-3 py-2 border-r border-slate-100">
+                                    <div className="font-semibold text-slate-800">{customer.companyName}</div>
+                                    {customer.address && <div className="text-[11px] text-slate-400 truncate max-w-[160px]">{customer.address}</div>}
+                                </td>
+                                <td className="px-3 py-2 border-r border-slate-100">
+                                    <div className="flex items-center gap-1.5 text-slate-700">
+                                        <User size={12} className="text-indigo-400 flex-shrink-0" />
+                                        {customer.contactName}
                                     </div>
-
-                                    <div className="grid grid-cols-1 gap-2 text-sm text-slate-600">
-                                        <div className="flex items-center gap-2">
-                                            <Phone size={14} className="text-emerald-500" />
-                                            {customer.mobile}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Mail size={14} className="text-blue-500" />
-                                            <span className="truncate">{customer.email}</span>
-                                        </div>
-                                        {customer.address && (
-                                            <div className="text-xs text-slate-400 mt-1">
-                                                {customer.address}
-                                            </div>
-                                        )}
+                                </td>
+                                <td className="px-3 py-2 border-r border-slate-100">
+                                    <div className="flex items-center gap-1.5 text-slate-600">
+                                        <Phone size={12} className="text-emerald-500 flex-shrink-0" />
+                                        {customer.mobile}
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Desktop View (Table) */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50/50 text-slate-800 font-semibold border-b border-slate-100 uppercase tracking-wider text-xs">
-                            <tr>
-                                <th className="px-6 py-4">Firma</th>
-                                <th className="px-6 py-4">İletişim</th>
-                                <th className="px-6 py-4">Telefon & Email</th>
-                                <th className="px-6 py-4 text-right">İşlemler</th>
+                                </td>
+                                <td className="px-3 py-2 border-r border-slate-100">
+                                    <div className="flex items-center gap-1.5 text-slate-600">
+                                        <Mail size={12} className="text-blue-400 flex-shrink-0" />
+                                        <span className="truncate max-w-[160px]">{customer.email}</span>
+                                    </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => handleEdit(customer)} title="Düzenle"
+                                            className="p-1 rounded hover:bg-indigo-100 text-slate-400 hover:text-indigo-600 transition-colors">
+                                            <Edit2 size={14} />
+                                        </button>
+                                        <button onClick={() => handleDelete(customer.id)} title="Sil"
+                                            className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600 transition-colors">
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {paginatedCustomers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                                        Kayıtlı müşteri bulunamadı.
-                                    </td>
-                                </tr>
-                            ) : (
-                                paginatedCustomers.map((customer) => (
-                                    <tr key={customer.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="font-semibold text-slate-800">{customer.companyName}</div>
-                                            <div className="text-xs text-slate-500 max-w-xs truncate">{customer.address}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <User size={16} className="text-indigo-500" />
-                                                {customer.contactName}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <Phone size={16} className="text-emerald-500" />
-                                                {customer.mobile}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Mail size={16} className="text-blue-500" />
-                                                {customer.email}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleEdit(customer)}
-                                                    className="p-2 text-slate-500 hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] rounded-lg transition-colors"
-                                                    title="Düzenle"
-                                                    aria-label="Düzenle"
-                                                >
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(customer.id)}
-                                                    className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
-                                                    title="Sil"
-                                                    aria-label="Sil"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                        ))}
+                    </tbody>
+                </table>
 
-                {/* Pagination Controls */}
+                {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 sm:px-6">
-                        <div className="flex flex-1 justify-between sm:hidden">
-                            <button
-                                onClick={() => handlePageChange(currentPage - 1)}
-                                disabled={currentPage === 1}
-                                className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Önceki
+                    <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 bg-slate-50/50">
+                        <p className="text-xs text-slate-500">
+                            {filteredCustomers.length} kayıttan {startIndex + 1}–{Math.min(startIndex + itemsPerPage, filteredCustomers.length)} gösteriliyor
+                        </p>
+                        <nav className="flex items-center gap-1">
+                            <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
+                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                                <ChevronLeft size={14} />
                             </button>
-                            <button
-                                onClick={() => handlePageChange(currentPage + 1)}
-                                disabled={currentPage === totalPages}
-                                className="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                Sonraki
+                            {[...Array(Math.min(totalPages, 7))].map((_, i) => {
+                                const page = i + 1;
+                                return (
+                                    <button key={page} onClick={() => handlePageChange(page)}
+                                        className={`px-2.5 py-1 rounded border text-xs font-medium transition-colors ${currentPage === page ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 hover:bg-slate-100 text-slate-600'}`}>
+                                        {page}
+                                    </button>
+                                );
+                            })}
+                            <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}
+                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                                <ChevronRight size={14} />
                             </button>
-                        </div>
-                        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                            <div>
-                                <p className="text-sm text-slate-700">
-                                    Toplam <span className="font-medium">{filteredCustomers.length}</span> kayıttan <span className="font-medium">{startIndex + 1}</span> - <span className="font-medium">{Math.min(startIndex + itemsPerPage, filteredCustomers.length)}</span> arası gösteriliyor
-                                </p>
-                            </div>
-                            <div>
-                                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                                    <button
-                                        onClick={() => handlePageChange(currentPage - 1)}
-                                        disabled={currentPage === 1}
-                                        className="relative inline-flex items-center rounded-l-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <span className="sr-only">Önceki</span>
-                                        <ChevronLeft className="h-5 w-5" aria-hidden="true" />
-                                    </button>
-
-                                    {/* Page Numbers */}
-                                    {[...Array(totalPages)].map((_, i) => {
-                                        const page = i + 1;
-                                        // Show first, last, current, and surrounding pages
-                                        if (
-                                            page === 1 ||
-                                            page === totalPages ||
-                                            (page >= currentPage - 1 && page <= currentPage + 1)
-                                        ) {
-                                            return (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => handlePageChange(page)}
-                                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${currentPage === page
-                                                            ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                                                            : 'text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0'
-                                                        }`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            );
-                                        } else if (
-                                            page === currentPage - 2 ||
-                                            page === currentPage + 2
-                                        ) {
-                                            return (
-                                                <span
-                                                    key={page}
-                                                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 focus:outline-offset-0"
-                                                >
-                                                    ...
-                                                </span>
-                                            );
-                                        }
-                                        return null;
-                                    })}
-
-                                    <button
-                                        onClick={() => handlePageChange(currentPage + 1)}
-                                        disabled={currentPage === totalPages}
-                                        className="relative inline-flex items-center rounded-r-md px-2 py-2 text-slate-400 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        <span className="sr-only">Sonraki</span>
-                                        <ChevronRight className="h-5 w-5" aria-hidden="true" />
-                                    </button>
-                                </nav>
-                            </div>
-                        </div>
+                        </nav>
                     </div>
                 )}
-            </div>
+            </ERPPageLayout>
 
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title={editingCustomer ? "Müşteri Düzenle" : "Yeni Müşteri Ekle"}
-            >
-                <CustomerForm
-                    initialData={editingCustomer}
-                    onSubmit={handleSubmit}
-                    onCancel={() => setIsModalOpen(false)}
-                />
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg"
+                title={editingCustomer ? "Müşteri Düzenle" : "Yeni Müşteri Ekle"}>
+                <CustomerForm initialData={editingCustomer} onSubmit={handleSubmit} onCancel={() => setIsModalOpen(false)} />
             </Modal>
-        </div>
+        </>
     );
 }

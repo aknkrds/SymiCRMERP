@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
 import { appsConfig } from '../../config/apps';
 import { useWindowStore } from '../../store/windowStore';
 import { Download } from 'lucide-react';
+import { useDesktopStore } from '../../store/desktopStore';
 
 export default function ShortcutManager() {
-    const { openWindow, closeWindow } = useWindowStore();
+    const { addItem } = useDesktopStore();
+    const { closeWindow } = useWindowStore();
 
-    const handleCreate = (appId: string, appTitle: string) => {
-        // For now we just trigger it or save to a desktop shortcuts store.
-        // In Phase 3, this will add to a desktop store. For now, it opens the app.
-        openWindow(appId, appTitle);
+    const handleCreate = (app: any) => {
+        addItem({
+            type: 'file',
+            name: app.title,
+            x: 120,
+            y: 120,
+            mimeType: 'application/x-shortcut',
+            url: app.id,
+            extension: 'app'
+        });
         closeWindow('shortcuts');
     };
 
@@ -31,7 +38,7 @@ export default function ShortcutManager() {
                                     <h3 className="font-semibold text-slate-700 text-sm truncate">{app.title}</h3>
                                 </div>
                                 <button
-                                    onClick={() => handleCreate(app.id, app.title)}
+                                    onClick={() => handleCreate(app)}
                                     className="opacity-0 group-hover:opacity-100 p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                                     title="Masaüstüne Kısayol Ekle"
                                 >

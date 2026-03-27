@@ -1,15 +1,34 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { cn } from '../../lib/utils';
 
 interface ModalProps {
     isOpen: boolean;
     onClose: () => void;
     title: string;
     children: React.ReactNode;
-    maxWidthClassName?: string;
+    size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+    theme?: 'light' | 'glass' | 'minimal';
 }
 
-export function Modal({ isOpen, onClose, title, children, maxWidthClassName }: ModalProps) {
+const sizeClasses = {
+    sm: 'max-w-md',
+    md: 'max-w-2xl',
+    lg: 'max-w-4xl',
+    xl: 'max-w-6xl',
+    '2xl': 'max-w-7xl',
+    full: 'max-w-[95vw] h-[90vh]'
+};
+
+export function Modal({ 
+    isOpen, 
+    onClose, 
+    title, 
+    children, 
+    size = 'md',
+    theme = 'minimal'
+}: ModalProps) {
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
@@ -26,22 +45,66 @@ export function Modal({ isOpen, onClose, title, children, maxWidthClassName }: M
 
     if (!isOpen) return null;
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md transition-opacity">
-            <div className={`glass-card shadow-2xl w-full ${maxWidthClassName || 'max-w-2xl'} max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200 mx-2 md:mx-0 border-white/20`}>
-                <div className="flex items-center justify-between p-4 border-b border-slate-100/50 shrink-0">
-                    <h3 className="text-lg font-semibold text-slate-800 line-clamp-1">{title}</h3>
+    const isFull = size === 'full';
+    const isMinimal = theme === 'minimal';
+
+    const modalNode = (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <div 
+                className={cn(
+                    "absolute inset-0 transition-opacity animate-in fade-in duration-300",
+                    isMinimal ? "bg-slate-900/30" : "bg-slate-900/40 backdrop-blur-sm"
+                )}
+                onClick={onClose}
+            />
+            
+            {/* Modal Content */}
+            <div 
+                className={cn(
+                    "relative w-full overflow-hidden flex flex-col animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300 rounded-2xl border max-h-[85vh]",
+                    sizeClasses[size],
+                    theme === 'glass' 
+                        ? "bg-white/80 backdrop-blur-2xl border-white/40 shadow-black/20"
+                        : isMinimal
+                          ? "bg-white border-slate-200 shadow-black/10"
+                          : "bg-white border-slate-200 shadow-slate-200/50",
+                    isFull && "h-[90vh]"
+                )}
+            >
+                {/* Header */}
+                <div className={cn(
+                    "flex items-center justify-between border-b border-slate-200/50 shrink-0",
+                    isMinimal ? "px-4 py-2.5 bg-white/80" : "px-6 py-4"
+                )}>
+                    <h3 className={cn(
+                        "text-slate-800 tracking-tight",
+                        isMinimal ? "text-sm font-semibold" : "text-lg font-bold"
+                    )}>{title}</h3>
                     <button
                         onClick={onClose}
-                        className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-500"
+                        className={cn(
+                            "rounded-full transition-colors text-slate-400 hover:text-slate-600",
+                            isMinimal ? "p-1 hover:bg-black/5" : "p-1.5 hover:bg-black/5"
+                        )}
+                        title="Kapat"
                     >
                         <X size={20} />
                     </button>
                 </div>
-                <div className="p-4 md:p-6 overflow-y-auto overflow-x-hidden min-w-0">
-                    {children}
+
+                {/* Body */}
+                <div className={cn(
+                    "flex-1 overflow-y-auto min-w-0 custom-scrollbar overscroll-contain",
+                    isMinimal ? "p-4" : "p-6"
+                )}>
+                    <div className="mx-auto w-full">
+                        {children}
+                    </div>
                 </div>
             </div>
         </div>
     );
+
+    return createPortal(modalNode, document.body);
 }

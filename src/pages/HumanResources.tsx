@@ -1,45 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Plus, Eye, Search, User, Phone, Mail, MapPin, Calendar, Briefcase, Heart, AlertCircle, X, FileText, Upload, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Eye, Search, User, Phone, Mail, Briefcase, FileText, Upload, Trash2, Menu, Filter } from 'lucide-react';
 import type { Personnel } from '../types';
+import { Modal } from '../components/ui/Modal';
+import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
 
 const REQUIRED_DOCUMENTS = [
-  'Kimlik Ön Resmi',
-  'Kimlik Arka Resmi',
-  'İşe Başvuru Formu',
-  'Engelli Belgesi',
-  'Askerlik Belgesi',
-  'İşe Giriş Belgesi',
-  'Sağlık Raporu',
-  'İkametgah',
-  'İşkur Evrağı',
-  'Resim',
-  'Diploma',
-  'Adli Sicil Raporu',
-  'Odio İşitme Testi',
-  'Akciğer Grafisi',
-  'EKG',
-  'Kan ve İdrar Tahlili'
+  'Kimlik Ön Resmi', 'Kimlik Arka Resmi', 'İşe Başvuru Formu', 'Engelli Belgesi', 'Askerlik Belgesi',
+  'İşe Giriş Belgesi', 'Sağlık Raporu', 'İkametgah', 'İşkur Evrağı', 'Resim', 'Diploma',
+  'Adli Sicil Raporu', 'Odio İşitme Testi', 'Akciğer Grafisi', 'EKG', 'Kan ve İdrar Tahlili'
 ];
 
 export default function HumanResources() {
   const [personnelList, setPersonnelList] = useState<Personnel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Personnel | null>(null);
   const [formData, setFormData] = useState<Partial<Personnel>>({});
   const [formLoading, setFormLoading] = useState(false);
-
-  // Documents Modal State
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false);
   const [selectedPersonDocs, setSelectedPersonDocs] = useState<Personnel | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchPersonnel();
-  }, []);
+  useEffect(() => { fetchPersonnel(); }, []);
 
   const fetchPersonnel = async () => {
     try {
@@ -49,652 +32,346 @@ export default function HumanResources() {
         const data = await response.json();
         setPersonnelList(Array.isArray(data) ? data : []);
       }
-    } catch (error) {
-      console.error('Error fetching personnel:', error);
-      setPersonnelList([]);
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { console.error('Error fetching personnel:', error); setPersonnelList([]); }
+    finally { setLoading(false); }
   };
 
   const handleOpenModal = (person?: Personnel) => {
     if (person) {
       setSelectedPerson(person);
-      setFormData({ 
-        ...person,
-        childrenAges: Array.isArray(person.childrenAges) ? person.childrenAges : [],
-        hasDisability: person.hasDisability || false
-      });
+      setFormData({ ...person, childrenAges: Array.isArray(person.childrenAges) ? person.childrenAges : [], hasDisability: person.hasDisability || false });
     } else {
       setSelectedPerson(null);
-      setFormData({
-        childrenCount: 0,
-        childrenAges: [],
-        hasDisability: false
-      });
+      setFormData({ childrenCount: 0, childrenAges: [], hasDisability: false });
     }
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedPerson(null);
-    setFormData({});
-  };
-
-  const handleOpenDocsModal = (person: Personnel) => {
-    setSelectedPersonDocs(person);
-    setIsDocsModalOpen(true);
-  };
-
-  const handleCloseDocsModal = () => {
-    setIsDocsModalOpen(false);
-    setSelectedPersonDocs(null);
-    setUploadingDoc(null);
-  };
+  const handleCloseModal = () => { setIsModalOpen(false); setSelectedPerson(null); setFormData({}); };
+  const handleOpenDocsModal = (person: Personnel) => { setSelectedPersonDocs(person); setIsDocsModalOpen(true); };
+  const handleCloseDocsModal = () => { setIsDocsModalOpen(false); setSelectedPersonDocs(null); setUploadingDoc(null); };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, docType: string) => {
     const input = event.target;
     const file = input.files?.[0];
     if (!file || !selectedPersonDocs) return;
-
     try {
       setUploadingDoc(docType);
-      const formData = new FormData();
-      formData.append('image', file);
-
-      // Upload file
-      const uploadRes = await fetch('/api/upload?folder=doc', {
-        method: 'POST',
-        body: formData
-      });
-
+      const formDataUpload = new FormData();
+      formDataUpload.append('image', file);
+      const uploadRes = await fetch('/api/upload?folder=doc', { method: 'POST', body: formDataUpload });
       if (!uploadRes.ok) throw new Error('Dosya yüklenemedi');
-
       const { url } = await uploadRes.json();
-
-      // Update personnel record
       const currentDocs = selectedPersonDocs.documents || {};
       const updatedDocs = { ...currentDocs, [docType]: url };
-
-      const updateRes = await fetch(`/api/personnel/${selectedPersonDocs.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documents: updatedDocs })
-      });
-
+      const updateRes = await fetch(`/api/personnel/${selectedPersonDocs.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documents: updatedDocs }) });
       if (!updateRes.ok) throw new Error('Personel güncellenemedi');
-
       const updatedPerson = await updateRes.json();
-      
-      // Update local state
       setSelectedPersonDocs(updatedPerson);
       setPersonnelList(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
-
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Dosya yüklenirken bir hata oluştu');
-    } finally {
-      setUploadingDoc(null);
-      // Reset input
-      if (input) input.value = '';
-    }
+    } catch (error) { console.error('Upload error:', error); alert('Dosya yüklenirken bir hata oluştu'); }
+    finally { setUploadingDoc(null); if (input) input.value = ''; }
   };
 
   const handleDeleteDocument = async (docType: string) => {
     if (!selectedPersonDocs || !confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
-
     try {
       const currentDocs = selectedPersonDocs.documents || {};
       const updatedDocs = { ...currentDocs };
       delete updatedDocs[docType];
-
-      const updateRes = await fetch(`/api/personnel/${selectedPersonDocs.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documents: updatedDocs })
-      });
-
+      const updateRes = await fetch(`/api/personnel/${selectedPersonDocs.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documents: updatedDocs }) });
       if (!updateRes.ok) throw new Error('Belge silinemedi');
-
       const updatedPerson = await updateRes.json();
-      
-      // Update local state
       setSelectedPersonDocs(updatedPerson);
       setPersonnelList(prev => prev.map(p => p.id === updatedPerson.id ? updatedPerson : p));
-
-    } catch (error) {
-      console.error('Delete error:', error);
-      alert('Belge silinirken bir hata oluştu');
-    }
+    } catch (error) { console.error('Delete error:', error); alert('Belge silinirken bir hata oluştu'); }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
-    
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
     } else if (name === 'childrenCount') {
       const count = parseInt(value) || 0;
-      // Resize array safely
       const currentAges = Array.isArray(formData.childrenAges) ? formData.childrenAges : [];
       const newAges = Array(count).fill(0).map((_, i) => currentAges[i] || 0);
-      
-      setFormData(prev => ({ 
-        ...prev, 
-        [name]: count,
-        childrenAges: newAges
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+      setFormData(prev => ({ ...prev, [name]: count, childrenAges: newAges }));
+    } else { setFormData(prev => ({ ...prev, [name]: value })); }
   };
 
   const handleChildAgeChange = (index: number, value: string) => {
     const age = parseInt(value) || 0;
     const currentAges = Array.isArray(formData.childrenAges) ? formData.childrenAges : [];
     const newAges = [...currentAges];
-    // Ensure array is long enough
-    while (newAges.length <= index) {
-      newAges.push(0);
-    }
+    while (newAges.length <= index) { newAges.push(0); }
     newAges[index] = age;
     setFormData(prev => ({ ...prev, childrenAges: newAges }));
-  };
-
-  const generateId = () => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    return Date.now().toString(36) + Math.random().toString(36).substring(2);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormLoading(true);
-
     try {
       const url = selectedPerson ? `/api/personnel/${selectedPerson.id}` : '/api/personnel';
       const method = selectedPerson ? 'PATCH' : 'POST';
-      
-      const body = {
-        ...formData,
-        id: selectedPerson ? selectedPerson.id : generateId(),
-        createdAt: selectedPerson ? selectedPerson.createdAt : new Date().toISOString()
-      };
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      if (response.ok) {
-        await fetchPersonnel();
-        handleCloseModal();
-      } else {
-        console.error('Failed to save personnel');
-      }
-    } catch (error) {
-      console.error('Error saving personnel:', error);
-    } finally {
-      setFormLoading(false);
-    }
+      const body = { ...formData, id: selectedPerson ? selectedPerson.id : crypto.randomUUID(), createdAt: selectedPerson ? selectedPerson.createdAt : new Date().toISOString() };
+      const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (response.ok) { await fetchPersonnel(); handleCloseModal(); }
+    } catch (error) { console.error('Error saving personnel:', error); }
+    finally { setFormLoading(false); }
   };
 
-  const filteredPersonnel = personnelList
-    .filter(p => 
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.department?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => {
-      // İşten çıkanları (endDate dolu olanları) en sona at
-      if (a.endDate && !b.endDate) return 1;
-      if (!a.endDate && b.endDate) return -1;
-      return 0;
-    });
+  const filteredPersonnel = personnelList.filter(p => 
+    `${p.firstName} ${p.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.department?.toLowerCase().includes(searchTerm.toLowerCase())
+  ).sort((a, b) => (a.endDate && !b.endDate) ? 1 : (!a.endDate && b.endDate) ? -1 : 0);
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">İnsan Kaynakları</h1>
-          <p className="text-slate-600">Personel yönetimi ve takibi</p>
-        </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-        >
-          <Plus size={20} />
-          Yeni Personel Ekle
-        </button>
-      </div>
-
-      {/* Search Bar */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-6">
+    <ERPPageLayout
+      breadcrumbs={[{ label: 'İK' }, { label: 'Personel Yönetimi', active: true }]}
+      toolbar={
+        <>
+          <ToolbarBtn icon={<Plus size={13} />} label="Yeni Personel" variant="primary" onClick={() => handleOpenModal()} />
+          <ToolbarBtn icon={<Filter size={13} />} label="Filtrele" />
+          <ToolbarBtn icon={<Menu size={13} />} />
+        </>
+      }
+      toolbarRight={
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
           <input 
             type="text" 
-            placeholder="Personel Ara (İsim, Görev, Departman)..." 
-            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-            value={searchTerm}
+            placeholder="Personel ara..." 
+            value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8 pr-3 py-1 text-xs bg-white border border-slate-200 rounded outline-none focus:ring-1 focus:ring-blue-400 w-64" 
           />
+        </div>
+      }
+    >
+      <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden text-[11px]">
+        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center whitespace-nowrap">
+            <span className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">Personel Listesi</span>
+            <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 font-bold border border-indigo-100 text-[9px]">{filteredPersonnel.length} PERSONEL</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/30 text-slate-400 font-bold uppercase text-[9px] tracking-wider border-b border-slate-100">
+                <th className="w-12 px-5 py-3 text-center border-r border-slate-100">#</th>
+                <th className="px-5 py-3 border-r border-slate-100">Personel Bilgileri</th>
+                <th className="px-5 py-3 border-r border-slate-100">Görev & Organizasyon</th>
+                <th className="px-5 py-3 border-r border-slate-100">İletişim Kanalları</th>
+                <th className="px-5 py-3 text-right">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr><td colSpan={5} className="px-5 py-20 text-center text-slate-400 uppercase tracking-widest animate-pulse font-bold">Veriler Yükleniyor...</td></tr>
+              ) : filteredPersonnel.length === 0 ? (
+                <tr><td colSpan={5} className="px-5 py-20 text-center text-slate-400">Aranan kriterlere uygun personel bulunamadı.</td></tr>
+              ) : filteredPersonnel.map((person, idx) => {
+                const isExited = !!person.endDate;
+                return (
+                  <tr key={person.id} className={`hover:bg-blue-50/30 transition-all group ${isExited ? 'bg-red-50/20' : ''}`}>
+                    <td className="px-5 py-4 text-center text-slate-300 border-r border-slate-50 font-mono font-bold">{idx + 1}</td>
+                    <td className="px-5 py-4 border-r border-slate-50">
+                      <div className="flex items-center gap-3">
+                         <div className={`w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-50 to-blue-50 text-indigo-600 flex items-center justify-center font-bold text-xs border border-indigo-100 shadow-sm ${isExited ? 'grayscale opacity-40' : ''}`}>
+                          {(person.firstName || '').charAt(0)}{(person.lastName || '').charAt(0)}
+                        </div>
+                        <div>
+                          <div className={`font-bold text-slate-800 text-[12px] uppercase tracking-tight ${isExited ? 'line-through text-slate-400' : ''}`}>{person.firstName} {person.lastName}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] text-slate-400 font-mono font-bold">TC: {person.tcNumber}</span>
+                            {isExited && <span className="px-1.5 py-0.5 bg-red-100 text-red-600 rounded text-[8px] font-black uppercase tracking-tighter">AYRILDI</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 border-r border-slate-50">
+                      <div className="flex items-center gap-2">
+                        <Briefcase size={12} className="text-slate-300" />
+                        <span className={`font-bold text-slate-700 uppercase tracking-tight ${isExited ? 'text-slate-400' : ''}`}>{person.role}</span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 ml-5">{person.department}</div>
+                    </td>
+                    <td className="px-5 py-4 border-r border-slate-50 text-slate-500">
+                      <div className="flex items-center gap-2 group/phone cursor-pointer">
+                        <Phone size={11} className="text-slate-300 group-hover/phone:text-blue-500 transition-colors" /> 
+                        <span className="font-mono text-[10px] font-bold tracking-tighter">{person.mobilePhone}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 group/mail cursor-pointer">
+                        <Mail size={11} className="text-slate-300 group-hover/mail:text-blue-500 transition-colors" />
+                        <span className="text-[10px] truncate max-w-[120px] font-medium">{person.email || '-'}</span>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-right whitespace-nowrap">
+                      <div className="flex justify-end gap-1.5 translate-x-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
+                        <button onClick={() => handleOpenDocsModal(person)} className="p-2 rounded-lg bg-white border border-slate-200 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm" title="Evrak Arşivi">
+                          <FileText size={14} />
+                        </button>
+                        <button onClick={() => handleOpenModal(person)} className="p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm" title="Profil Detayı">
+                          <Eye size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Personnel List */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 text-slate-600 text-xs uppercase font-semibold">
-            <tr>
-              <th className="px-6 py-3">Adı Soyadı</th>
-              <th className="px-6 py-3">Görevi</th>
-              <th className="px-6 py-3">Departman</th>
-              <th className="px-6 py-3">İletişim</th>
-              <th className="px-6 py-3 text-right">İşlemler</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">Yükleniyor...</td>
-              </tr>
-            ) : filteredPersonnel.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-slate-500">Kayıtlı personel bulunamadı.</td>
-              </tr>
-            ) : (
-              filteredPersonnel.map((person) => {
-                const isExited = !!person.endDate;
-                const rowStyle = isExited ? 'bg-red-50' : 'hover:bg-slate-50';
-                const textStyle = isExited ? 'line-through decoration-red-500 decoration-2 text-slate-500' : '';
-                
-                return (
-                <tr key={person.id} className={`${rowStyle} transition-colors`}>
-                  <td className={`px-6 py-4 ${textStyle}`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${isExited ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                        {(person.firstName || '').charAt(0)}{(person.lastName || '').charAt(0)}
-                      </div>
-                      <div>
-                        <div className={`font-medium ${isExited ? 'text-slate-600' : 'text-slate-900'}`}>{person.firstName} {person.lastName}</div>
-                        <div className="text-xs text-slate-500">{person.tcNumber}</div>
+      {/* Docs Modal */}
+      {isDocsModalOpen && selectedPersonDocs && (
+        <Modal isOpen={isDocsModalOpen} onClose={handleCloseDocsModal} title={`Personel Arşivi: ${selectedPersonDocs.firstName} ${selectedPersonDocs.lastName}`} size="lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 p-1 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+            {REQUIRED_DOCUMENTS.map((docName) => {
+              const docUrl = selectedPersonDocs.documents?.[docName];
+              const isUploading = uploadingDoc === docName;
+              return (
+                <div key={docName} className="group border border-slate-200/60 rounded-xl p-3 flex flex-col justify-between gap-3 bg-white hover:border-blue-200 hover:shadow-md hover:shadow-blue-500/5 transition-all">
+                  <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-black text-slate-800 uppercase tracking-tight leading-tight">{docName}</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-1.5 h-1.5 rounded-full ${docUrl ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-200'}`}></div>
+                        <span className={`text-[9px] font-bold tracking-widest ${docUrl ? 'text-emerald-600' : 'text-slate-400'}`}>{docUrl ? 'MEVCUT' : 'BEKLENİYOR'}</span>
                       </div>
                     </div>
-                  </td>
-                  <td className={`px-6 py-4 text-slate-700 ${textStyle}`}>{person.role}</td>
-                  <td className={`px-6 py-4 text-slate-700 ${textStyle}`}>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${isExited ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                      {person.department}
-                    </span>
-                  </td>
-                  <td className={`px-6 py-4 ${textStyle}`}>
-                    <div className="flex flex-col text-sm text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <Phone size={14} /> {person.mobilePhone}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
-                        <Mail size={14} /> {person.email || '-'}
-                      </div>
+                    <div className="p-2 bg-slate-50 rounded-lg text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-400 transition-colors">
+                      <FileText size={16} />
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
-                    <button 
-                      onClick={() => handleOpenDocsModal(person)}
-                      className="text-slate-600 hover:text-indigo-600 font-medium text-sm flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-md hover:bg-indigo-50 transition-colors border border-slate-200 hover:border-indigo-200"
-                      title="Evraklar"
-                    >
-                      <FileText size={16} /> Evraklar
-                    </button>
-                    <button 
-                      onClick={() => handleOpenModal(person)}
-                      className="text-indigo-600 hover:text-indigo-800 font-medium text-sm flex items-center justify-end gap-1"
-                    >
-                      <Eye size={16} /> Gözat
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center z-10">
-              <h2 className="text-xl font-bold text-slate-800">
-                {selectedPerson ? 'Personel Detayları' : 'Yeni Personel Ekle'}
-              </h2>
-              <button onClick={handleCloseModal} className="text-slate-500 hover:text-slate-700" aria-label="Kapat" title="Kapat">
-                <X size={24} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="p-6 space-y-8">
-              {/* 1. Kişisel Bilgiler */}
-              <section>
-                <h3 className="text-lg font-semibold text-indigo-700 mb-4 flex items-center gap-2">
-                  <User size={20} /> Kişisel Bilgiler
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="firstName" className="block text-sm font-medium text-slate-700 mb-1">Adı</label>
-                    <input id="firstName" required name="firstName" value={formData.firstName || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Adı" placeholder="Adı" />
-                  </div>
-                  <div>
-                    <label htmlFor="lastName" className="block text-sm font-medium text-slate-700 mb-1">Soyadı</label>
-                    <input id="lastName" required name="lastName" value={formData.lastName || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Soyadı" placeholder="Soyadı" />
-                  </div>
-                  <div>
-                    <label htmlFor="tcNumber" className="block text-sm font-medium text-slate-700 mb-1">TC Kimlik No</label>
-                    <input id="tcNumber" required name="tcNumber" maxLength={11} value={formData.tcNumber || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="TC Kimlik No" placeholder="TC Kimlik No" />
-                  </div>
-                  <div>
-                    <label htmlFor="birthDate" className="block text-sm font-medium text-slate-700 mb-1">Doğum Tarihi</label>
-                    <input id="birthDate" type="date" name="birthDate" value={formData.birthDate || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Doğum Tarihi" />
-                  </div>
-                  <div>
-                    <label htmlFor="birthPlace" className="block text-sm font-medium text-slate-700 mb-1">Doğum Yeri</label>
-                    <input id="birthPlace" name="birthPlace" value={formData.birthPlace || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Doğum Yeri" placeholder="Doğum Yeri" />
-                  </div>
-                  <div>
-                    <label htmlFor="maritalStatus" className="block text-sm font-medium text-slate-700 mb-1">Medeni Durum</label>
-                    <select id="maritalStatus" name="maritalStatus" value={formData.maritalStatus || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Medeni Durum" aria-label="Medeni Durum">
-                      <option value="">Seçiniz</option>
-                      <option value="Bekar">Bekar</option>
-                      <option value="Evli">Evli</option>
-                    </select>
-                  </div>
-                </div>
-              </section>
-
-              {/* 2. İletişim Bilgileri */}
-              <section>
-                <h3 className="text-lg font-semibold text-indigo-700 mb-4 flex items-center gap-2">
-                  <MapPin size={20} /> İletişim Bilgileri
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-3">
-                    <label htmlFor="address" className="block text-sm font-medium text-slate-700 mb-1">Ev Adresi</label>
-                    <textarea id="address" name="address" rows={2} value={formData.address || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Ev Adresi" placeholder="Ev Adresi" />
-                  </div>
-                  <div>
-                    <label htmlFor="mobilePhone" className="block text-sm font-medium text-slate-700 mb-1">Cep Telefonu</label>
-                    <input id="mobilePhone" type="tel" name="mobilePhone" value={formData.mobilePhone || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Cep Telefonu" placeholder="Cep Telefonu" />
-                  </div>
-                  <div>
-                    <label htmlFor="homePhone" className="block text-sm font-medium text-slate-700 mb-1">Ev Telefonu</label>
-                    <input id="homePhone" type="tel" name="homePhone" value={formData.homePhone || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Ev Telefonu" placeholder="Ev Telefonu" />
-                  </div>
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">E-posta Adresi</label>
-                    <input id="email" type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="E-posta Adresi" placeholder="E-posta Adresi" />
-                  </div>
-                </div>
-              </section>
-
-              {/* 3. Acil Durum */}
-              <section>
-                <h3 className="text-lg font-semibold text-indigo-700 mb-4 flex items-center gap-2">
-                  <AlertCircle size={20} /> Acil Durumda Ulaşılacak Kişi
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="emergencyContactName" className="block text-sm font-medium text-slate-700 mb-1">Adı Soyadı</label>
-                    <input id="emergencyContactName" name="emergencyContactName" value={formData.emergencyContactName || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Adı Soyadı" placeholder="Adı Soyadı" />
-                  </div>
-                  <div>
-                    <label htmlFor="emergencyContactRelation" className="block text-sm font-medium text-slate-700 mb-1">Yakınlık Derecesi</label>
-                    <input id="emergencyContactRelation" name="emergencyContactRelation" value={formData.emergencyContactRelation || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Yakınlık Derecesi" placeholder="Yakınlık Derecesi" />
-                  </div>
-                  <div>
-                    <label htmlFor="emergencyContactPhone" className="block text-sm font-medium text-slate-700 mb-1">Cep Telefonu</label>
-                    <input id="emergencyContactPhone" type="tel" name="emergencyContactPhone" value={formData.emergencyContactPhone || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Cep Telefonu" placeholder="Cep Telefonu" />
-                  </div>
-                </div>
-              </section>
-
-              {/* 4. İş Bilgileri */}
-              <section>
-                <h3 className="text-lg font-semibold text-indigo-700 mb-4 flex items-center gap-2">
-                  <Briefcase size={20} /> İş Bilgileri
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="department" className="block text-sm font-medium text-slate-700 mb-1">Departmanı</label>
-                    <select id="department" name="department" value={formData.department || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Departmanı" aria-label="Departmanı">
-                      <option value="">Seçiniz</option>
-                      <option value="Yönetim">Yönetim</option>
-                      <option value="İnsan Kaynakları">İnsan Kaynakları</option>
-                      <option value="Muhasebe">Muhasebe</option>
-                      <option value="Satış">Satış</option>
-                      <option value="Pazarlama">Pazarlama</option>
-                      <option value="Üretim">Üretim</option>
-                      <option value="Depo">Depo</option>
-                      <option value="Sevkiyat">Sevkiyat</option>
-                      <option value="Tasarım">Tasarım</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="role" className="block text-sm font-medium text-slate-700 mb-1">Görevi</label>
-                    <input id="role" name="role" value={formData.role || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Görevi" placeholder="Görevi" />
-                  </div>
-                  <div>
-                    <label htmlFor="sskNumber" className="block text-sm font-medium text-slate-700 mb-1">SSK Numarası</label>
-                    <input id="sskNumber" name="sskNumber" value={formData.sskNumber || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="SSK Numarası" placeholder="SSK Numarası" />
-                  </div>
-                  <div>
-                    <label htmlFor="startDate" className="block text-sm font-medium text-slate-700 mb-1">İşe Giriş Tarihi</label>
-                    <input id="startDate" type="date" name="startDate" value={formData.startDate || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="İşe Giriş Tarihi" />
-                  </div>
-                  <div>
-                    <label htmlFor="recruitmentPlace" className="block text-sm font-medium text-slate-700 mb-1">İşe Alım Yeri</label>
-                    <input id="recruitmentPlace" name="recruitmentPlace" value={formData.recruitmentPlace || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="İşe Alım Yeri" placeholder="İşe Alım Yeri" />
-                  </div>
-                  <div></div>
-                  <div>
-                    <label htmlFor="endDate" className="block text-sm font-medium text-slate-700 mb-1">İşten Çıkış Tarihi</label>
-                    <input id="endDate" type="date" name="endDate" value={formData.endDate || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="İşten Çıkış Tarihi" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label htmlFor="exitReason" className="block text-sm font-medium text-slate-700 mb-1">İşten Çıkış Sebebi</label>
-                    <input id="exitReason" name="exitReason" value={formData.exitReason || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="İşten Çıkış Sebebi" placeholder="İşten Çıkış Sebebi" />
-                  </div>
-                </div>
-              </section>
-
-              {/* 5. Aile ve Sağlık */}
-              <section>
-                <h3 className="text-lg font-semibold text-indigo-700 mb-4 flex items-center gap-2">
-                  <Heart size={20} /> Aile ve Sağlık
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label htmlFor="childrenCount" className="block text-sm font-medium text-slate-700 mb-1">Çocuk Sayısı</label>
-                    <select id="childrenCount" name="childrenCount" value={formData.childrenCount || 0} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Çocuk Sayısı" aria-label="Çocuk Sayısı">
-                      {[...Array(11)].map((_, i) => (
-                        <option key={i} value={i}>{i}</option>
-                      ))}
-                    </select>
                   </div>
                   
-                  {formData.childrenCount && formData.childrenCount > 0 ? (
-                    <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <p className="col-span-full text-xs font-semibold text-slate-500 mb-1">Çocukların Yaşları:</p>
-                      {[...Array(Number(formData.childrenCount) || 0)].map((_, i) => (
-                        <div key={i} className="flex flex-col">
-                          <label htmlFor={`child-age-${i}`} className="text-xs text-slate-500">{i + 1}. Çocuk</label>
-                          <input 
-                            id={`child-age-${i}`}
-                            type="number" 
-                            min="0" 
-                            max="99" 
-                            value={Array.isArray(formData.childrenAges) && formData.childrenAges[i] !== undefined ? formData.childrenAges[i] : ''} 
-                            onChange={(e) => handleChildAgeChange(i, e.target.value)}
-                            className="w-full px-2 py-1 border rounded focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
-                            title={`${i + 1}. Çocuk Yaşı`}
-                            placeholder="Yaş"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  ) : <div className="md:col-span-2"></div>}
-
-                  <div>
-                    <label htmlFor="parentsStatus" className="block text-sm font-medium text-slate-700 mb-1">Anne Baba Sağ mı?</label>
-                    <select id="parentsStatus" name="parentsStatus" value={formData.parentsStatus || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" title="Anne Baba Sağ mı?" aria-label="Anne Baba Sağ mı?">
-                      <option value="">Seçiniz</option>
-                      <option value="İkisi de Sağ">İkisi de Sağ</option>
-                      <option value="Anne Sağ, Baba Vefat">Anne Sağ, Baba Vefat</option>
-                      <option value="Baba Sağ, Anne Vefat">Baba Sağ, Anne Vefat</option>
-                      <option value="İkisi de Vefat">İkisi de Vefat</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2 md:col-span-3">
-                    <div className="flex items-center gap-2">
-                      <input 
-                        type="checkbox" 
-                        id="hasDisability"
-                        name="hasDisability" 
-                        checked={formData.hasDisability || false} 
-                        onChange={handleInputChange}
-                        className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                        title="Engeli var mı?"
-                      />
-                      <label htmlFor="hasDisability" className="text-sm font-medium text-slate-700">Engeli var mı?</label>
-                    </div>
-                    {formData.hasDisability && (
-                      <textarea 
-                        name="disabilityDescription" 
-                        placeholder="Engel durumu hakkında açıklama giriniz..."
-                        rows={2} 
-                        value={formData.disabilityDescription || ''} 
-                        onChange={handleInputChange} 
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none mt-2"
-                        title="Engel durumu açıklaması"
-                      />
+                  <div className="flex gap-1.5">
+                    {docUrl ? (
+                      <>
+                        <a href={docUrl} target="_blank" rel="noopener noreferrer" className="flex-1 flex justify-center items-center p-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm group/view">
+                          <Eye size={14} />
+                          <span className="ml-2 text-[10px] font-bold uppercase tracking-widest">GÖRÜNTÜLE</span>
+                        </a>
+                        <button onClick={() => handleDeleteDocument(docName)} className="p-2 rounded-lg bg-red-50 border border-red-100 text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-sm">
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <label className={`flex-1 flex justify-center items-center p-2 rounded-lg bg-blue-600 text-white border border-blue-500 cursor-pointer hover:bg-blue-700 transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {isUploading ? (
+                          <span className="text-[10px] font-bold uppercase tracking-widest animate-pulse">YÜKLENİYOR...</span>
+                        ) : (
+                          <>
+                            <Upload size={14} />
+                            <span className="ml-2 text-[10px] font-bold uppercase tracking-widest">DOSYA YÜKLE</span>
+                          </>
+                        )}
+                        <input type="file" className="hidden" onChange={(e) => handleFileUpload(e, docName)} accept=".pdf,.png,.jpg,.jpeg" disabled={isUploading} />
+                      </label>
                     )}
                   </div>
                 </div>
-              </section>
-
-              {/* Action Buttons */}
-              <div className="sticky bottom-0 bg-white pt-4 pb-2 border-t flex justify-end gap-3 z-10">
-                <button 
-                  type="button" 
-                  onClick={handleCloseModal}
-                  className="px-6 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
-                >
-                  İptal
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={formLoading}
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2"
-                >
-                  {formLoading ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
-              </div>
-            </form>
+              );
+            })}
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Documents Modal */}
-      {isDocsModalOpen && selectedPersonDocs && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white px-6 py-4 border-b flex justify-between items-center z-10">
-              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                <FileText className="text-indigo-600" />
-                {selectedPersonDocs.firstName} {selectedPersonDocs.lastName} - Evraklar
-              </h2>
-              <button onClick={handleCloseDocsModal} className="text-slate-500 hover:text-slate-700" aria-label="Kapat" title="Kapat">
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {REQUIRED_DOCUMENTS.map((docName) => {
-                  const docUrl = selectedPersonDocs.documents?.[docName];
-                  const isUploading = uploadingDoc === docName;
-
-                  return (
-                    <div key={docName} className="border rounded-lg p-4 flex flex-col justify-between bg-slate-50 hover:bg-white hover:shadow-md transition-all">
-                      <div className="mb-3">
-                        <h4 className="font-semibold text-slate-700 mb-1">{docName}</h4>
-                        {docUrl ? (
-                          <div className="flex items-center gap-2 text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded w-fit">
-                            <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                            Yüklendi
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 text-xs text-slate-400 font-medium bg-slate-100 px-2 py-1 rounded w-fit">
-                            <span className="w-2 h-2 rounded-full bg-slate-300"></span>
-                            Eksik
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 mt-auto">
-                        {docUrl ? (
-                          <>
-                            <a 
-                              href={docUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-3 py-2 rounded text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-                            >
-                              <Eye size={14} /> Görüntüle
-                            </a>
-                            <button
-                              onClick={() => handleDeleteDocument(docName)}
-                              className="bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded transition-colors"
-                              title="Sil"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <label className={`flex-1 cursor-pointer bg-white border border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded text-sm font-medium flex items-center justify-center gap-2 transition-colors ${isUploading ? 'opacity-50 cursor-wait' : ''}`}>
-                            {isUploading ? (
-                              <>
-                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-indigo-600"></div>
-                                Yükleniyor...
-                              </>
-                            ) : (
-                              <>
-                                <Upload size={14} /> Yükle
-                                <input 
-                                  type="file" 
-                                  accept=".pdf,.png,.jpg,.jpeg" 
-                                  className="hidden" 
-                                  onChange={(e) => handleFileUpload(e, docName)}
-                                  disabled={isUploading}
-                                />
-                              </>
-                            )}
-                          </label>
-                        )}
-                      </div>
+      {/* Detail/Form Modal */}
+      {isModalOpen && (
+        <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={selectedPerson ? 'Personel Profil Detayı' : 'Yeni Personel Kaydı'} size="lg">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="max-h-[65vh] overflow-y-auto pr-4 -mr-4 custom-scrollbar px-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Kişisel Bilgiler */}
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <User size={14} className="text-blue-500" />
+                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">KİŞİSEL BİLGİLER</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">ADINIZ</label>
+                      <input required name="firstName" value={formData.firstName || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all" />
                     </div>
-                  );
-                })}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">SOYADINIZ</label>
+                      <input required name="lastName" value={formData.lastName || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">TC KİMLİK NUMARASI</label>
+                    <input required name="tcNumber" maxLength={11} value={formData.tcNumber || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all" placeholder="11 haneli TC no" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">TELEFON</label>
+                      <input type="tel" name="mobilePhone" value={formData.mobilePhone || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all" placeholder="05XX XXX XX XX" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">E-POSTA</label>
+                      <input type="email" name="email" value={formData.email || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all" placeholder="ornek@firma.com" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* İş Bilgileri */}
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <Briefcase size={14} className="text-indigo-500" />
+                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">ORGANİZASYONEL BİLGİLER</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">DEPARTMAN</label>
+                      <select name="department" value={formData.department || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-400/20 focus:border-indigo-400 transition-all">
+                        <option value="">Seçiniz</option>
+                        <option value="Yönetim">Yönetim</option>
+                        <option value="İnsan Kaynakları">İnsan Kaynakları</option>
+                        <option value="Muhasebe">Muhasebe</option>
+                        <option value="Üretim">Üretim</option>
+                        <option value="Depo">Depo</option>
+                        <option value="Sevkiyat">Sevkiyat</option>
+                        <option value="Tasarım">Tasarım</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">POZİSYON / GÖREV</label>
+                      <input name="role" value={formData.role || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-400/20 focus:border-indigo-400 transition-all" placeholder="Örn: Operatör" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">İşe Giriş Tarihi</label>
+                      <input type="date" name="startDate" value={formData.startDate || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-400/20 focus:border-emerald-400 transition-all" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-red-500 uppercase tracking-widest ml-1">İşten Çıkış Tarihi</label>
+                      <input type="date" name="endDate" value={formData.endDate || ''} onChange={handleInputChange} className="w-full px-4 py-2 bg-red-50/30 border border-red-100 rounded-xl text-xs font-bold text-red-600 outline-none focus:ring-2 focus:ring-red-400/20 focus:border-red-400 transition-all" />
+                    </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <div className="relative flex items-center">
+                        <input type="checkbox" name="hasDisability" checked={formData.hasDisability || false} onChange={handleInputChange} className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 transition-all" />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wide group-hover:text-blue-600 transition-colors">Engellilik Durumu Mevcut</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+
+            <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+              <button type="button" onClick={handleCloseModal} className="px-6 py-2.5 text-slate-500 hover:bg-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all">VAZGEÇ</button>
+              <button type="submit" disabled={formLoading} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:grayscale">{formLoading ? 'KAYDEDİLİYOR...' : 'KAYDET'}</button>
+            </div>
+          </form>
+        </Modal>
       )}
-    </div>
+    </ERPPageLayout>
   );
 }

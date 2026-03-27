@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import db from './db-postgres.js';
+import db, { pool } from './db-postgres.js';
 import { execSync } from 'child_process';
 import crypto from 'crypto';
 
@@ -21,6 +21,22 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/img', express.static(path.join(process.cwd(), 'server/img')));
 app.use('/doc', express.static(path.join(process.cwd(), 'server/doc')));
 app.use('/users', express.static(path.join(process.cwd(), 'server/users')));
+
+// Database initialization & Schema Sync
+const dbInit = async () => {
+    try {
+        const schemaPath = path.join(__dirname, 'postgres', 'schema.sql');
+        if (fs.existsSync(schemaPath)) {
+            console.log('Syncing database schema...');
+            const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+            await pool.query(schemaSql);
+            console.log('Database schema synced successfully.');
+        }
+    } catch (error) {
+        console.error('Database initialization failed:', error);
+    }
+};
+dbInit();
 
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
@@ -121,22 +137,19 @@ const logError = (req, error, context = {}) => {
 };
 
 // Get products sold to a specific customer
-app.get('/api/customers/:customerId/products', (req, res) => {
+app.get('/api/customers/:customerId/products', async (req, res) => {
   try {
     const { customerId } = req.params;
     
-    // 1. Get all orders for this customer
-    const orders = db.prepare('SELECT items FROM orders WHERE customerId = ?').all(customerId);
-    
-    if (orders.length === 0) {
+    const orders = await db.prepare('SELECT items FROM orders WHERE customerId = ?').all(customerId);
+    if (!Array.isArray(orders) || orders.length === 0) {
       return res.json([]);
     }
 
-    // 2. Extract unique product IDs
     const productIds = new Set();
     orders.forEach(order => {
       try {
-        const items = JSON.parse(order.items);
+        const items = parseJsonField(order.items, []);
         if (Array.isArray(items)) {
           items.forEach(item => {
             if (item.productId) productIds.add(item.productId);
@@ -152,19 +165,17 @@ app.get('/api/customers/:customerId/products', (req, res) => {
       return res.json([]);
     }
 
-    // 3. Fetch product details
     const placeholders = [...productIds].map(() => '?').join(',');
-    const products = db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`).all(...productIds);
+    const products = await db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`).all(...productIds);
     
-    // Parse JSON fields
     const formattedProducts = products.map(p => ({
       ...p,
-      dimensions: JSON.parse(p.dimensions || '{}'),
-      features: JSON.parse(p.features || '{}'),
-      inks: JSON.parse(p.inks || '{}'),
-      windowDetails: JSON.parse(p.windowDetails || '{}'),
-      lidDetails: JSON.parse(p.lidDetails || '{}'),
-      images: JSON.parse(p.images || '{}')
+      dimensions: parseJsonField(p.dimensions, {}),
+      features: parseJsonField(p.features, {}),
+      inks: parseJsonField(p.inks, {}),
+      windowDetails: parseJsonField(p.windowDetails, {}),
+      lidDetails: parseJsonField(p.lidDetails, {}),
+      images: parseJsonField(p.images, {})
     }));
 
     res.json(formattedProducts);
@@ -344,14 +355,12 @@ const ensureUserDir = (username) => {
   return { userDir, userFilesDir };
 };
 
-app.get('/api/users/:username/desktop-data', (req, res) => {
+app.get('/api/users/:username/desktop-data', async (req, res) => {
   try {
     const { username } = req.params;
-    const { userDir } = ensureUserDir(username);
-    const dataFile = path.join(userDir, 'data.json');
-    if (fs.existsSync(dataFile)) {
-      const data = fs.readFileSync(dataFile, 'utf8');
-      res.json(JSON.parse(data));
+    const row = await db.prepare('SELECT data FROM user_desktop_data WHERE username = ?').get(username);
+    if (row) {
+      res.json(parseJsonField(row.data, null));
     } else {
       res.json(null);
     }
@@ -360,21 +369,23 @@ app.get('/api/users/:username/desktop-data', (req, res) => {
   }
 });
 
-app.post('/api/users/:username/desktop-data', (req, res) => {
+app.post('/api/users/:username/desktop-data', async (req, res) => {
   try {
     const { username } = req.params;
-    const { userDir } = ensureUserDir(username);
-    const dataFile = path.join(userDir, 'data.json');
-    let existingData = {};
-    if (fs.existsSync(dataFile)) {
-      try {
-        existingData = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-      } catch (e) {
-        console.error('Error parsing existing data.json', e);
-      }
+    const data = req.body;
+    const now = new Date().toISOString();
+    
+    // Check if exists
+    const row = await db.prepare('SELECT data FROM user_desktop_data WHERE username = ?').get(username);
+    if (row) {
+      const existingData = parseJsonField(row.data, {});
+      const mergedData = { ...existingData, ...data };
+      await db.prepare('UPDATE user_desktop_data SET data = ?, updated_at = ? WHERE username = ?')
+        .run(JSON.stringify(mergedData), now, username);
+    } else {
+      await db.prepare('INSERT INTO user_desktop_data (username, data, updated_at) VALUES (?, ?, ?)')
+        .run(username, JSON.stringify(data), now);
     }
-    const mergedData = { ...existingData, ...req.body };
-    fs.writeFileSync(dataFile, JSON.stringify(mergedData, null, 2));
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1507,6 +1518,8 @@ const parseOrder = (order) => {
 
   const productionDiffs = parseJsonField(order.productionDiffs, []);
 
+  const designJobDetails = parseJsonField(order.designJobDetails, {});
+
   return {
     ...order,
     items,
@@ -1514,11 +1527,12 @@ const parseOrder = (order) => {
     stockUsage,
     procurementDetails,
     productionApprovedDetails,
-    productionDiffs
+    productionDiffs,
+    designJobDetails
   };
 };
 
-const enrichOrderItems = (orders) => {
+const enrichOrderItems = async (orders) => {
   if (!orders || (Array.isArray(orders) && orders.length === 0)) return orders;
   
   const ordersArray = Array.isArray(orders) ? orders : [orders];
@@ -1538,7 +1552,7 @@ const enrichOrderItems = (orders) => {
 
   try {
       const placeholders = [...productIdsToFetch].map(() => '?').join(',');
-      const products = db.prepare(`SELECT id, name, code, details FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
+      const products = await db.prepare(`SELECT id, name, code, details FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
       
       const productMap = new Map();
       products.forEach(p => {
@@ -1567,7 +1581,8 @@ app.get('/api/orders', async (req, res) => {
     const stmt = db.prepare('SELECT * FROM orders ORDER BY createdAt DESC');
     const orders = await stmt.all();
     const parsedOrders = orders.map(parseOrder);
-    res.json(enrichOrderItems(parsedOrders));
+    const enriched = await enrichOrderItems(parsedOrders);
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1581,7 +1596,8 @@ app.get('/api/orders/:id', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
     const parsedOrder = parseOrder(order);
-    res.json(enrichOrderItems(parsedOrder));
+    const enriched = await enrichOrderItems(parsedOrder);
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1796,6 +1812,9 @@ app.patch('/api/orders/:id', async (req, res) => {
     }
     if (updates.productionDiffs) {
       updates.productionDiffs = JSON.stringify(updates.productionDiffs);
+    }
+    if (updates.designJobDetails) {
+      updates.designJobDetails = JSON.stringify(updates.designJobDetails);
     }
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
@@ -2491,20 +2510,19 @@ const DEFAULT_MOLDS = [
 ];
 
 // Ensure default molds exist (Seed if missing)
-try {
-  console.log('Checking default molds...');
-  const seedTransaction = db.transaction(async (tx, molds) => {
-    const existsStmt = tx.prepare('SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1');
-    const insertStmt = tx.prepare(`
-      INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+(async () => {
+  try {
+    console.log('Checking default molds...');
     const now = new Date().toISOString();
     let inserted = 0;
-    for (const m of molds) {
-      const exists = await existsStmt.get(m.productType, m.boxShape, m.dimensions);
+    for (const m of DEFAULT_MOLDS) {
+      const exists = await db.prepare(
+        'SELECT 1 FROM product_molds WHERE productType = ? AND boxShape = ? AND dimensions = ? LIMIT 1'
+      ).get(m.productType, m.boxShape, m.dimensions);
       if (!exists) {
-        await insertStmt.run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
+        await db.prepare(
+          'INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(crypto.randomUUID(), m.productType, m.boxShape, m.dimensions, m.label || null, now);
         inserted++;
       }
     }
@@ -2513,14 +2531,10 @@ try {
     } else {
       console.log('All default molds already exist.');
     }
-  });
-  
-  seedTransaction(DEFAULT_MOLDS).catch((error) => {
+  } catch (error) {
     console.error('Auto-seed molds error:', error);
-  });
-} catch (error) {
-  console.error('Auto-seed molds error:', error);
-}
+  }
+})();
 
 // Varsayılan kalıpları veritabanına ekleyen endpoint (kayıt varsa atlar)
 app.post('/api/molds/seed-defaults', async (req, res) => {

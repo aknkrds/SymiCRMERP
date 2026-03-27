@@ -2,7 +2,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { Customer, CustomerFormData } from '../../types';
-import { cn } from '../../lib/utils';
+import { FormSection, InputGroup, premiumInputClass } from '../ui/FormLayouts';
+import { Mail, Phone, MapPin, User, Building } from 'lucide-react';
 
 const customerSchema = z.object({
     companyName: z.string().min(2, 'Firma ünvanı en az 2 karakter olmalıdır'),
@@ -33,110 +34,107 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
     });
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">Firma Ünvanı</label>
-                    <input
-                        {...register('companyName')}
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
-                            errors.companyName ? "border-red-500" : "border-slate-300"
-                        )}
-                        placeholder="Şirket A.Ş."
-                        aria-label="Firma Ünvanı"
-                    />
-                    {errors.companyName && <p className="text-xs text-red-500">{errors.companyName.message}</p>}
-                </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 w-full mx-auto">
+            <FormSection 
+                title="Şirket Bilgileri" 
+                description="Müşterinin resmi ünvanı ve ana iletişim bilgileri"
+            >
+                <InputGroup label="Firma Ünvanı" error={errors.companyName?.message} required>
+                    <div className="relative group">
+                        <Building size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                            {...register('companyName')}
+                            placeholder="Şirket A.Ş."
+                            className={`${premiumInputClass} pl-11`}
+                        />
+                    </div>
+                </InputGroup>
 
-                <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">Yetkili Kişi</label>
-                    <input
-                        {...register('contactName')}
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
-                            errors.contactName ? "border-red-500" : "border-slate-300"
-                        )}
-                        placeholder="Ad Soyad"
-                        aria-label="Yetkili Kişi"
-                    />
-                    {errors.contactName && <p className="text-xs text-red-500">{errors.contactName.message}</p>}
-                </div>
+                <InputGroup label="Yetkili Kişi" error={errors.contactName?.message} required>
+                    <div className="relative group">
+                        <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                            {...register('contactName')}
+                            placeholder="Ad Soyad"
+                            className={`${premiumInputClass} pl-11`}
+                        />
+                    </div>
+                </InputGroup>
+            </FormSection>
 
-                <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">Telefon</label>
-                    <input
-                        {...register('phone')}
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
-                            errors.phone ? "border-red-500" : "border-slate-300"
-                        )}
-                        placeholder="0212..."
-                        aria-label="Telefon"
-                    />
-                    {errors.phone && <p className="text-xs text-red-500">{errors.phone.message}</p>}
-                </div>
+            <FormSection 
+                title="İletişim Detayları" 
+                description="E-posta ve telefon numaraları"
+            >
+                <InputGroup label="Email" error={errors.email?.message} required>
+                    <div className="relative group">
+                        <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                            {...register('email')}
+                            type="email"
+                            placeholder="ornek@sirket.com"
+                            className={`${premiumInputClass} pl-11`}
+                        />
+                    </div>
+                </InputGroup>
 
-                <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-700">Mobil</label>
-                    <input
-                        {...register('mobile')}
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
-                            errors.mobile ? "border-red-500" : "border-slate-300"
-                        )}
-                        placeholder="05..."
-                        aria-label="Mobil"
-                    />
-                    {errors.mobile && <p className="text-xs text-red-500">{errors.mobile.message}</p>}
-                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <InputGroup label="Telefon" error={errors.phone?.message} required>
+                        <div className="relative group">
+                            <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                            <input
+                                {...register('phone')}
+                                placeholder="0212..."
+                                className={`${premiumInputClass} pl-11`}
+                            />
+                        </div>
+                    </InputGroup>
 
-                <div className="space-y-1 md:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">Email</label>
-                    <input
-                        {...register('email')}
-                        type="email"
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
-                            errors.email ? "border-red-500" : "border-slate-300"
-                        )}
-                        placeholder="ornek@sirket.com"
-                        aria-label="Email"
-                    />
-                    {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
+                    <InputGroup label="Mobil" error={errors.mobile?.message} required>
+                        <div className="relative group">
+                            <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                            <input
+                                {...register('mobile')}
+                                placeholder="05..."
+                                className={`${premiumInputClass} pl-11`}
+                            />
+                        </div>
+                    </InputGroup>
                 </div>
+            </FormSection>
 
-                <div className="space-y-1 md:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">Adres</label>
-                    <textarea
-                        {...register('address')}
-                        rows={3}
-                        className={cn(
-                            "w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 transition-all",
-                            errors.address ? "border-red-500" : "border-slate-300"
-                        )}
-                        placeholder="Açık adres..."
-                        aria-label="Adres"
-                    />
-                    {errors.address && <p className="text-xs text-red-500">{errors.address.message}</p>}
+            <FormSection 
+                title="Adres Bilgileri" 
+                description="Faturada görünecek açık adres"
+            >
+                <div className="md:col-span-2">
+                    <InputGroup label="Açık Adres" error={errors.address?.message} required>
+                        <div className="relative group">
+                            <MapPin size={16} className="absolute left-3.5 top-3 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                            <textarea
+                                {...register('address')}
+                                rows={3}
+                                placeholder="Mahalle, Cadde, No..."
+                                className={`${premiumInputClass} pl-11 pt-2.5 resize-none`}
+                            />
+                        </div>
+                    </InputGroup>
                 </div>
-            </div>
+            </FormSection>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <div className="sticky bottom-0 bg-white/50 backdrop-blur-md pt-6 pb-2 -mx-6 px-6 border-t border-slate-200/60 flex justify-end gap-3 z-10">
                 <button
                     type="button"
                     onClick={onCancel}
-                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                    aria-label="İptal"
+                    className="px-6 py-2.5 text-slate-500 font-bold text-xs uppercase tracking-widest hover:bg-slate-100 rounded-xl transition-all"
                 >
                     İptal
                 </button>
                 <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                    aria-label={initialData ? 'Müşteriyi Güncelle' : 'Müşteriyi Kaydet'}
+                    className="px-8 py-2.5 bg-blue-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95 transition-all"
                 >
-                    {initialData ? 'Güncelle' : 'Kaydet'}
+                    {initialData ? 'GÜNCELLE' : 'MÜŞTERİYİ KAYDET'}
                 </button>
             </div>
         </form>

@@ -2,31 +2,31 @@ import { useEffect, useMemo, useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
 import { useStock } from '../hooks/useStock';
-import { Eye, Network, CheckCircle2, Plus, Trash2, Package, FileText, Pencil, AlertTriangle } from 'lucide-react';
+import { Eye, Network, CheckCircle2, Plus, Trash2, Package, FileText, Pencil, AlertTriangle, Menu } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { ProductDetail } from '../components/products/ProductDetail';
 import type { Order, Product, ProcurementDispatch, ProcurementDispatchChangeRequest, ProcurementDispatchLine, ProcurementDispatchPrintType, StockItemFormData } from '../types';
+import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
 
-const STOCK_UNITS = [
-    'Adet', 'Gram', 'Koli', 'Kg', 'Metre', 'Ton', 'Litre'
-];
+// STOCK_UNITS removed as it was unused
 
 export default function Procurement() {
     const { orders, updateStatus, updateOrder } = useOrders();
     const { products } = useProducts();
     const { stockItems, addStockItem, deleteStockItem, updateStockQuantity } = useStock();
     
-    const procurementOrders = orders.filter(o => 
-        o.status === 'supply_design_process' || 
-        o.status === 'design_approved' || 
-        o.status === 'supply_waiting' ||
-        o.status === 'offer_accepted' ||
-        o.status === 'waiting_manager_approval' ||
-        o.status === 'manager_approved' ||
-        o.status === 'revision_requested'
-    );
+    const procurementOrders = orders.filter(o => {
+        const s = o.status as any;
+        return s === 'supply_design_process' || 
+               s === 'design_approved' || 
+               s === 'supply_waiting' ||
+               s === 'offer_accepted' ||
+               s === 'waiting_manager_approval' ||
+               s === 'manager_approved' ||
+               s === 'revision_requested';
+    });
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
@@ -34,7 +34,7 @@ export default function Procurement() {
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [productJobDetails, setProductJobDetails] = useState<any>(null);
-    const [productDesignImages, setProductDesignImages] = useState<string[] | undefined>(undefined);
+    const [productDesignImages, setProductDesignImages] = useState<(string | { url: string; productId?: string })[] | undefined>(undefined);
 
     const [isAddStockModalOpen, setIsAddStockModalOpen] = useState(false);
     const [newStockItem, setNewStockItem] = useState<StockItemFormData>({
@@ -556,19 +556,24 @@ export default function Procurement() {
     };
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Tedarik</h1>
-                    <p className="text-slate-500">Tedarik süreci bekleyen tasarım onaylı siparişler</p>
-                </div>
-            </div>
-
-            {/* Procurement Orders List */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-200">
-                    <h2 className="text-lg font-bold text-slate-800">Tedarik Bekleyen Siparişler</h2>
-                </div>
+        <ERPPageLayout
+            breadcrumbs={[{ label: 'Tedarik' }, { label: 'Tedarik & Stok Yönetimi', active: true }]}
+            toolbar={
+                <>
+                    <ToolbarBtn icon={<Plus size={13} />} label="Hızlı Stok Fişi" onClick={() => setIsAddStockModalOpen(true)} variant="primary" />
+                    <ToolbarBtn icon={<Plus size={13} />} label="Yeni Sevkiyat" onClick={handleOpenDispatchModal} />
+                    <ToolbarBtn icon={<Plus size={13} />} label="Filtrele" />
+                    <ToolbarBtn icon={<Menu size={13} />} />
+                </>
+            }
+        >
+            <div className="mx-auto max-w-screen-xl px-3 md:px-4 space-y-5">
+                {/* Procurement Orders List */}
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/70 flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Tedarik Bekleyen Siparişler</span>
+                        <span className="text-[10px] text-slate-500 font-bold uppercase">{procurementOrders.length} KAYIT</span>
+                    </div>
                 
                 {/* Mobile View (Cards) */}
                 <div className="md:hidden">
@@ -652,29 +657,29 @@ export default function Procurement() {
 
                 {/* Desktop View (Table) */}
                 <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                    <table className="w-full text-left text-xs text-slate-600">
+                        <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-[10px] tracking-wide">
                             <tr>
-                                <th className="px-6 py-4">Sipariş No</th>
-                                <th className="px-6 py-4">Müşteri</th>
-                                <th className="px-6 py-4">Ürünler</th>
-                                <th className="px-6 py-4">Tarih</th>
-                                <th className="px-6 py-4 text-right">İşlemler</th>
+                                <th className="px-4 py-2">Sipariş No</th>
+                                <th className="px-4 py-2">Müşteri</th>
+                                <th className="px-4 py-2">Ürünler</th>
+                                <th className="px-4 py-2">Tarih</th>
+                                <th className="px-4 py-2 text-right">İşlemler</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                             {procurementOrders.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                                    <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
                                         Tedarik bekleyen sipariş bulunmuyor.
                                     </td>
                                 </tr>
                             ) : (
                                 procurementOrders.map((order) => (
                                     <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
-                                        <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-600">
+                                        <td className="px-4 py-2 font-mono text-[11px]">#{order.id.slice(0, 8)}</td>
+                                        <td className="px-4 py-2 font-medium text-slate-800">{order.customerName}</td>
+                                        <td className="px-4 py-2 text-slate-600">
                                             <div className="space-y-1">
                                                 {order.items.map((item, idx) => {
                                                     const product = products.find(p => p.id === item.productId);
@@ -684,51 +689,51 @@ export default function Procurement() {
                                                     return (
                                                         <div key={idx} className="flex flex-col">
                                                             <span className="font-medium text-slate-800">{product?.name || item.productName}</span>
-                                                            {dimensions && <span className="text-xs text-slate-500">{dimensions}</span>}
+                                                            {dimensions && <span className="text-[10px] text-slate-500">{dimensions}</span>}
                                                         </div>
                                                     );
                                                 })}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-4">
+                                        <td className="px-4 py-2">
                                             {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
                                         </td>
-                                        <td className="px-6 py-4 text-right">
+                                        <td className="px-4 py-2 text-right">
                                             <div className="flex justify-end gap-2">
                                                 <button
                                                     onClick={() => handleViewOrder(order)}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
+                                                    className="flex items-center gap-1.5 px-2.5 py-1 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-[10px] font-semibold"
                                                     aria-label="Sipariş Detaylarını Görüntüle"
                                                 >
-                                                    <Eye size={16} />
+                                                    <Eye size={14} />
                                                     Görüntüle
                                                 </button>
                                                 <button
                                                     onClick={() => handleOpenProcurement(order)}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors text-xs font-medium"
+                                                    className="flex items-center gap-1.5 px-2.5 py-1 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors text-[10px] font-semibold"
                                                     aria-label="Tedarik İşlemleri"
                                                 >
-                                                    <Network size={16} />
+                                                    <Network size={14} />
                                                     Tedarik
                                                 </button>
                                                 <button
                                                     onClick={() => handleViewRawMaterials(order)}
-                                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg transition-colors text-[10px] font-semibold ${
                                                         order.stockUsage && Object.keys(order.stockUsage).length > 0
                                                             ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
                                                             : 'text-slate-500 bg-slate-50 hover:bg-slate-100'
                                                     }`}
                                                     aria-label="Kullanılan Hammaddeler"
                                                 >
-                                                    <Package size={16} />
+                                                    <Package size={14} />
                                                     Hammaddeler
                                                 </button>
                                                 <button
                                                     onClick={() => handleProcurementStatusChange(order.id, 'completed')}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-xs font-medium"
+                                                    className="flex items-center gap-1.5 px-2.5 py-1 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors text-[10px] font-semibold"
                                                     aria-label="Tedarik İşlemini Tamamla"
                                                 >
-                                                    <CheckCircle2 size={16} />
+                                                    <CheckCircle2 size={14} />
                                                     Tamamlandı
                                                 </button>
                                             </div>
@@ -743,36 +748,35 @@ export default function Procurement() {
 
             {/* Sevk Edilen Ürünler */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-                    <h2 className="text-lg font-bold text-slate-800">Sevk Edilen Ürünler</h2>
+                <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Sevk Edilen Ürünler</span>
                     <button
                         onClick={handleOpenDispatchModal}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                        className="flex items-center gap-2 px-2.5 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-semibold text-[10px] uppercase"
                         aria-label="Yeni Sevkiyat"
                         title="Yeni Sevkiyat"
                     >
-                        <Plus size={20} />
-                        <span className="hidden md:inline">Yeni Sevkiyat</span>
-                        <span className="md:hidden">Yeni</span>
+                        <Plus size={12} />
+                        Yeni
                     </button>
                 </div>
 
                 {dispatchesLoading ? (
-                    <div className="p-6 text-slate-500">Yükleniyor...</div>
+                    <div className="p-5 text-slate-500 text-xs">Yükleniyor...</div>
                 ) : dispatches.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500">Henüz sevk kaydı bulunmuyor.</div>
+                    <div className="p-6 text-center text-slate-500 text-xs">Henüz sevk kaydı bulunmuyor.</div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600">
-                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                        <table className="w-full text-left text-xs text-slate-600">
+                            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-[10px] tracking-wide">
                                 <tr>
-                                    <th className="px-6 py-4">Fiş No</th>
-                                    <th className="px-6 py-4">Ürünler</th>
-                                    <th className="px-6 py-4">Sipariş Kodları</th>
-                                    <th className="px-6 py-4">Sevk Tarihi</th>
-                                    <th className="px-6 py-4">Toplam Levha</th>
-                                    <th className="px-6 py-4">Toplam İş</th>
-                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                    <th className="px-4 py-2">Fiş No</th>
+                                    <th className="px-4 py-2">Ürünler</th>
+                                    <th className="px-4 py-2">Sipariş Kodları</th>
+                                    <th className="px-4 py-2">Sevk Tarihi</th>
+                                    <th className="px-4 py-2">Toplam Levha</th>
+                                    <th className="px-4 py-2">Toplam İş</th>
+                                    <th className="px-4 py-2 text-right">İşlemler</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
@@ -792,55 +796,55 @@ export default function Procurement() {
 
                                     return (
                                         <tr key={d.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-6 py-4 font-mono text-xs">{d.id}</td>
-                                            <td className="px-6 py-4">
-                                                <div className="max-w-[420px] truncate" title={uniqProductNames.join(', ')}>
+                                            <td className="px-4 py-2 font-mono text-[11px]">{d.id}</td>
+                                            <td className="px-4 py-2">
+                                                <div className="max-w-[360px] truncate" title={uniqProductNames.join(', ')}>
                                                     {uniqProductNames.join(', ') || '-'}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
-                                                <div className="font-mono text-xs max-w-[280px] truncate" title={uniqOrderCodes.join(', ')}>
+                                            <td className="px-4 py-2">
+                                                <div className="font-mono text-[11px] max-w-[240px] truncate" title={uniqOrderCodes.join(', ')}>
                                                     {uniqOrderCodes.join(', ') || '-'}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">{d.dispatchDate || '-'}</td>
-                                            <td className="px-6 py-4 font-semibold text-slate-800">{totalPlate}</td>
-                                            <td className="px-6 py-4 font-semibold text-slate-800">{totalJob}</td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-4 py-2">{d.dispatchDate || '-'}</td>
+                                            <td className="px-4 py-2 font-semibold text-slate-800">{totalPlate}</td>
+                                            <td className="px-4 py-2 font-semibold text-slate-800">{totalJob}</td>
+                                            <td className="px-4 py-2 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button
                                                         type="button"
                                                         onClick={() => handleOpenDispatchView(d)}
-                                                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                                                         title="Görüntüle"
                                                         aria-label="Görüntüle"
                                                     >
-                                                        <FileText size={18} />
+                                                        <FileText size={16} />
                                                     </button>
 
                                                     {canEdit ? (
                                                         <button
                                                             type="button"
                                                             onClick={() => handleOpenEditDispatch(d)}
-                                                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                                                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                                                             title="Düzenle"
                                                             aria-label="Düzenle"
                                                         >
-                                                            <Pencil size={18} />
+                                                            <Pencil size={16} />
                                                         </button>
                                                     ) : hasPending ? (
-                                                        <span className="px-3 py-2 text-xs font-semibold bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
+                                                        <span className="px-2.5 py-1.5 text-[10px] font-semibold bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
                                                             Onay Bekliyor
                                                         </span>
                                                     ) : (
                                                         <button
                                                             type="button"
                                                             onClick={() => handleOpenChangeRequestModal(d)}
-                                                            className="px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-2"
+                                                            className="px-2.5 py-1.5 text-[10px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1.5"
                                                             title="Değişiklik Onayı İste"
                                                             aria-label="Değişiklik Onayı İste"
                                                         >
-                                                            <AlertTriangle size={16} />
+                                                            <AlertTriangle size={14} />
                                                             Değişiklik Onayı İste
                                                         </button>
                                                     )}
@@ -857,16 +861,15 @@ export default function Procurement() {
 
             {/* Stock Management Section */}
             <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-slate-800">Stok Listesi</h2>
+                <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between rounded-t-xl">
+                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-widest">Stok Listesi</span>
                     <button
                         onClick={() => setIsAddStockModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium"
+                        className="flex items-center gap-2 px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-semibold text-[10px] uppercase"
                         aria-label="Stok Ekle"
                     >
-                        <Plus size={20} />
-                        <span className="hidden md:inline">Stok Ekle</span>
-                        <span className="md:hidden">Ekle</span>
+                        <Plus size={12} />
+                        Ekle
                     </button>
                 </div>
 
@@ -923,51 +926,51 @@ export default function Procurement() {
 
                     {/* Desktop View (Table) */}
                     <div className="hidden md:block overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600">
-                            <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
+                        <table className="w-full text-left text-xs text-slate-600">
+                            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-[10px] tracking-wide">
                                 <tr>
-                                    <th className="px-6 py-4">Stok No</th>
-                                    <th className="px-6 py-4">Firma</th>
-                                    <th className="px-6 py-4">Ürün</th>
-                                    <th className="px-6 py-4">Miktar</th>
-                                    <th className="px-6 py-4">Kayıt Tarihi</th>
-                                    <th className="px-6 py-4 text-right">İşlemler</th>
+                                    <th className="px-4 py-2">Stok No</th>
+                                    <th className="px-4 py-2">Firma</th>
+                                    <th className="px-4 py-2">Ürün</th>
+                                    <th className="px-4 py-2">Miktar</th>
+                                    <th className="px-4 py-2">Kayıt Tarihi</th>
+                                    <th className="px-4 py-2 text-right">İşlemler</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
                                 {stockItems.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
+                                        <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
                                             Henüz stok kaydı bulunmuyor.
                                         </td>
                                     </tr>
                                 ) : (
                                     stockItems.map((item) => (
                                         <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="px-6 py-4 font-mono text-xs">{item.stockNumber}</td>
-                                            <td className="px-6 py-4 font-medium text-slate-800">{item.company}</td>
-                                            <td className="px-6 py-4">{item.product}</td>
-                                            <td className="px-6 py-4 font-semibold text-emerald-600">
+                                            <td className="px-4 py-2 font-mono text-[11px]">{item.stockNumber}</td>
+                                            <td className="px-4 py-2 font-medium text-slate-800">{item.company}</td>
+                                            <td className="px-4 py-2">{item.product}</td>
+                                            <td className="px-4 py-2 font-semibold text-emerald-600">
                                                 {item.quantity} {item.unit}
                                             </td>
-                                            <td className="px-6 py-4 text-slate-500">
+                                            <td className="px-4 py-2 text-slate-500">
                                                 {format(new Date(item.createdAt), 'dd MMM yyyy', { locale: tr })}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-4 py-2 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button
                                                         onClick={() => handleQuickAddClick(item)}
-                                                        className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                                        className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                                                         title="Stok Ekle"
                                                     >
-                                                        <Plus size={18} />
+                                                        <Plus size={14} />
                                                     </button>
                                                     <button
                                                         onClick={() => deleteStockItem(item.id)}
-                                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                                         title="Sil"
                                                     >
-                                                        <Trash2 size={18} />
+                                                        <Trash2 size={14} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -985,6 +988,8 @@ export default function Procurement() {
                 isOpen={isOrderModalOpen}
                 onClose={() => setIsOrderModalOpen(false)}
                 title={`Sipariş Detayı #${selectedOrder?.id.slice(0, 8)}`}
+                theme="minimal"
+                size="xl"
             >
                 {selectedOrder && (
                     <div className="space-y-6">
@@ -1082,6 +1087,8 @@ export default function Procurement() {
                 isOpen={isProductModalOpen}
                 onClose={() => setIsProductModalOpen(false)}
                 title="Ürün Detayı"
+                theme="minimal"
+                size="lg"
             >
                 {selectedProduct && (
                     <ProductDetail
@@ -1098,6 +1105,8 @@ export default function Procurement() {
                 isOpen={isRawMaterialsModalOpen}
                 onClose={() => setIsRawMaterialsModalOpen(false)}
                 title="Kullanılan Hammaddeler"
+                theme="minimal"
+                size="lg"
             >
                 {selectedOrderForMaterials && (
                     <div className="space-y-6">
@@ -1171,6 +1180,8 @@ export default function Procurement() {
                 isOpen={isProcurementModalOpen}
                 onClose={() => setIsProcurementModalOpen(false)}
                 title="Tedarik Malzeme Seçimi"
+                theme="minimal"
+                size="xl"
             >
                 <div className="space-y-6">
                     <div className="bg-amber-50 p-4 rounded-lg text-sm text-amber-800">
@@ -1239,6 +1250,8 @@ export default function Procurement() {
                 isOpen={isAddStockModalOpen}
                 onClose={() => setIsAddStockModalOpen(false)}
                 title="Yeni Stok Ekle"
+                theme="minimal"
+                size="md"
             >
                 <form onSubmit={handleAddStock} className="space-y-4">
                     <div className="space-y-2">
@@ -1352,6 +1365,8 @@ export default function Procurement() {
                 isOpen={quantityModal.isOpen}
                 onClose={() => setQuantityModal({ ...quantityModal, isOpen: false })}
                 title="Kullanılacak Miktar"
+                theme="minimal"
+                size="sm"
             >
                 <form onSubmit={handleQuantityConfirm} className="space-y-4">
                     <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-600 mb-4">
@@ -1400,6 +1415,8 @@ export default function Procurement() {
                 isOpen={quickAddModal.isOpen}
                 onClose={() => setQuickAddModal({ ...quickAddModal, isOpen: false })}
                 title="Hızlı Stok Ekle"
+                theme="minimal"
+                size="sm"
             >
                 <form onSubmit={handleQuickAddSave} className="space-y-4">
                     <div className="bg-emerald-50 p-3 rounded-lg text-sm text-emerald-800 mb-4 border border-emerald-100">
@@ -1446,7 +1463,8 @@ export default function Procurement() {
                 isOpen={isDispatchModalOpen}
                 onClose={() => setIsDispatchModalOpen(false)}
                 title="Yeni Sevkiyat"
-                maxWidthClassName="max-w-6xl"
+                size="xl"
+                theme="minimal"
             >
                 <div className="space-y-6">
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -1671,7 +1689,8 @@ export default function Procurement() {
                 isOpen={dispatchViewModal.isOpen}
                 onClose={() => setDispatchViewModal({ isOpen: false, dispatch: null })}
                 title={`Sevk Fişi #${dispatchViewModal.dispatch?.id || ''}`}
-                maxWidthClassName="max-w-5xl"
+                size="xl"
+                theme="minimal"
             >
                 {dispatchViewModal.dispatch && (
                     <div className="space-y-6">
@@ -1727,7 +1746,8 @@ export default function Procurement() {
                 isOpen={changeRequestModal.isOpen}
                 onClose={() => setChangeRequestModal({ isOpen: false, dispatch: null, reason: '' })}
                 title={`Değişiklik Onayı İste #${changeRequestModal.dispatch?.id || ''}`}
-                maxWidthClassName="max-w-2xl"
+                size="md"
+                theme="minimal"
             >
                 <div className="space-y-4">
                     <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-4 text-sm">
@@ -1761,6 +1781,7 @@ export default function Procurement() {
                     </div>
                 </div>
             </Modal>
-        </div>
+            </div> {/* Closing space-y-6 */}
+        </ERPPageLayout>
     );
 }

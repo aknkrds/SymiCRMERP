@@ -1,5 +1,25 @@
 
 import { Client } from 'ssh2';
+import readline from 'node:readline';
+
+const askHidden = (question) => new Promise((resolve) => {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.stdoutMuted = true;
+  rl._writeToOutput = function _writeToOutput(stringToWrite) {
+    if (rl.stdoutMuted) {
+      if (stringToWrite.trim().length === 0) rl.output.write(stringToWrite);
+      else rl.output.write('*');
+    } else {
+      rl.output.write(stringToWrite);
+    }
+  };
+  rl.question(question, (answer) => {
+    rl.stdoutMuted = false;
+    rl.output.write('\n');
+    rl.close();
+    resolve(answer);
+  });
+});
 
 const safeCmdFast =
   'set -e; ' +
@@ -52,14 +72,11 @@ const main = async () => {
   const port = process.env.DEPLOY_PORT ? parseInt(process.env.DEPLOY_PORT, 10) : 2121;
   const username = process.env.DEPLOY_USER || 'aknkrds';
 
+  const deployFull = process.env.DEPLOY_FULL === '1';
+  const safeCmd = deployFull ? safeCmdFull : safeCmdFast;
+
   const agent = process.env.SSH_AUTH_SOCK;
-  const password = process.env.DEPLOY_PASSWORD || null;
-  const fullDeploy = process.env.DEPLOY_FULL === '1';
-  const canSudo = fullDeploy && !!password;
-  const safeCmd = fullDeploy ? safeCmdFull : safeCmdFast;
-  if (!password && !agent) {
-    throw new Error('DEPLOY_PASSWORD yok ve SSH_AUTH_SOCK yok. Deploy için en az birini sağlamalısınız.');
-  }
+  const password = process.env.DEPLOY_PASSWORD || await askHidden('SSH Password: ');
 
   const conn = new Client();
   conn.on('ready', () => {
@@ -71,7 +88,7 @@ const main = async () => {
         conn.end();
         process.exit(1);
       }
-      if (canSudo) {
+      if (deployFull) {
         stream.write(`${password}\n`);
       }
       stream.on('close', (code, signal) => {
@@ -91,8 +108,8 @@ const main = async () => {
     host,
     port,
     username,
-    ...(password ? { password } : {}),
-    ...(agent ? { agent } : {})
+    password,
+    agent
   });
 };
 

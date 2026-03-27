@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Plus, Search, Edit2, Trash2, Package, Eye } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, Eye, Filter, Star, Menu } from 'lucide-react';
 import { useProducts } from '../hooks/useProducts';
 import type { Product, ProductFormData } from '../types';
 import { Modal } from '../components/ui/Modal';
 import { ProductForm } from '../components/products/ProductForm';
 import { ProductDetail } from '../components/products/ProductDetail';
+import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
 
 export default function Products() {
     const { products, addProduct, updateProduct, deleteProduct } = useProducts();
@@ -16,249 +17,97 @@ export default function Products() {
 
     const filteredProducts = products.filter(p =>
         (p.code?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (p.description?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+        (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
 
-    const handleAdd = () => {
-        setEditingProduct(undefined);
-        setIsModalOpen(true);
-    };
-
-    const handleEdit = (product: Product) => {
-        setEditingProduct(product);
-        setIsModalOpen(true);
-    };
-
-    const handleView = (product: Product) => {
-        setViewingProduct(product);
-        setIsViewModalOpen(true);
-    };
-
+    const handleAdd = () => { setEditingProduct(undefined); setIsModalOpen(true); };
+    const handleEdit = (product: Product) => { setEditingProduct(product); setIsModalOpen(true); };
+    const handleView = (product: Product) => { setViewingProduct(product); setIsViewModalOpen(true); };
     const handleSubmit = (data: ProductFormData) => {
-        if (editingProduct) {
-            updateProduct(editingProduct.id, data);
-        } else {
-            addProduct(data);
-        }
+        if (editingProduct) updateProduct(editingProduct.id, data);
+        else addProduct(data);
         setIsModalOpen(false);
     };
-
     const handleDelete = (id: string) => {
-        if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
-            deleteProduct(id);
-        }
+        if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) deleteProduct(id);
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Ürünler & Reçeteler</h1>
-                    <p className="text-slate-500">Ürün yönetimi ve reçete detayları</p>
-                </div>
-                <button
-                    onClick={handleAdd}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-white rounded-xl hover:bg-[var(--accent-strong)] hover:shadow-lg hover:shadow-[var(--accent)]/30 transition-all duration-300 transform hover:-translate-y-0.5"
-                >
-                    <Plus size={20} />
-                    Yeni Ürün
-                </button>
-            </div>
-
-            <div className="glass-card overflow-hidden">
-                <div className="p-4 border-b border-slate-200">
-                    <div className="relative max-w-sm">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                        <input
-                            type="text"
-                            placeholder="Ürün ara..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-all"
-                        />
+        <>
+            <ERPPageLayout
+                breadcrumbs={[{ label: 'Üretim' }, { label: 'Ürünler & Reçeteler', active: true }]}
+                toolbar={
+                    <>
+                        <ToolbarBtn icon={<Plus size={13} />} label="Yeni" variant="primary" onClick={handleAdd} />
+                        <ToolbarBtn icon={<Filter size={13} />} label="Filtrele" />
+                        <ToolbarBtn icon={<Star size={13} />} />
+                        <ToolbarBtn icon={<Menu size={13} />} />
+                    </>
+                }
+                toolbarRight={
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                        <input type="text" placeholder="Ürün ara..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-8 pr-3 py-1 text-xs bg-white border border-slate-200 rounded outline-none focus:ring-1 focus:ring-blue-400 w-48" />
                     </div>
-                </div>
-
-                {/* Mobile View (Cards) */}
-                <div className="md:hidden">
-                    {filteredProducts.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500">
-                            Kayıtlı ürün bulunamadı.
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-200">
-                            {filteredProducts.map((product) => (
-                                <div key={product.id} className="p-4 space-y-3">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
-                                            <Package size={20} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-start">
-                                                <div className="font-semibold text-slate-800 truncate">{product.code}</div>
-                                                <div className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                                    {product.dimensions.length}x{product.dimensions.width}x{product.dimensions.depth}
-                                                </div>
-                                            </div>
-                                            <div className="text-sm text-slate-600 mt-1 line-clamp-2">{product.description}</div>
-                                        </div>
+                }
+            >
+                <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 z-10">
+                        <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                            <th className="w-8 px-2 py-2 text-center border-r border-slate-200 text-[11px]">#</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Kod</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Ürün Adı</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Tip</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Boyutlar (mm)</th>
+                            <th className="px-3 py-2 border-r border-slate-200 text-[11px] uppercase tracking-wide">Özellikler</th>
+                            <th className="px-3 py-2 text-[11px] uppercase tracking-wide">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredProducts.length === 0 ? (
+                            <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-400">Kayıtlı ürün bulunamadı.</td></tr>
+                        ) : filteredProducts.map((product, idx) => (
+                            <tr key={product.id} className="border-b border-slate-100 hover:bg-blue-50/40 transition-colors">
+                                <td className="px-2 py-2 text-center text-slate-400 border-r border-slate-100 font-mono">{idx + 1}</td>
+                                <td className="px-3 py-2 border-r border-slate-100 font-mono text-blue-600 font-medium">{product.code}</td>
+                                <td className="px-3 py-2 border-r border-slate-100 font-medium text-slate-800">{product.name}</td>
+                                <td className="px-3 py-2 border-r border-slate-100">
+                                    {product.productType && (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                            {product.productType === 'percinli' ? 'Perçinli' : product.productType === 'sivama' ? 'Sıvama' : product.productType}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="px-3 py-2 border-r border-slate-100 font-mono text-slate-600">
+                                    {product.dimensions?.length && `${product.dimensions.length}×${product.dimensions.width}×${product.dimensions.depth}`}
+                                </td>
+                                <td className="px-3 py-2 border-r border-slate-100">
+                                    <div className="flex flex-wrap gap-1">
+                                        {product.features?.lid?.selected && <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] rounded-full border border-emerald-200">Kapaklı</span>}
+                                        {product.features?.window?.selected && <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] rounded-full border border-blue-200">Pencereli</span>}
+                                        {product.features?.gofre?.selected && <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-[10px] rounded-full border border-amber-200">Gofre</span>}
                                     </div>
-
-                                    <div className="flex flex-wrap gap-2 pt-1">
-                                        {product.features.hasLid && (
-                                            <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
-                                        )}
-                                        {product.features.hasWindow && (
-                                            <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
-                                        )}
-                                        {product.features.extras && (
-                                            <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full" title={product.features.extras}>+Ekstra</span>
-                                        )}
+                                </td>
+                                <td className="px-3 py-2">
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => handleView(product)} title="Görüntüle" className="p-1 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"><Eye size={14} /></button>
+                                        <button onClick={() => handleEdit(product)} title="Düzenle" className="p-1 rounded hover:bg-indigo-100 text-slate-400 hover:text-indigo-600 transition-colors"><Edit2 size={14} /></button>
+                                        <button onClick={() => handleDelete(product.id)} title="Sil" className="p-1 rounded hover:bg-red-100 text-slate-400 hover:text-red-600 transition-colors"><Trash2 size={14} /></button>
                                     </div>
-
-                                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                                        <button
-                                            onClick={() => handleView(product)}
-                                            className="p-2 text-blue-600 bg-blue-50 rounded-lg"
-                                            title="Görüntüle"
-                                        >
-                                            <Eye size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleEdit(product)}
-                                            className="p-2 text-[var(--accent-strong)] bg-[var(--accent-soft)] rounded-lg"
-                                            title="Düzenle"
-                                        >
-                                            <Edit2 size={18} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(product.id)}
-                                            className="p-2 text-red-600 bg-red-50 rounded-lg"
-                                            title="Sil"
-                                        >
-                                            <Trash2 size={18} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Desktop View (Table) */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50/50 text-slate-800 font-semibold border-b border-slate-100 uppercase tracking-wider text-xs">
-                            <tr>
-                                <th className="px-6 py-4">Kod & Açıklama</th>
-                                <th className="px-6 py-4">Boyutlar (mm)</th>
-                                <th className="px-6 py-4">Özellikler</th>
-                                <th className="px-6 py-4 text-right">İşlemler</th>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {filteredProducts.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4} className="px-6 py-8 text-center text-slate-500">
-                                        Kayıtlı ürün bulunamadı.
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredProducts.map((product) => (
-                                    <tr key={product.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-[var(--accent-soft)] text-[var(--accent-strong)] rounded-lg">
-                                                    <Package size={20} />
-                                                </div>
-                                                <div>
-                                                    <div className="font-semibold text-slate-800">{product.code}</div>
-                                                    <div className="text-xs text-slate-500">{product.description}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-slate-700">
-                                                {product.dimensions.length} x {product.dimensions.width} x {product.dimensions.depth}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="space-y-2">
-                                                <div className="flex flex-wrap gap-2">
-                                                    {product.features.hasLid && (
-                                                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs rounded-full">Kapaklı</span>
-                                                    )}
-                                                    {product.features.hasWindow && (
-                                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full">Pencereli</span>
-                                                    )}
-                                                    {product.features.extras && (
-                                                        <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full" title={product.features.extras}>+Ekstra</span>
-                                                    )}
-                                                </div>
-                                                {product.details && (
-                                                    <div className="text-xs text-slate-600 line-clamp-2">
-                                                        {product.details}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleView(product)}
-                                                    className="p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
-                                                    title="Görüntüle"
-                                                >
-                                                    <Eye size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleEdit(product)}
-                                                    className="p-2 text-slate-500 hover:bg-[var(--accent-soft)] hover:text-[var(--accent-strong)] rounded-lg transition-colors"
-                                                    title="Düzenle"
-                                                >
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(product.id)}
-                                                    className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
-                                                    title="Sil"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                        ))}
+                    </tbody>
+                </table>
+            </ERPPageLayout>
 
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title={editingProduct ? "Ürün Düzenle" : "Yeni Ürün Ekle"}
-            >
-                <ProductForm
-                    initialData={editingProduct}
-                    onSubmit={handleSubmit}
-                    onCancel={() => setIsModalOpen(false)}
-                />
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? "Ürün Düzenle" : "Yeni Ürün Ekle"} size="full">
+                <ProductForm initialData={editingProduct} onSubmit={handleSubmit} onCancel={() => setIsModalOpen(false)} />
             </Modal>
-
-            <Modal
-                isOpen={isViewModalOpen}
-                onClose={() => setIsViewModalOpen(false)}
-                title="Ürün Detayları"
-            >
-                {viewingProduct && (
-                    <ProductDetail
-                        product={viewingProduct}
-                        onClose={() => setIsViewModalOpen(false)}
-                    />
-                )}
+            <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Ürün Detayları" size="lg">
+                {viewingProduct && <ProductDetail product={viewingProduct} onClose={() => setIsViewModalOpen(false)} />}
             </Modal>
-        </div>
+        </>
     );
 }

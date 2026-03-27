@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDesktopStore } from '../../store/desktopStore';
 import { useWindowStore } from '../../store/windowStore';
-import { Folder, Image as ImageIcon, FileText, FileSpreadsheet, File, Trash2 } from 'lucide-react';
+import { Folder, Image as ImageIcon, FileText, FileSpreadsheet, File, Trash2, Zap } from 'lucide-react';
 import { Rnd } from 'react-rnd';
+import { appsConfig } from '../../config/apps';
 
 export function DesktopIcons() {
     const { items, updateItemPosition, deleteItem, setActiveFileId } = useDesktopStore();
@@ -10,7 +11,7 @@ export function DesktopIcons() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 
-    React.useEffect(() => {
+    useEffect(() => {
         const hideMenu = () => setContextMenu(null);
         document.addEventListener('click', hideMenu);
         return () => document.removeEventListener('click', hideMenu);
@@ -18,7 +19,11 @@ export function DesktopIcons() {
 
     const handleDoubleClick = (item: any) => {
         if (item.type === 'folder') {
-            openWindow('dashboard', item.name); // Using dashboard as a fallback for folder
+            setActiveFileId(item.id);
+            openWindow('preview', item.name);
+        } else if (item.mimeType === 'application/x-shortcut') {
+            const app = appsConfig.find(a => a.id === item.url);
+            if (app) openWindow(app.id, app.title);
         } else {
             setActiveFileId(item.id);
             openWindow('preview', item.name);
@@ -26,6 +31,22 @@ export function DesktopIcons() {
     };
 
     const getIcon = (item: any) => {
+        if (item.mimeType === 'application/x-shortcut') {
+            const app = appsConfig.find(a => a.id === item.url);
+            if (app) {
+                const Icon = app.icon;
+                return (
+                    <div className="relative">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg ${app.colorClass || 'bg-blue-500'}`}>
+                            <Icon size={28} />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-sm border border-slate-200">
+                            <Zap size={10} className="text-amber-500 fill-amber-500" />
+                        </div>
+                    </div>
+                );
+            }
+        }
         if (item.type === 'folder') return <Folder size={48} className="text-blue-400 fill-blue-400/20" />;
         if (item.mimeType?.startsWith('image/')) return <ImageIcon size={48} className="text-emerald-400" />;
         if (item.mimeType === 'application/pdf') return <FileText size={48} className="text-red-500" />;
@@ -36,12 +57,12 @@ export function DesktopIcons() {
 
     return (
         <>
-            {items.map(item => (
+            {items.filter(i => !i.parentId).map(item => (
                 <Rnd
                     key={item.id}
                     bounds="parent"
                     position={{ x: item.x, y: item.y }}
-                    onDragStop={(e, d) => updateItemPosition(item.id, d.x, d.y)}
+                    onDragStop={(_e, d) => updateItemPosition(item.id, d.x, d.y)}
                     enableResizing={false}
                     className="absolute z-[5]"
                 >

@@ -18,6 +18,10 @@ local-backups
 crm.db*
 server/users
 check.mjs
+server/img/**
+server/doc/**
+*.bak.*
+*.pre-*.bak.*
 
 # Editor directories and files
 .vscode/*

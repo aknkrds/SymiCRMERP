@@ -1,8 +1,11 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Rnd } from 'react-rnd';
 import { useWindowStore } from '../../store/windowStore';
-import type { WindowState } from '../../store/windowStore';
+import type { WindowState } from '../../types';
 import { X, Minus, Maximize2 } from 'lucide-react';
+
+const DEFAULT_WIDTH = 1000;
+const DEFAULT_HEIGHT = 650;
 
 interface WindowFrameProps {
     windowState: WindowState;
@@ -16,19 +19,15 @@ export function WindowFrame({ windowState, children }: WindowFrameProps) {
 
     const isActive = activeWindowId === id;
 
-    // Legacy ERP pages need padding since they used to be inside a layout container
-    const noPaddingApps = ['notes', 'preview', 'shortcuts'];
-    const contentPadding = noPaddingApps.includes(id) ? 'p-0' : 'p-6 md:p-8';
-
     if (isMinimized) return null;
 
-    const handleDragStop = (e: any, d: any) => {
+    const handleDragStop = (_e: any, d: any) => {
         if (!isMaximized) {
-            updateWindowBounds(id, { x: d.x, y: d.y }, size || { width: 1000, height: 650 });
+            updateWindowBounds(id, { x: d.x, y: d.y }, (size as any) || { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT });
         }
     };
 
-    const handleResizeStop = (e: any, direction: any, ref: any, delta: any, pos: any) => {
+    const handleResizeStop = (_e: any, _direction: any, ref: any, _delta: any, pos: any) => {
         if (!isMaximized) {
             updateWindowBounds(id, pos, { width: ref.style.width, height: ref.style.height });
         }
@@ -37,7 +36,7 @@ export function WindowFrame({ windowState, children }: WindowFrameProps) {
     return (
         <Rnd
             ref={rndRef}
-            size={isMaximized ? { width: '100%', height: '100%' } : (size || { width: 1000, height: 650 })}
+            size={isMaximized ? { width: '100%', height: window.innerHeight - 32 } : ((size as any) || { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT })}
             position={isMaximized ? { x: 0, y: 32 } : (position || { x: 50, y: 50 })}
             onDragStop={handleDragStop}
             onResizeStop={handleResizeStop}
@@ -84,7 +83,7 @@ export function WindowFrame({ windowState, children }: WindowFrameProps) {
             </div>
 
             {/* Content */}
-            <div className={`flex-1 min-h-0 overflow-y-auto w-full bg-slate-50 relative ${contentPadding}`}>
+            <div className="flex-1 overflow-auto w-full bg-white relative">
                 {children}
             </div>
         </Rnd>

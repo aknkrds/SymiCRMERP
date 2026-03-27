@@ -98,6 +98,8 @@ CREATE TABLE IF NOT EXISTS orders (
   FOREIGN KEY (customer_id) REFERENCES customers (id)
 );
 
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS design_job_details JSONB;
+
 CREATE TABLE IF NOT EXISTS procurement_dispatches (
   id TEXT PRIMARY KEY,
   dispatch_date TEXT NOT NULL,
@@ -320,4 +322,10 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_products_code ON products(code);
 CREATE INDEX IF NOT EXISTS idx_stock_items_stock_number ON stock_items(stock_number);
 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id);
+CREATE TABLE IF NOT EXISTS user_desktop_data (
+  username TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);

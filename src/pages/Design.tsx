@@ -1,814 +1,346 @@
 import { useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
-import { Eye, Plus, X, Upload, PencilLine, Info, CheckCircle2 } from 'lucide-react';
+import { Eye, Plus, X, Upload, PencilLine, Info, CheckCircle2, Search, Menu, Filter, Settings, FileText, Image as ImageIcon, Check } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { ProductDetail } from '../components/products/ProductDetail';
 import type { Order, Product } from '../types';
 import { ProductForm } from '../components/products/ProductForm';
+import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
 
 export default function Design() {
     const { orders, updateStatus, updateOrder } = useOrders();
     const { products, updateProduct } = useProducts();
     
-    const designOrders = orders.filter(o => 
-        (o.status === 'supply_design_process' || 
-         o.status === 'design_waiting' || 
-         o.status === 'offer_accepted' ||
-         o.status === 'waiting_manager_approval' ||
-         o.status === 'manager_approved' ||
-         o.status === 'revision_requested') &&
-        o.designStatus !== 'completed'
-    );
+    const designOrders = orders.filter(o => (o.status === 'supply_design_process' || o.status === 'design_pending' || o.status === 'offer_accepted' || o.status === 'waiting_manager_approval' || o.status === 'manager_approved' || o.status === 'revision_requested') && o.designStatus !== 'completed');
 
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
     const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
-    
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-
     const [uploadOrder, setUploadOrder] = useState<Order | null>(null);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [uploadedImages, setUploadedImages] = useState<{ url: string; productId?: string }[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [selectedUploadProductId, setSelectedUploadProductId] = useState<string>('');
-
-    // Product Info Entry (Edit) modal
     const [infoOrder, setInfoOrder] = useState<Order | null>(null);
     const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
     const [infoSelectedItemId, setInfoSelectedItemId] = useState<string | null>(null);
-    const currentInfoProduct = (() => {
-        if (!infoOrder || !infoSelectedItemId) return null;
-        const item = infoOrder.items.find(i => i.productId === infoSelectedItemId);
-        if (!item) return null;
-        return products.find(p => p.id === item.productId) || null;
-    })();
-
-    // Job Info Entry modal
     const [jobOrder, setJobOrder] = useState<Order | null>(null);
     const [isJobModalOpen, setIsJobModalOpen] = useState(false);
-    const [jobSize, setJobSize] = useState('');
-    const [boxSize, setBoxSize] = useState('');
-    const [efficiency, setEfficiency] = useState('');
+    const [jobSelectedProductId, setJobSelectedProductId] = useState<string>('');
+    const [jobDetailsByProduct, setJobDetailsByProduct] = useState<Record<string, { jobSize: string; boxSize: string; efficiency: string }>>({});
 
-    const handleSendToGM = async (orderId: string) => {
-        if (confirm('Siparişi Genel Müdür onayına göndermek istiyor musunuz?')) {
-            await updateStatus(orderId, 'waiting_manager_approval');
-        }
-    };
-
-    const handleCompleteDesign = async (orderId: string) => {
-        if (confirm('Tasarım işlemleri tamamlandı olarak işaretlensin mi?')) {
-            await updateOrder(orderId, { designStatus: 'completed' } as any);
-        }
-    };
-
-    const handleViewOrder = (order: Order) => {
-        setSelectedOrder(order);
-        setIsOrderModalOpen(true);
-    };
-
-    const handleViewProduct = (productId: string) => {
-        const product = products.find(p => p.id === productId);
-        if (product) {
-            setSelectedProduct(product);
-            setIsProductModalOpen(true);
-        }
-    };
-
-    const handleOpenUpload = (order: Order) => {
-        setUploadOrder(order);
-        const images = (order.designImages || []).map(img => 
-            typeof img === 'string' ? { url: img } : img
-        );
-        setUploadedImages(images);
-        setSelectedUploadProductId('');
-        setIsUploadModalOpen(true);
-    };
-
-    const handleOpenNewUpload = () => {
-        setUploadOrder(null);
-        setUploadedImages([]);
-        setSelectedUploadProductId('');
-        setIsUploadModalOpen(true);
-    };
-
-    const handleOpenInfo = (order: Order) => {
-        setInfoOrder(order);
-        const firstItem = order.items[0];
-        setInfoSelectedItemId(firstItem?.productId || null);
-        setIsInfoModalOpen(true);
-    };
-
-    const handleSaveProductInfo = async (data: any) => {
-        if (!infoOrder || !currentInfoProduct) return;
-        await updateProduct(currentInfoProduct.id, data);
-        // Reflect name change to order items (for display)
-        const updatedItems = infoOrder.items.map(i => 
-            i.productId === currentInfoProduct.id ? { ...i, productName: data.name || i.productName } : i
-        );
-        await updateOrder(infoOrder.id, { items: updatedItems } as any);
-        setIsInfoModalOpen(false);
-        setInfoOrder(null);
-        setInfoSelectedItemId(null);
-    };
-
-    const handleOpenJob = (order: Order) => {
-        setJobOrder(order);
-        setJobSize(order.jobSize || '');
-        setBoxSize(order.boxSize || '');
-        setEfficiency(order.efficiency || '');
-        setIsJobModalOpen(true);
-    };
-
-    const handleSaveJob = async () => {
-        if (!jobOrder) return;
-        await updateOrder(jobOrder.id, { jobSize, boxSize, efficiency } as any);
-        setIsJobModalOpen(false);
-        setJobOrder(null);
-        setJobSize('');
-        setBoxSize('');
-        setEfficiency('');
-    };
+    const handleSendToGM = async (orderId: string) => { if (confirm('Genel Müdür onayına gönderilsin mi?')) await updateStatus(orderId, 'waiting_manager_approval'); };
+    const handleCompleteDesign = async (orderId: string) => { if (confirm('Tasarım tamamlandı mı?')) await updateOrder(orderId, { designStatus: 'completed' } as any); };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || !uploadOrder) return;
-        
-        if (!selectedUploadProductId) {
-            alert('Lütfen önce tasarımın ekleneceği ürünü seçiniz.');
-            e.target.value = '';
-            return;
-        }
+        const maxPerProduct = 5;
+        const targetProductId = selectedUploadProductId || uploadOrder.items[0]?.productId || '';
+        if (!targetProductId) return;
+        if (!selectedUploadProductId) setSelectedUploadProductId(targetProductId);
 
-        const files = Array.from(e.target.files);
-        if (uploadedImages.length + files.length > 5) {
-            alert('En fazla 5 adet tasarım görseli yükleyebilirsiniz.');
-            return;
-        }
+        const existingCount = uploadedImages.filter(img => img.productId === targetProductId).length;
+        const remaining = Math.max(0, maxPerProduct - existingCount);
+        const files = Array.from(e.target.files).slice(0, remaining);
+        if (files.length === 0) return;
 
         setIsUploading(true);
-        const newUploadedImages: { url: string; productId: string }[] = [];
-
         for (const file of files) {
-            const formData = new FormData();
-            formData.append('image', file);
-
+            const fd = new FormData(); fd.append('image', file);
             try {
-                // Upload to 'tasarim' folder
-                const response = await fetch('/api/upload?folder=tasarim', {
-                    method: 'POST',
-                    body: formData,
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    newUploadedImages.push({ 
-                        url: data.url, 
-                        productId: selectedUploadProductId 
-                    });
-                } else {
-                    console.error('Upload failed');
-                    alert(`"${file.name}" yüklenirken hata oluştu.`);
+                const res = await fetch('/api/upload?folder=tasarim', { method: 'POST', body: fd });
+                if (res.ok) {
+                    const d = await res.json();
+                    setUploadedImages(prev => [...prev, { url: d.url, productId: targetProductId }]);
                 }
-            } catch (error) {
-                console.error('Error uploading image:', error);
-                alert('Resim yüklenirken bir hata oluştu.');
-            }
+            } catch (e) {}
         }
-
-        if (newUploadedImages.length > 0) {
-            setUploadedImages(prev => [...prev, ...newUploadedImages]);
-        }
-        setIsUploading(false);
-        // Clear input
-        e.target.value = '';
-    };
-
-    const handleRemoveImage = (indexToRemove: number) => {
-        setUploadedImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
-    };
-
-    const handleSaveDesign = async () => {
-        if (!uploadOrder) return;
-        
-        if (uploadedImages.length === 0) {
-            alert('Lütfen en az bir tasarım görseli yükleyin.');
-            return;
-        }
-        
-        await updateOrder(uploadOrder.id, {
-            designImages: uploadedImages
-        } as any);
-
-        setIsUploadModalOpen(false);
-        setUploadOrder(null);
-        setUploadedImages([]);
+        setIsUploading(false); e.target.value = '';
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">Tasarım</h1>
-                    <p className="text-slate-500">Tasarım bekleyen siparişler ve onay işlemleri</p>
-                </div>
-                <button
-                    onClick={handleOpenNewUpload}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
-                >
-                    <Plus size={20} />
-                    Yeni Tasarım Ekle
-                </button>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                {/* Mobile View (Cards) */}
-                <div className="md:hidden">
-                    {designOrders.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500">
-                            Tasarım bekleyen sipariş bulunmuyor.
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-200">
-                            {designOrders.map((order) => (
-                                <div key={order.id} className="p-4 space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <div className="font-mono text-xs text-slate-500">#{order.id.slice(0, 8)}</div>
-                                            <div className="font-medium text-slate-800">{order.customerName}</div>
-                                        </div>
-                                        <div className="text-xs text-slate-500">
-                                            {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
-                                        </div>
+        <ERPPageLayout
+            breadcrumbs={[{ label: 'Tasarım' }, { label: 'Tasarım Onayları & Teknik Çizim', active: true }]}
+            toolbar={
+                <>
+                    <ToolbarBtn icon={<Plus size={13} />} label="Yeni Tasarım" variant="primary" onClick={() => setIsUploadModalOpen(true)} />
+                    <ToolbarBtn icon={<Filter size={13} />} label="Filtrele" />
+                    <ToolbarBtn icon={<Menu size={13} />} />
+                </>
+            }
+        >
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center"><span className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Tasarım Bekleyenler</span></div>
+                <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr className="bg-slate-50/30 text-slate-400 font-bold uppercase text-[9px] tracking-wider border-b border-slate-100">
+                            <th className="px-4 py-2">Sipariş</th>
+                            <th className="px-4 py-2">Müşteri</th>
+                            <th className="px-4 py-2">Ürün Detayları</th>
+                            <th className="px-4 py-2 text-center">Durum</th>
+                            <th className="px-4 py-2 text-right">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {designOrders.map(o => (
+                            <tr key={o.id} className="border-b border-slate-50 hover:bg-slate-50 transition-all group">
+                                <td className="px-4 py-3 font-mono text-slate-400 font-bold">#{o.id.slice(0, 8)}</td>
+                                <td className="px-4 py-3 font-bold text-slate-700 uppercase tracking-tight">{o.customerName}</td>
+                                <td className="px-4 py-3">
+                                    <div className="flex flex-col gap-1 max-w-[250px]">
+                                        {o.items.map((item, i) => <div key={i} className="text-[10px] text-slate-500 font-medium truncate">• {item.productName}</div>)}
                                     </div>
-
-                                    <div className="text-sm text-slate-600 space-y-2">
-                                        <span className="text-xs text-slate-400 block font-medium">Ürünler:</span>
-                                        <div className="flex flex-col gap-2 pl-2 border-l-2 border-slate-100">
-                                            {order.items.map((item, idx) => {
-                                                const product = products.find(p => p.id === item.productId);
-                                                const dims = product?.dimensions;
-                                                const dimStr = (dims && dims.length && dims.width) 
-                                                    ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
-                                                    : '';
-                                                
-                                                return (
-                                                    <div key={idx} className="flex flex-col gap-0.5">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-semibold text-slate-700">{product ? product.name : (item.productName || 'Bilinmeyen Ürün')}</span>
-                                                            {product?.productType && (
-                                                                <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                                                    {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        {product?.details && <span className="text-slate-500 italic text-xs">{product.details}</span>}
-                                                        {dimStr && <span className="text-slate-600 font-mono text-xs">Ölçü: {dimStr}</span>}
-                                                        <span className="text-xs text-slate-400">Adet: {item.quantity}</span>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                    <span className={`px-2 py-0.5 rounded-[4px] text-[9px] font-bold border ${o.status === 'waiting_manager_approval' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                        {o.status === 'waiting_manager_approval' ? 'GM ONAYINDA' : 'TASARIMDA'}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setInfoOrder(o); setInfoSelectedItemId(o.items[0]?.productId || null); setIsInfoModalOpen(true); }} className="p-1 px-3 bg-teal-50 text-teal-600 rounded text-[9px] font-bold border border-teal-100 hover:bg-teal-100 transition-all">BİLGİ</button>
+                                        <button onClick={() => {
+                                            const defaultProductId = o.items[0]?.productId || '';
+                                            setUploadOrder(o);
+                                            setSelectedUploadProductId(defaultProductId);
+                                            setUploadedImages((o.designImages || []).map(img => {
+                                                if (typeof img === 'string') return { url: img, productId: defaultProductId };
+                                                return { ...img, productId: img.productId || defaultProductId };
+                                            }));
+                                            setIsUploadModalOpen(true);
+                                        }} className="p-1 px-3 bg-indigo-50 text-indigo-600 rounded text-[9px] font-bold border border-indigo-100 hover:bg-indigo-100 transition-all">GÖRSEL</button>
+                                        <button onClick={() => {
+                                            const defaultProductId = o.items[0]?.productId || '';
+                                            const source = (o.designJobDetails && typeof o.designJobDetails === 'object') ? o.designJobDetails : {};
+                                            const next: Record<string, { jobSize: string; boxSize: string; efficiency: string }> = {};
+                                            for (const it of o.items) {
+                                                const existing = (source as any)[it.productId] || {};
+                                                const fallbackFromOrder = it.productId === defaultProductId
+                                                    ? { jobSize: o.jobSize || '', boxSize: o.boxSize || '', efficiency: o.efficiency || '' }
+                                                    : { jobSize: '', boxSize: '', efficiency: '' };
+                                                next[it.productId] = {
+                                                    jobSize: existing.jobSize ?? fallbackFromOrder.jobSize,
+                                                    boxSize: existing.boxSize ?? fallbackFromOrder.boxSize,
+                                                    efficiency: existing.efficiency ?? fallbackFromOrder.efficiency,
+                                                };
+                                            }
+                                            setJobOrder(o);
+                                            setJobSelectedProductId(defaultProductId);
+                                            setJobDetailsByProduct(next);
+                                            setIsJobModalOpen(true);
+                                        }} className="p-1 px-3 bg-slate-50 text-slate-600 rounded text-[9px] font-bold border border-slate-100 hover:bg-slate-100 transition-all">LEVHA</button>
+                                        <button onClick={() => handleSendToGM(o.id)} disabled={o.status === 'waiting_manager_approval'} className="p-1 px-3 bg-orange-50 text-orange-600 rounded text-[9px] font-bold border border-orange-100 hover:bg-orange-100 transition-all disabled:opacity-30">GM ONAYI</button>
+                                        <button onClick={() => handleCompleteDesign(o.id)} disabled={o.status !== 'manager_approved'} className="p-1 px-3 bg-emerald-50 text-emerald-600 rounded text-[9px] font-bold border border-emerald-100 hover:bg-emerald-100 transition-all disabled:opacity-30">TAMAMLA</button>
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
-                                        <button
-                                            onClick={() => handleViewOrder(order)}
-                                            className="flex items-center justify-center gap-2 px-3 py-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
-                                            aria-label="Sipariş Detaylarını Görüntüle"
-                                        >
-                                            <Eye size={16} />
-                                            Görüntüle
-                                        </button>
-                                        <button
-                                            onClick={() => handleOpenInfo(order)}
-                                            className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors text-xs font-medium"
-                                            aria-label="Bilgi Girişi Yap"
-                                        >
-                                            <PencilLine size={16} />
-                                            Bilgi Girişi
-                                        </button>
-                                        <button
-                                            onClick={() => handleOpenUpload(order)}
-                                            className="flex items-center justify-center gap-2 px-3 py-2 text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-xs font-medium"
-                                            aria-label="Tasarım Yükle"
-                                        >
-                                            <Upload size={16} />
-                                            Tasarım Ekle
-                                        </button>
-                                        <button
-                                            onClick={() => handleOpenJob(order)}
-                                            className="flex items-center justify-center gap-2 px-3 py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
-                                            aria-label="Levha Bilgisi Gir"
-                                        >
-                                            <Info size={16} />
-                                            Levha Bilgi
-                                        </button>
-                                        <button
-                                            onClick={() => handleSendToGM(order.id)}
-                                            disabled={order.status === 'waiting_manager_approval' || order.status === 'manager_approved'}
-                                            className={`col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${
-                                                order.status === 'waiting_manager_approval' || order.status === 'manager_approved'
-                                                    ? 'bg-slate-400 cursor-not-allowed'
-                                                    : 'bg-orange-600 hover:bg-orange-700'
-                                            }`}
-                                            aria-label="Genel Müdüre Onaya Gönder"
-                                        >
-                                            <CheckCircle2 size={16} />
-                                            Genel Müdüre Onaya Gönder
-                                        </button>
-                                        <button
-                                            onClick={() => handleCompleteDesign(order.id)}
-                                            disabled={order.status !== 'manager_approved'}
-                                            className={`col-span-2 flex items-center justify-center gap-2 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${
-                                                order.status === 'manager_approved'
-                                                    ? 'bg-green-600 hover:bg-green-700'
-                                                    : 'bg-slate-400 cursor-not-allowed'
-                                            }`}
-                                            aria-label="Tasarımı Tamamla"
-                                        >
-                                            <CheckCircle2 size={16} />
-                                            İşlem Tamamlandı
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-600">
-                        <thead className="bg-slate-50 text-slate-800 font-semibold border-b border-slate-200">
-                            <tr>
-                                <th className="px-6 py-4">Sipariş No</th>
-                                <th className="px-6 py-4">Müşteri</th>
-                                <th className="px-6 py-4">Ürünler</th>
-                                <th className="px-6 py-4">Tarih</th>
-                                <th className="px-6 py-4 text-right">İşlemler</th>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200">
-                            {designOrders.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500">
-                                        Tasarım bekleyen sipariş bulunmuyor.
-                                    </td>
-                                </tr>
-                            ) : (
-                                designOrders.map((order) => (
-                                    <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="px-6 py-4 font-mono text-xs">#{order.id.slice(0, 8)}</td>
-                                        <td className="px-6 py-4 font-medium text-slate-800">{order.customerName}</td>
-                                        <td className="px-6 py-4 text-sm text-slate-600">
-                                            <div className="flex flex-col gap-3 max-w-[300px]">
-                                                {order.items.map((item, idx) => {
-                                                    const product = products.find(p => p.id === item.productId);
-                                                    const dims = product?.dimensions;
-                                                    const dimStr = (dims && dims.length && dims.width) 
-                                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
-                                                        : '';
-                                                    
-                                                    return (
-                                                        <div key={idx} className="flex flex-col gap-0.5 pb-2 border-b border-slate-100 last:border-0 last:pb-0">
-                                                            {product ? (
-                                                                <>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="font-semibold text-slate-700">{product.name}</span>
-                                                                        {product.productType && (
-                                                                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                                                                                {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    {product.details && <span className="text-slate-500 italic text-[11px]">{product.details}</span>}
-                                                                    {dimStr && <span className="text-slate-600 font-mono text-[10px]">Ölçü: {dimStr}</span>}
-                                                                </>
-                                                            ) : (
-                                                                <span className="font-medium text-slate-700">{item.productName || 'Bilinmeyen Ürün'}</span>
-                                                            )}
-                                                            <div className="text-xs text-slate-400 mt-0.5">Adet: {item.quantity}</div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex flex-wrap justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleViewOrder(order)}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
-                                                >
-                                                    <Eye size={16} />
-                                                    Görüntüle
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenInfo(order)}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors text-xs font-medium"
-                                                >
-                                                    <PencilLine size={16} />
-                                                    Bilgi Girişi
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenUpload(order)}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-xs font-medium"
-                                                >
-                                                    <Upload size={16} />
-                                                    Tasarım Ekle
-                                                </button>
-                                                <button
-                                                    onClick={() => handleOpenJob(order)}
-                                                    className="flex items-center gap-2 px-3 py-1.5 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-xs font-medium"
-                                                >
-                                                    <Info size={16} />
-                                                    Levha Bilgi Girişi
-                                                </button>
-                                                <button
-                                                    onClick={() => handleSendToGM(order.id)}
-                                                    disabled={order.status === 'waiting_manager_approval' || order.status === 'manager_approved'}
-                                                    className={`flex items-center gap-2 px-3 py-1.5 text-white rounded-lg transition-colors text-xs font-medium ${
-                                                        order.status === 'waiting_manager_approval' || order.status === 'manager_approved'
-                                                            ? 'bg-slate-400 cursor-not-allowed'
-                                                            : 'bg-orange-600 hover:bg-orange-700'
-                                                    }`}
-                                                >
-                                                    <CheckCircle2 size={16} />
-                                                    GM Onaya Gönder
-                                                </button>
-                                                <button
-                                                    onClick={() => handleCompleteDesign(order.id)}
-                                                    disabled={order.status !== 'manager_approved'}
-                                                    className={`flex items-center gap-2 px-3 py-1.5 text-white rounded-lg transition-colors text-xs font-medium ${
-                                                        order.status === 'manager_approved'
-                                                            ? 'bg-green-600 hover:bg-green-700'
-                                                            : 'bg-slate-400 cursor-not-allowed'
-                                                    }`}
-                                                >
-                                                    <CheckCircle2 size={16} />
-                                                    İşlem Tamamlandı
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                        ))}
+                    </tbody>
+                </table>
             </div>
 
-            {/* Order Detail Modal */}
-            <Modal
-                isOpen={isOrderModalOpen}
-                onClose={() => setIsOrderModalOpen(false)}
-                title={`Sipariş Detayı #${selectedOrder?.id.slice(0, 8)}`}
-            >
-                {selectedOrder && (
-                    <div className="space-y-6">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <span className="text-slate-500">Müşteri:</span>
-                                <p className="font-medium text-slate-800">{selectedOrder.customerName}</p>
-                            </div>
-                            <div>
-                                <span className="text-slate-500">Tarih:</span>
-                                <p className="font-medium text-slate-800">
-                                    {format(new Date(selectedOrder.createdAt), 'dd MMM yyyy HH:mm', { locale: tr })}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 className="font-medium text-slate-800 mb-3">Sipariş Kalemleri</h4>
-                            <div className="space-y-3">
-                                {selectedOrder.items.map((item, idx) => {
-                                    const product = products.find(p => p.id === item.productId);
-                                    const dims = product?.dimensions;
-                                    const dimStr = (dims && dims.length && dims.width) 
-                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''}`
-                                        : '';
-
-                                    return (
-                                        <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <p className="font-medium text-slate-800">{product ? product.name : item.productName}</p>
-                                                    {product?.productType && (
-                                                        <span className="text-[10px] text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                                            {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {product?.details && <p className="text-xs text-slate-500 mt-1">{product.details}</p>}
-                                                <div className="flex items-center gap-3 mt-1">
-                                                    {dimStr && <p className="text-xs text-slate-600 font-mono">Ölçü: {dimStr}</p>}
-                                                    <p className="text-xs text-slate-500 font-semibold">
-                                                        {item.quantity} Adet
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleViewProduct(item.productId)}
-                                                className="ml-4 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-blue-200 shrink-0"
-                                            >
-                                                Ürünü Görüntüle
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end pt-4 border-t border-slate-100">
-                            <button
-                                onClick={() => setIsOrderModalOpen(false)}
-                                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
-                            >
-                                Kapat
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </Modal>
-
-            {/* Product Detail Modal (Nested) */}
-            <Modal
-                isOpen={isProductModalOpen}
-                onClose={() => setIsProductModalOpen(false)}
-                title="Ürün Detayları"
-            >
-                {selectedProduct && (
-                    <ProductDetail
-                        product={selectedProduct}
-                        onClose={() => setIsProductModalOpen(false)}
-                        designImages={selectedOrder?.designImages}
-                    />
-                )}
-            </Modal>
-
-            {/* Product Info Entry Modal */}
-            <Modal
-                isOpen={isInfoModalOpen}
-                onClose={() => setIsInfoModalOpen(false)}
-                title="Ürün Bilgi Girişi / Düzenleme"
-            >
-                {infoOrder && (
-                    <div className="space-y-6">
-                        <div className="space-y-3">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Düzenlenecek Ürünü Seçin</label>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
-                                {infoOrder.items.map(item => {
-                                    const product = products.find(p => p.id === item.productId);
-                                    const isSelected = infoSelectedItemId === item.productId;
-                                    
-                                    // Use product name if available, fallback to item name, fallback to generic
-                                    const displayName = product?.name || item.productName || 'İsimsiz Ürün';
-                                    
-                                    const dims = product?.dimensions;
-                                    const dimStr = (dims && dims.length && dims.width) 
-                                        ? `${dims.length}x${dims.width}${dims.depth ? `x${dims.depth}` : ''} mm`
-                                        : '';
-
-                                    return (
-                                        <button
-                                            key={item.productId}
-                                            onClick={() => setInfoSelectedItemId(item.productId)}
-                                            className={`
-                                                relative flex flex-col items-start p-3 rounded-xl border text-left transition-all duration-200 group
-                                                ${isSelected 
-                                                    ? 'bg-indigo-50 border-indigo-500 shadow-sm ring-1 ring-indigo-500' 
-                                                    : 'bg-white border-slate-200 hover:border-indigo-300 hover:bg-slate-50 hover:shadow-sm'
-                                                }
-                                            `}
-                                        >
-                                            <div className="flex items-start justify-between w-full mb-1">
-                                                <div className={`font-semibold text-sm ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>
-                                                    {displayName}
-                                                </div>
-                                                {isSelected && (
-                                                    <div className="text-indigo-600 shrink-0 ml-2">
-                                                        <CheckCircle2 size={16} /> 
-                                                    </div>
-                                                )}
-                                            </div>
-                                            
-                                            {dimStr && (
-                                                <div className={`text-xs font-mono mb-1 ${isSelected ? 'text-indigo-600' : 'text-slate-500'}`}>
-                                                    {dimStr}
-                                                </div>
-                                            )}
-                                            
-                                            {product?.productType && (
-                                                <span className={`
-                                                    text-[10px] px-1.5 py-0.5 rounded border
-                                                    ${isSelected 
-                                                        ? 'bg-white border-indigo-200 text-indigo-700' 
-                                                        : 'bg-slate-100 border-slate-200 text-slate-500'
-                                                    }
-                                                `}>
-                                                    {product.productType === 'percinli' ? 'Perçinli' : (product.productType === 'sivama' ? 'Sıvama' : product.productType)}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        
-                        {currentInfoProduct && (
-                            <ProductForm
-                                initialData={currentInfoProduct}
-                                onSubmit={handleSaveProductInfo}
-                                onCancel={() => setIsInfoModalOpen(false)}
-                            />
-                        )}
-                    </div>
-                )}
-            </Modal>
-
-            {/* Upload Design Modal */}
-            <Modal
-                isOpen={isUploadModalOpen}
-                onClose={() => setIsUploadModalOpen(false)}
-                title={uploadOrder ? `Tasarım Ekle: ${uploadOrder.customerName}` : "Yeni Tasarım Ekle"}
-            >
-                <div className="space-y-6">
+            <Modal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} title="Tasarım Görsel Yönetimi">
+                <div className="space-y-4 p-1">
                     {!uploadOrder ? (
-                        <div className="space-y-4">
-                            <p className="text-sm text-slate-600">
-                                Lütfen tasarım eklemek istediğiniz siparişi seçiniz.
-                            </p>
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Sipariş Seçiniz
-                                </label>
-                                <select
-                                    onChange={(e) => {
-                                        const order = designOrders.find(o => o.id === e.target.value);
-                                        if (order) handleOpenUpload(order);
-                                    }}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                >
-                                    <option value="">Sipariş Seçiniz...</option>
-                                    {designOrders.map(order => (
-                                        <option key={order.id} value={order.id}>
-                                            {order.customerName} - #{order.id.slice(0, 8)} ({format(new Date(order.createdAt), 'dd MMM yyyy', { locale: tr })})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                        <div className="p-4 bg-slate-50 rounded border border-slate-100 text-center">
+                            <p className="text-xs text-slate-500 font-bold mb-4 uppercase">Önce bir sipariş seçiniz</p>
+                            <select
+                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                aria-label="Sipariş Seçimi"
+                                onChange={e => {
+                                    const o = designOrders.find(do_ => do_.id === e.target.value);
+                                    if (o) {
+                                        const defaultProductId = o.items[0]?.productId || '';
+                                        setUploadOrder(o);
+                                        setSelectedUploadProductId(defaultProductId);
+                                        setUploadedImages((o.designImages || []).map(img => {
+                                            if (typeof img === 'string') return { url: img, productId: defaultProductId };
+                                            return { ...img, productId: img.productId || defaultProductId };
+                                        }));
+                                    }
+                                }}
+                            >
+                                <option value="">Sipariş Seçiniz...</option>
+                                {designOrders.map(o => <option key={o.id} value={o.id}>{o.customerName} (#{o.id.slice(0,8)})</option>)}
+                            </select>
                         </div>
                     ) : (
                         <>
-                            <p className="text-sm text-slate-600">
-                                Bu sipariş için onaylanan tasarım görsellerini yükleyin. 
-                                Lütfen önce görselin ait olduğu ürünü seçiniz.
-                            </p>
-
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <label className="block text-sm font-medium text-slate-700 mb-2">
-                                    Hangi Ürün İçin Tasarım Yüklenecek?
-                                </label>
-                                <select
-                                    value={selectedUploadProductId}
-                                    onChange={(e) => setSelectedUploadProductId(e.target.value)}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                >
-                                    <option value="">Ürün Seçiniz...</option>
-                                    {uploadOrder.items.map((item, idx) => {
-                                        const product = products.find(p => p.id === item.productId);
-                                        return (
-                                            <option key={idx} value={item.productId}>
-                                                {product ? product.name : item.productName} ({item.quantity} Adet)
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                            <div className="bg-indigo-50 p-2 rounded border border-indigo-100 text-[10px] font-bold text-indigo-700 uppercase text-center">{uploadOrder.customerName}</div>
+                            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                                {uploadOrder.items.map(item => (
+                                    <button
+                                        key={item.productId}
+                                        onClick={() => setSelectedUploadProductId(item.productId)}
+                                        className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase whitespace-nowrap border transition-all ${selectedUploadProductId === item.productId ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-400'}`}
+                                    >
+                                        {item.productName}
+                                    </button>
+                                ))}
                             </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                {uploadedImages.map((img, idx) => {
-                                    const product = uploadOrder.items.find(i => i.productId === img.productId);
-                                    const productName = product ? (products.find(p => p.id === product.productId)?.name || product.productName) : 'Genel';
-                                    
-                                    return (
-                                        <div key={idx} className="relative aspect-square group rounded-lg overflow-hidden border border-slate-200">
-                                            <img src={img.url} alt={`Design ${idx + 1}`} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <button
-                                                    onClick={() => handleRemoveImage(idx)}
-                                                    className="p-2 bg-white rounded-full text-red-600 hover:bg-red-50 transition-colors"
-                                                >
-                                                    <X size={20} />
-                                                </button>
-                                            </div>
-                                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] px-2 py-1 truncate">
-                                                {productName}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                
-                                {uploadedImages.length < 5 && (
-                                    <label className={`
-                                        relative aspect-square rounded-lg border-2 border-dashed border-slate-300
-                                        flex flex-col items-center justify-center gap-2 cursor-pointer
-                                        hover:border-indigo-500 hover:bg-indigo-50 transition-colors
-                                        ${(!selectedUploadProductId || isUploading) ? 'opacity-50 cursor-not-allowed' : ''}
-                                    `}>
-                                        <Upload className="text-slate-400" size={24} />
-                                        <span className="text-xs text-slate-500 font-medium text-center px-2">
-                                            {isUploading ? 'Yükleniyor...' : 'Görsel Yükle'}
-                                        </span>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            className="hidden"
-                                            onChange={handleImageUpload}
-                                            disabled={!selectedUploadProductId || isUploading}
-                                        />
+                            <div className="flex flex-wrap gap-2">
+                                {uploadedImages
+                                    .map((img, idx) => ({ img, idx }))
+                                    .filter(({ img }) => !!selectedUploadProductId && img.productId === selectedUploadProductId)
+                                    .map(({ img, idx }) => (
+                                    <div key={idx} className="relative w-20 h-20 rounded border border-slate-200 overflow-hidden group">
+                                        <img src={img.url} alt="Tasarım" className="w-full h-full object-cover" />
+                                        <button
+                                            onClick={() => setUploadedImages(prev => prev.filter((_, j) => j !== idx))}
+                                            className="absolute top-0 right-0 bg-red-500 text-white p-1 opacity-0 group-hover:opacity-100"
+                                            aria-label="Görseli kaldır"
+                                            title="Kaldır"
+                                        >
+                                            <X size={10} />
+                                        </button>
+                                    </div>
+                                ))}
+                                {uploadedImages.filter(img => img.productId === selectedUploadProductId).length < 5 && (
+                                    <label className="w-20 h-20 rounded border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-50 transition-all">
+                                        <Plus size={14} className="text-slate-400" />
+                                        <span className="text-[8px] font-bold text-slate-400 uppercase mt-1 text-center">GÖRSEL EKLE</span>
+                                        <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" multiple />
                                     </label>
                                 )}
                             </div>
-
-                            <div className="flex justify-end pt-4 border-t border-slate-100">
-                                <button
-                                    onClick={handleSaveDesign}
-                                    disabled={isUploading}
-                                    className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 font-medium"
-                                >
-                                    Kaydet ve Tamamla
-                                </button>
+                            <div className="text-[10px] text-slate-500 flex items-center justify-between">
+                                <div className="bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                                    {isUploading ? 'Yükleniyor...' : 'Seçili ürün için en fazla 5 görsel ekleyebilirsiniz'}
+                                </div>
+                                <div className="text-[10px] font-bold text-slate-600">
+                                    {uploadedImages.filter(img => img.productId === selectedUploadProductId).length}/5
+                                </div>
                             </div>
+                            <div className="pt-4 border-t border-slate-50 flex justify-end gap-2"><button onClick={() => setIsUploadModalOpen(false)} className="px-4 py-2 text-slate-500 text-[10px] font-bold uppercase">Kapat</button><button onClick={async () => { await updateOrder(uploadOrder.id, { designImages: uploadedImages } as any); setIsUploadModalOpen(false); }} className="px-5 py-2 bg-blue-600 text-white rounded text-[10px] font-bold uppercase tracking-widest shadow-md shadow-blue-100">KAYDET</button></div>
                         </>
                     )}
                 </div>
             </Modal>
 
-            {/* Job Info Entry Modal */}
-            <Modal
-                isOpen={isJobModalOpen}
-                onClose={() => setIsJobModalOpen(false)}
-                title="Levha Bilgi Girişi"
-            >
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Levha Ebadı</label>
-                        <input
-                            type="text"
-                            value={jobSize}
-                            onChange={e => setJobSize(e.target.value)}
-                            placeholder="Örn: 500x700 mm"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                            aria-label="Levha ebadı"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Kutu boyutu</label>
-                        <input
-                            type="text"
-                            value={boxSize}
-                            onChange={e => setBoxSize(e.target.value)}
-                            placeholder="Örn: 90x90x25 mm"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                            aria-label="Kutu boyutu"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">Verim</label>
-                        <input
-                            type="text"
-                            value={efficiency}
-                            onChange={e => setEfficiency(e.target.value)}
-                            placeholder="Örn: 6 adet/baskı"
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                            aria-label="Verim"
-                        />
-                    </div>
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                        <button
-                            onClick={() => setIsJobModalOpen(false)}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            aria-label="İptal"
-                        >
-                            İptal
-                        </button>
-                        <button
-                            onClick={handleSaveJob}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                            aria-label="Kaydet"
-                        >
-                            Kaydet
-                        </button>
-                    </div>
+            <Modal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} title="Ürün Bilgi Girişi">
+                <div className="space-y-4 p-1">
+                   {infoOrder && (
+                       <>
+                           <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                               {infoOrder.items.map(item => (
+                                   <button key={item.productId} onClick={() => setInfoSelectedItemId(item.productId)} className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase whitespace-nowrap border transition-all ${infoSelectedItemId === item.productId ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-400'}`}>{item.productName}</button>
+                               ))}
+                           </div>
+                           {infoSelectedItemId && products.find(p => p.id === infoSelectedItemId) && (
+                               <ProductForm initialData={products.find(p => p.id === infoSelectedItemId)!} onSubmit={async (data) => { await updateProduct(infoSelectedItemId!, data); setIsInfoModalOpen(false); }} onCancel={() => setIsInfoModalOpen(false)} />
+                           )}
+                       </>
+                   )}
                 </div>
             </Modal>
-        </div>
+
+            <Modal isOpen={isJobModalOpen} onClose={() => setIsJobModalOpen(false)} title="Levha Bilgileri">
+                <div className="space-y-4 p-1">
+                    {jobOrder ? (
+                        <>
+                            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                                {jobOrder.items.map(item => (
+                                    <button
+                                        key={item.productId}
+                                        onClick={() => setJobSelectedProductId(item.productId)}
+                                        className={`px-3 py-1.5 rounded text-[9px] font-bold uppercase whitespace-nowrap border transition-all ${jobSelectedProductId === item.productId ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200 hover:border-blue-400'}`}
+                                    >
+                                        {item.productName}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {!jobSelectedProductId ? (
+                                <div className="p-4 bg-slate-50 rounded border border-slate-100 text-center">
+                                    <p className="text-xs text-slate-500 font-bold uppercase">Ürün seçiniz</p>
+                                </div>
+                            ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Levha Ebadı</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                        value={(jobDetailsByProduct[jobSelectedProductId]?.jobSize) || ''}
+                                        onChange={(e) => setJobDetailsByProduct(prev => ({
+                                            ...prev,
+                                            [jobSelectedProductId]: {
+                                                jobSize: e.target.value,
+                                                boxSize: prev[jobSelectedProductId]?.boxSize || '',
+                                                efficiency: prev[jobSelectedProductId]?.efficiency || '',
+                                            }
+                                        }))}
+                                        placeholder="Örn: 70x100"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Kutu Boyutu</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                        value={(jobDetailsByProduct[jobSelectedProductId]?.boxSize) || ''}
+                                        onChange={(e) => setJobDetailsByProduct(prev => ({
+                                            ...prev,
+                                            [jobSelectedProductId]: {
+                                                jobSize: prev[jobSelectedProductId]?.jobSize || '',
+                                                boxSize: e.target.value,
+                                                efficiency: prev[jobSelectedProductId]?.efficiency || '',
+                                            }
+                                        }))}
+                                        placeholder="Örn: Orta"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Verim</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                        value={(jobDetailsByProduct[jobSelectedProductId]?.efficiency) || ''}
+                                        onChange={(e) => setJobDetailsByProduct(prev => ({
+                                            ...prev,
+                                            [jobSelectedProductId]: {
+                                                jobSize: prev[jobSelectedProductId]?.jobSize || '',
+                                                boxSize: prev[jobSelectedProductId]?.boxSize || '',
+                                                efficiency: e.target.value,
+                                            }
+                                        }))}
+                                        placeholder="Örn: %85"
+                                    />
+                                </div>
+                            </div>
+                            )}
+                            <div className="pt-4 border-t border-slate-50 flex justify-end gap-2">
+                                <button onClick={() => setIsJobModalOpen(false)} className="px-4 py-2 text-slate-500 text-[10px] font-bold uppercase">Vazgeç</button>
+                                <button
+                                    onClick={async () => {
+                                        if (!jobOrder) return;
+                                        const firstProductId = jobOrder.items[0]?.productId || '';
+                                        const first = firstProductId ? jobDetailsByProduct[firstProductId] : undefined;
+                                        await updateOrder(jobOrder.id, {
+                                            designJobDetails: jobDetailsByProduct,
+                                            jobSize: first?.jobSize || null,
+                                            boxSize: first?.boxSize || null,
+                                            efficiency: first?.efficiency || null
+                                        } as any);
+                                        setIsJobModalOpen(false);
+                                    }}
+                                    className="px-5 py-2 bg-blue-600 text-white rounded text-[10px] font-bold uppercase tracking-widest shadow-md shadow-blue-100"
+                                >
+                                    Kaydet
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="p-4 bg-slate-50 rounded border border-slate-100 text-center">
+                            <p className="text-xs text-slate-500 font-bold uppercase">Önce bir sipariş seçiniz</p>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+        </ERPPageLayout>
     );
 }

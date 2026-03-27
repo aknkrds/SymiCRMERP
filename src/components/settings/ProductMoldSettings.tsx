@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMolds } from '../../hooks/useMolds';
-import { Plus, Trash2, Box, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Box, RefreshCw, Layers, Maximize2, Tag } from 'lucide-react';
 
 const PRODUCT_TYPES = [
     { value: 'percinli', label: 'Perçinli' },
@@ -11,31 +11,6 @@ const SHAPES = {
     percinli: ['Kare', 'Oval', 'Sekizgen', 'Dikdörtgen', 'Yuvarlak', 'Kalpli', 'Tepsi', 'Konik'],
     sivama: ['Standart']
 };
-
-const DEFAULT_MOLDS = [
-    // Percinli Square
-    ...['55x55','75x75','85x85','90x90','100x100','120x120','155x155','190x190','215x215','235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kare', dimensions: d })),
-    // Percinli Oval
-    ...['60x70','83x103','143x232','200x300'].map(d => ({ productType: 'percinli', boxShape: 'Oval', dimensions: d })),
-    // Percinli Octagon
-    ...['85x110','220x220','190x275'].map(d => ({ productType: 'percinli', boxShape: 'Sekizgen', dimensions: d })),
-    // Percinli Rectangle
-    ...['45x65','80x120','80x140','90x150','100x75','100x130','110x150','115x190','135x190','140x240','155x195','170x260','180x225','180x240','215x235','200x300'].map(d => ({ productType: 'percinli', boxShape: 'Dikdörtgen', dimensions: d })),
-    // Percinli Round
-    ...[42, 52, 55, 65, 69, 73, 82, 85, 90, 99, 105, 108, 120, 140, 153, 160, 175, 190, 200, 215, 240, 265].map(d => ({ productType: 'percinli', boxShape: 'Yuvarlak', dimensions: String(d), label: `Ø${d}` })),
-    // Percinli Heart
-    ...['90x90','90x90x25','205x190x40','235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kalpli', dimensions: d })),
-    // Percinli Tray
-    { productType: 'percinli', boxShape: 'Tepsi', dimensions: '304x234', label: '304x234' },
-    { productType: 'percinli', boxShape: 'Tepsi', dimensions: '357x272', label: '357x272' },
-    { productType: 'percinli', boxShape: 'Tepsi', dimensions: '362x245', label: '362x245 (Dalgalı)' },
-    { productType: 'percinli', boxShape: 'Tepsi', dimensions: '315x215', label: '315x215' },
-    { productType: 'percinli', boxShape: 'Tepsi', dimensions: '400x400', label: 'Ø400' },
-    // Percinli Conic
-    ...['130x165x160','130x165x140','90x120x105'].map(d => ({ productType: 'percinli', boxShape: 'Konik', dimensions: d })),
-    // Sivama (Mapping these to 'Standart' shape)
-    ...['90x90x30 - Kalp Şekilli','205x190x40 - Kalp Şekilli','75x205x25','65x205x25 - Fermuarlı','105x205x25 - Fermuarlı','135x200x25 - Fermuarlı','175x215x45','90x80x15','90x80x30','100x100x30','105x105x40','97x58x20','94x58x20','95x120x22','69x45','85x40','99x30','105x40 - Expanded','132x45 - Expanded','O115 - Bardak Altlığı'].map(d => ({ productType: 'sivama', boxShape: 'Standart', dimensions: d })),
-];
 
 export default function ProductMoldSettings() {
     const { molds, addMold, deleteMold } = useMolds();
@@ -57,14 +32,13 @@ export default function ProductMoldSettings() {
             const res = await fetch('/api/molds/seed-defaults', { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
-                alert(`${data.inserted} adet ölçü eklendi. (${data.skipped} adet zaten mevcuttu)`);
+                alert(`${data.inserted} adet ölçü eklendi.`);
                 window.location.reload();
             } else {
                 alert('Hata: ' + data.error);
             }
         } catch (error) {
             console.error('Seed error:', error);
-            alert('Bir hata oluştu.');
         } finally {
             setSeeding(false);
         }
@@ -88,108 +62,136 @@ export default function ProductMoldSettings() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row gap-4">
-                <div className="w-full md:w-64 space-y-4">
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                        <h3 className="font-medium text-slate-900 mb-3">Kategori Seçimi</h3>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="text-xs text-slate-500 block mb-1">Ürün Tipi</label>
-                                <select 
-                                    value={selectedType}
-                                    onChange={e => {
-                                        const newType = e.target.value;
-                                        setSelectedType(newType);
-                                        // Default to first shape of new type
-                                        if (newType === 'percinli') setSelectedShape('Kare');
-                                        else setSelectedShape('Standart');
-                                    }}
-                                    className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                    aria-label="Ürün Tipi"
-                                >
-                                    {PRODUCT_TYPES.map(t => (
-                                        <option key={t.value} value={t.value}>{t.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            
-                            {selectedType === 'percinli' && (
-                                <div>
-                                    <label className="text-xs text-slate-500 block mb-1">Kutu Şekli</label>
-                                    <select 
-                                        value={selectedShape}
-                                        onChange={e => setSelectedShape(e.target.value)}
-                                        className="w-full text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                        aria-label="Kutu Şekli"
-                                    >
-                                        {SHAPES.percinli.map(s => (
-                                            <option key={s} value={s}>{s}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+        <div className="flex flex-col lg:flex-row gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Sidebar Controls */}
+            <div className="w-full lg:w-72 space-y-4">
+                <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden text-[11px]">
+                    <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+                        <span className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">Kategori Seçimi</span>
+                    </div>
+                    <div className="p-5 space-y-5">
+                        <div className="space-y-1.5">
+                            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
+                                <Layers size={12} className="text-blue-500" /> ÜRÜN TİPİ
+                            </label>
+                            <select 
+                                value={selectedType}
+                                onChange={e => {
+                                    const newType = e.target.value;
+                                    setSelectedType(newType);
+                                    if (newType === 'percinli') setSelectedShape('Kare');
+                                    else setSelectedShape('Standart');
+                                }}
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all cursor-pointer"
+                            >
+                                {PRODUCT_TYPES.map(t => (
+                                    <option key={t.value} value={t.value}>{t.label}</option>
+                                ))}
+                            </select>
                         </div>
+                        
+                        {selectedType === 'percinli' && (
+                            <div className="space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">
+                                    <Box size={12} className="text-blue-500" /> KUTU ŞEKLİ
+                                </label>
+                                <div className="grid grid-cols-1 gap-1">
+                                  {SHAPES.percinli.map(s => (
+                                      <button 
+                                          key={s} 
+                                          onClick={() => setSelectedShape(s)}
+                                          className={`px-4 py-2 rounded-lg text-left text-[11px] font-bold transition-all ${
+                                            selectedShape === s 
+                                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                                              : 'text-slate-500 hover:bg-slate-100'
+                                          }`}
+                                      >
+                                        {s}
+                                      </button>
+                                  ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
+            </div>
 
-                <div className="flex-1 space-y-4">
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-                        <h3 className="font-medium text-slate-900 mb-4 flex items-center justify-between">
-                            <span className="flex items-center gap-2"><Box className="w-4 h-4" /> Kalıp Ölçüleri Listesi</span>
-                            <button 
-                                onClick={handleSeed}
-                                disabled={seeding}
-                                className="text-xs flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors"
-                            >
-                                <RefreshCw className={`w-3 h-3 ${seeding ? 'animate-spin' : ''}`} />
-                                Varsayılanları Yükle
-                            </button>
-                        </h3>
+            {/* Main Content Area */}
+            <div className="flex-1 space-y-6">
+                <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden text-[11px]">
+                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+                              <Maximize2 size={16} />
+                           </div>
+                           <div>
+                              <h3 className="font-black text-slate-800 uppercase tracking-tight leading-none text-[12px]">Kalıp Ölçüleri</h3>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">{selectedType} • {selectedShape}</p>
+                           </div>
+                        </div>
+                        <button 
+                            onClick={handleSeed}
+                            disabled={seeding}
+                            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 hover:bg-slate-50 hover:border-blue-200 hover:text-blue-600 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-3.5 h-3.5 ${seeding ? 'animate-spin' : ''}`} />
+                            VARSAYILANLARI YÜKLE
+                        </button>
+                    </div>
 
-                        <form onSubmit={handleSubmit} className="flex gap-2 mb-4">
-                            <input
-                                type="text"
-                                placeholder="Ölçü (örn: 55x55)"
-                                value={newDimension}
-                                onChange={e => setNewDimension(e.target.value)}
-                                className="flex-1 text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                aria-label="Yeni Ölçü"
-                            />
-                            <input
-                                type="text"
-                                placeholder="Etiket (Opsiyonel, örn: Ø42)"
-                                value={newLabel}
-                                onChange={e => setNewLabel(e.target.value)}
-                                className="flex-1 text-sm border-slate-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                aria-label="Yeni Etiket"
-                            />
-                            <button
-                                type="submit"
-                                className="px-3 py-2 bg-indigo-600 text-white rounded-md text-sm hover:bg-indigo-700 flex items-center gap-1"
-                                aria-label="Ekle"
-                            >
-                                <Plus className="w-4 h-4" /> Ekle
-                            </button>
+                    <div className="p-6">
+                        <form onSubmit={handleSubmit} className="flex flex-wrap md:flex-nowrap gap-3 mb-8 p-4 bg-slate-50/50 border border-slate-200/60 rounded-2xl">
+                            <div className="flex-1 space-y-1.5">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">BOYUTLAR</label>
+                                <input
+                                    type="text"
+                                    placeholder="örn: 200x300"
+                                    value={newDimension}
+                                    onChange={e => setNewDimension(e.target.value)}
+                                    className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all"
+                                />
+                            </div>
+                            <div className="flex-1 space-y-1.5">
+                                <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">ETİKET (OPSİYONEL)</label>
+                                <div className="relative">
+                                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={14} />
+                                    <input
+                                        type="text"
+                                        placeholder="örn: Ø200"
+                                        value={newLabel}
+                                        onChange={e => setNewLabel(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-[11px] font-bold outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 transition-all"
+                                    />
+                                </div>
+                            </div>
+                            <div className="pt-5">
+                                <button
+                                    type="submit"
+                                    className="h-10 px-6 bg-blue-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all active:scale-[0.98] flex items-center gap-2"
+                                >
+                                    <Plus className="w-4 h-4" /> EKLE
+                                </button>
+                            </div>
                         </form>
 
-                        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
                             {filteredMolds.length === 0 ? (
-                                <p className="text-sm text-slate-500 text-center py-4">Bu kategori için kayıtlı ölçü bulunamadı.</p>
+                                <div className="col-span-full py-12 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+                                   <Box size={40} className="text-slate-200 mb-2" />
+                                   <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">Ölçü Kaydı Bulunamadı</p>
+                                </div>
                             ) : (
                                 filteredMolds.map(mold => (
-                                    <div key={mold.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-md border border-slate-100 group">
-                                        <div>
-                                            <span className="font-medium text-slate-700">{mold.dimensions}</span>
-                                            {mold.label && <span className="ml-2 text-xs text-slate-500">({mold.label})</span>}
+                                    <div key={mold.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl group hover:border-blue-200 hover:shadow-md hover:shadow-blue-500/5 transition-all">
+                                        <div className="flex flex-col">
+                                            <span className="text-[11px] font-black text-slate-800 uppercase tracking-tight leading-none">{mold.dimensions}</span>
+                                            {mold.label && <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest mt-1.5">{mold.label}</span>}
                                         </div>
                                         <button
                                             onClick={() => deleteMold(mold.id)}
-                                            className="text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="Sil"
-                                            aria-label="Sil"
+                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-300 hover:bg-red-50 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 size={16} />
                                         </button>
                                     </div>
                                 ))
