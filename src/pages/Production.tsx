@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Plus, Factory, Truck, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -6,7 +6,7 @@ import { Modal } from '../components/ui/Modal';
 import { useStock } from '../hooks/useStock';
 import { useProducts } from '../hooks/useProducts';
 import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
-import type { Order, Personnel, Machine, Shift, ProcurementDispatch } from '../types';
+import type { Order, Personnel, Machine, Shift, ProcurementDispatch, ProductionJob, WarehouseLocation } from '../types';
 
 const API_URL = '/api';
 
@@ -16,33 +16,141 @@ export default function Production() {
     const [machines, setMachines] = useState<Machine[]>([]);
     const [shifts, setShifts] = useState<Shift[]>([]);
     const [dispatches, setDispatches] = useState<ProcurementDispatch[]>([]);
+    const [productionJobs, setProductionJobs] = useState<ProductionJob[]>([]);
+    const [warehouseLocations, setWarehouseLocations] = useState<WarehouseLocation[]>([]);
     const [activeTab, setActiveTab] = useState<'line' | 'incoming' | 'assets'>('line');
     const { stockItems } = useStock();
 
     const [isStartModalOpen, setIsStartModalOpen] = useState(false);
-    const [selectedItem, setSelectedItem] = useState<{order: Order, item: any} | null>(null);
+    const [selectedJob, setSelectedJob] = useState<ProductionJob | null>(null);
     const [prodForm, setProdForm] = useState({ machineId: '', target: 0 });
+
+    const [isLogModalOpen, setIsLogModalOpen] = useState(false);
+    const [logForm, setLogForm] = useState({
+        reportedAtLocal: '',
+        bodyQty: 0,
+        lidQty: 0,
+        scrapBody: 0,
+        scrapLid: 0,
+        scrapBottom: 0,
+        locationCode: 'GENEL',
+        note: ''
+    });
 
     const fetchData = async () => {
         try {
-            const [o, p, m, s, d] = await Promise.all([fetch(`${API_URL}/orders`), fetch(`${API_URL}/personnel`), fetch(`${API_URL}/machines`), fetch(`${API_URL}/shifts`), fetch(`/api/procurement-dispatches`)]);
-            if (o.ok) setOrders(await o.json()); if (p.ok) setPersonnel(await p.json()); if (m.ok) setMachines(await m.json()); if (s.ok) setShifts(await s.json()); if (d.ok) setDispatches(await d.json());
+            const [o, p, m, s, d, j, wl] = await Promise.all([
+                fetch(`${API_URL}/orders`),
+                fetch(`${API_URL}/personnel`),
+                fetch(`${API_URL}/machines`),
+                fetch(`${API_URL}/shifts`),
+                fetch(`/api/procurement-dispatches`),
+                fetch(`/api/production-jobs`),
+                fetch(`/api/warehouse-locations`)
+            ]);
+            if (o.ok) setOrders(await o.json());
+            if (p.ok) setPersonnel(await p.json());
+            if (m.ok) setMachines(await m.json());
+            if (s.ok) setShifts(await s.json());
+            if (d.ok) setDispatches(await d.json());
+            if (j.ok) setProductionJobs(await j.json());
+            if (wl.ok) setWarehouseLocations(await wl.json());
         } catch (e) {}
     };
 
     useEffect(() => { fetchData(); const i = setInterval(fetchData, 30000); return () => clearInterval(i); }, []);
 
     const incomingDispatches = dispatches.filter(d => !d.productionApprovedAt);
-    const activeProduction = orders.filter(o => o.status === 'production_started' || o.status === 'production_planned');
+    const activeJobs = productionJobs.filter(j => j.status === 'active' || j.status === 'queued');
 
     const handleStartProduction = async () => {
-        if (!selectedItem) return;
+        if (!selectedJob) return;
         try {
-            await fetch(`${API_URL}/shifts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: crypto.randomUUID(), orderId: selectedItem.order.id, machineId: prodForm.machineId, startTime: new Date().toISOString(), plannedQuantity: prodForm.target, producedQuantity: 0, status: 'active', createdAt: new Date().toISOString() }) });
-            await fetch(`${API_URL}/orders/${selectedItem.order.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'production_started', productionStatus: 'production_started' }) });
+            await fetch(`${API_URL}/production-jobs/${selectedJob.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    machineId: prodForm.machineId,
+                    plannedQuantity: prodForm.target,
+                    status: 'active',
+                    startedAt: new Date().toISOString()
+                })
+            });
+            await fetch(`${API_URL}/orders/${selectedJob.orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'production_started', productionStatus: 'production_started' }) });
             setIsStartModalOpen(false); fetchData();
         } catch(e) { alert('Hata.'); }
     };
+
+    const handleReceiveDispatch = async (dispatchId: string) => {
+        try {
+            const res = await fetch(`${API_URL}/production-jobs/from-dispatch`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dispatchId })
+            });
+            if (!res.ok) throw new Error('not ok');
+            await fetchData();
+            setActiveTab('line');
+        } catch (e) {
+            alert('Sevk teslim alınamadı.');
+        }
+    };
+
+    const openLogModal = (job: ProductionJob) => {
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        setSelectedJob(job);
+        setLogForm({
+            reportedAtLocal: local,
+            bodyQty: 0,
+            lidQty: 0,
+            scrapBody: 0,
+            scrapLid: 0,
+            scrapBottom: 0,
+            locationCode: 'GENEL',
+            note: ''
+        });
+        setIsLogModalOpen(true);
+    };
+
+    const handleSaveLog = async () => {
+        if (!selectedJob) return;
+        const bodyQty = Number(logForm.bodyQty) || 0;
+        const lidQty = Number(logForm.lidQty) || 0;
+        const bottomQty = bodyQty;
+        const reportedAt = new Date(logForm.reportedAtLocal).toISOString();
+        try {
+            const res = await fetch(`${API_URL}/production-logs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: crypto.randomUUID(),
+                    jobId: selectedJob.id,
+                    reportedAt,
+                    bodyQty,
+                    lidQty,
+                    bottomQty,
+                    scrapBody: Number(logForm.scrapBody) || 0,
+                    scrapLid: Number(logForm.scrapLid) || 0,
+                    scrapBottom: Number(logForm.scrapBottom) || 0,
+                    locationCode: logForm.locationCode || 'GENEL',
+                    note: logForm.note || null,
+                    createdAt: new Date().toISOString()
+                })
+            });
+            if (!res.ok) throw new Error('not ok');
+            setIsLogModalOpen(false);
+            await fetchData();
+        } catch (e) {
+            alert('Üretim kaydı kaydedilemedi.');
+        }
+    };
+
+    const jobOrder = useMemo(() => {
+        if (!selectedJob) return null;
+        return orders.find(o => o.id === selectedJob.orderId) || null;
+    }, [orders, selectedJob]);
 
     return (
         <ERPPageLayout
@@ -67,32 +175,31 @@ export default function Production() {
                         <div className="bg-white rounded-xl border border-slate-200/60 shadow-sm overflow-hidden text-[11px]">
                             <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center whitespace-nowrap">
                                 <span className="font-bold text-slate-700 uppercase tracking-widest text-[10px]">Aktif Üretim Hattı</span>
-                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-bold border border-blue-100 text-[9px]">{activeProduction.length} İŞLEM</span>
+                                <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-bold border border-blue-100 text-[9px]">{activeJobs.length} İŞLEM</span>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead className="bg-slate-50/30 text-slate-400 font-bold uppercase text-[9px] border-b border-slate-100">
                                         <tr>
                                             <th className="px-5 py-3">Sipariş</th>
-                                            <th className="px-5 py-3">Müşteri</th>
+                                            <th className="px-5 py-3">Ürün</th>
                                             <th className="px-5 py-3">Makine</th>
                                             <th className="px-5 py-3 w-48 text-center">İlerleme</th>
                                             <th className="px-5 py-3 text-right">İşlemler</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
-                                        {activeProduction.length === 0 ? (
+                                        {activeJobs.length === 0 ? (
                                             <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-400">Şu anda aktif üretim bulunmuyor.</td></tr>
-                                        ) : activeProduction.map(o => {
-                                            const s = shifts.find(s => s.orderId === o.id && s.status === 'active');
-                                            const m = machines.find(m => m.id === s?.machineId);
-                                            const progress = s?.plannedQuantity ? Math.round((s.producedQuantity / s.plannedQuantity) * 100) : 0;
+                                        ) : activeJobs.map(j => {
+                                            const m = machines.find(m => m.id === j.machineId);
+                                            const progress = j.plannedQuantity ? Math.round(((j.producedBody || 0) / j.plannedQuantity) * 100) : 0;
                                             return (
-                                                <tr key={o.id} className="hover:bg-blue-50/30 transition-all group">
-                                                    <td className="px-5 py-4 font-mono text-blue-600 font-bold">#{o.id.slice(0, 8)}</td>
+                                                <tr key={j.id} className="hover:bg-blue-50/30 transition-all group">
+                                                    <td className="px-5 py-4 font-mono text-blue-600 font-bold">#{j.orderId.slice(0, 8)}</td>
                                                     <td className="px-5 py-4">
-                                                        <div className="font-bold text-slate-700 uppercase tracking-tight">{o.customerName}</div>
-                                                        <div className="text-[9px] text-slate-400 font-medium">SÖZLEŞME: {format(new Date(o.createdAt), 'dd MMM yyyy', { locale: tr })}</div>
+                                                        <div className="font-bold text-slate-700 uppercase tracking-tight">{j.productName || 'ÜRÜN'}</div>
+                                                        <div className="text-[9px] text-slate-400 font-medium">DURUM: {(j.status || '').toUpperCase()}</div>
                                                     </td>
                                                     <td className="px-5 py-4 whitespace-nowrap">
                                                         <div className="flex items-center gap-2">
@@ -104,7 +211,7 @@ export default function Production() {
                                                         <div className="flex flex-col gap-1.5">
                                                             <div className="flex justify-between text-[9px] font-bold text-slate-500 uppercase">
                                                                 <span className="text-blue-600">%{progress}</span>
-                                                                <span>{s?.producedQuantity || 0} / {s?.plannedQuantity || 0}</span>
+                                                                <span>{j.producedBody || 0} / {j.plannedQuantity || 0}</span>
                                                             </div>
                                                             <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden shadow-inner">
                                                                 <div className="bg-blue-500 h-full transition-all duration-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" style={{ width: `${progress}%` }}></div>
@@ -112,7 +219,22 @@ export default function Production() {
                                                         </div>
                                                     </td>
                                                     <td className="px-5 py-4 text-right">
-                                                        <button className="p-1.5 px-4 bg-white text-red-600 rounded-lg text-[9px] font-bold border border-red-100 hover:bg-red-50 hover:shadow-sm transition-all uppercase tracking-tighter opacity-0 group-hover:opacity-100">DURDUR</button>
+                                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                            {j.status === 'queued' && (
+                                                                <button
+                                                                    onClick={() => { setSelectedJob(j); setProdForm({ machineId: '', target: j.plannedQuantity || 0 }); setIsStartModalOpen(true); }}
+                                                                    className="p-1.5 px-4 bg-white text-blue-600 rounded-lg text-[9px] font-bold border border-blue-100 hover:bg-blue-50 hover:shadow-sm transition-all uppercase tracking-tighter"
+                                                                >
+                                                                    BAŞLAT
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                onClick={() => openLogModal(j)}
+                                                                className="p-1.5 px-4 bg-white text-slate-700 rounded-lg text-[9px] font-bold border border-slate-200 hover:bg-slate-50 hover:shadow-sm transition-all uppercase tracking-tighter"
+                                                            >
+                                                                KAYIT GİR
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -146,7 +268,7 @@ export default function Production() {
                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                                         <span className="text-[11px] font-medium text-slate-600">Aktif Shift Sayısı</span>
                                     </div>
-                                    <span className="text-[11px] font-bold text-slate-800 font-mono">{shifts.filter(s => s.status === 'active').length}</span>
+                                    <span className="text-[11px] font-bold text-slate-800 font-mono">{activeJobs.filter(j => j.status === 'active').length}</span>
                                 </div>
                                 <div className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 transition-colors">
                                     <div className="flex items-center gap-2">
@@ -200,10 +322,10 @@ export default function Production() {
                                         </td>
                                         <td className="px-5 py-4 text-right">
                                             <button 
-                                                onClick={() => { setSelectedItem({ order: orders.find(o => o.id === d.lines[0]?.orderId) as Order, item: d.lines[0] }); setIsStartModalOpen(true); }} 
+                                                onClick={() => handleReceiveDispatch(d.id)} 
                                                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-blue-700 shadow-md shadow-blue-100 transition-all active:scale-95"
                                             >
-                                                <Plus size={11} /> ÜRETİME AL
+                                                <Plus size={11} /> TESLİM AL
                                             </button>
                                         </td>
                                     </tr>
@@ -272,8 +394,8 @@ export default function Production() {
                         <div className="absolute top-0 right-0 p-12 -mr-6 -mt-6 bg-white/10 rounded-full blur-2xl"></div>
                         <div className="relative z-10">
                             <span className="text-[9px] font-black text-white/60 uppercase tracking-[0.3em] mb-2 block">Aktif İş Emri Ataması</span>
-                            <div className="text-sm font-bold uppercase tracking-tight">{selectedItem?.order.customerName}</div>
-                            <div className="text-[11px] font-medium text-white/80 mt-1 uppercase tracking-wide">{selectedItem?.item.productName}</div>
+                            <div className="text-sm font-bold uppercase tracking-tight">{jobOrder?.customerName || 'Müşteri'}</div>
+                            <div className="text-[11px] font-medium text-white/80 mt-1 uppercase tracking-wide">{selectedJob?.productName || 'Ürün'}</div>
                         </div>
                     </div>
 
@@ -284,6 +406,8 @@ export default function Production() {
                                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 font-bold transition-all" 
                                 value={prodForm.machineId} 
                                 onChange={e => setProdForm({...prodForm, machineId: e.target.value})}
+                                title="Üretim Hattı / Makine"
+                                aria-label="Üretim Hattı / Makine"
                             >
                                 <option value="">Makine Seçiniz</option>
                                 {machines.map(m => (
@@ -316,6 +440,147 @@ export default function Production() {
                             className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
                         >
                             ÜRETİMİ BAŞLAT
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isLogModalOpen} onClose={() => setIsLogModalOpen(false)} title="Üretim Kaydı" size="lg" theme="minimal">
+                <div className="space-y-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Tarih & Saat</div>
+                            <input
+                                type="datetime-local"
+                                value={logForm.reportedAtLocal}
+                                onChange={(e) => setLogForm(prev => ({ ...prev, reportedAtLocal: e.target.value }))}
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                aria-label="Tarih ve saat"
+                            />
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Depo Alanı</div>
+                            <select
+                                value={logForm.locationCode}
+                                onChange={(e) => setLogForm(prev => ({ ...prev, locationCode: e.target.value }))}
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                aria-label="Depo Alanı"
+                            >
+                                <option value="GENEL">GENEL</option>
+                                {warehouseLocations.map(l => (
+                                    <option key={l.code} value={l.code}>{l.code} {l.label ? `- ${l.label}` : ''}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <div className="flex items-center justify-between gap-3 mb-3">
+                            <div className="min-w-0">
+                                <div className="text-sm font-semibold text-[var(--text-main)] truncate">{selectedJob?.productName || 'Ürün'}</div>
+                                <div className="text-[11px] text-[var(--text-muted)] font-mono">#{selectedJob?.orderId?.slice(0, 8)}</div>
+                            </div>
+                            <div className="text-[11px] text-[var(--text-muted)] font-mono">
+                                {selectedJob?.producedBody || 0} / {selectedJob?.plannedQuantity || 0}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Gövde</div>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={logForm.bodyQty || 0}
+                                    onChange={(e) => setLogForm(prev => ({ ...prev, bodyQty: Number(e.target.value) || 0 }))}
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                    aria-label="Gövde adedi"
+                                />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Kapak</div>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={logForm.lidQty || 0}
+                                    onChange={(e) => setLogForm(prev => ({ ...prev, lidQty: Number(e.target.value) || 0 }))}
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                    aria-label="Kapak adedi"
+                                />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Dip</div>
+                                <input
+                                    type="number"
+                                    value={Number(logForm.bodyQty) || 0}
+                                    readOnly
+                                    className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-main)] text-[var(--text-main)] text-sm outline-none"
+                                    aria-label="Dip adedi"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Fire Gövde</div>
+                            <input
+                                type="number"
+                                min="0"
+                                value={logForm.scrapBody || 0}
+                                onChange={(e) => setLogForm(prev => ({ ...prev, scrapBody: Number(e.target.value) || 0 }))}
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                aria-label="Fire Gövde"
+                            />
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Fire Kapak</div>
+                            <input
+                                type="number"
+                                min="0"
+                                value={logForm.scrapLid || 0}
+                                onChange={(e) => setLogForm(prev => ({ ...prev, scrapLid: Number(e.target.value) || 0 }))}
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                aria-label="Fire Kapak"
+                            />
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Fire Dip</div>
+                            <input
+                                type="number"
+                                min="0"
+                                value={logForm.scrapBottom || 0}
+                                onChange={(e) => setLogForm(prev => ({ ...prev, scrapBottom: Number(e.target.value) || 0 }))}
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                aria-label="Fire Dip"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Not</div>
+                        <textarea
+                            value={logForm.note}
+                            onChange={(e) => setLogForm(prev => ({ ...prev, note: e.target.value }))}
+                            className="w-full min-h-20 px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none resize-none"
+                            placeholder="Opsiyonel not..."
+                            aria-label="Not"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsLogModalOpen(false)}
+                            className="px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-slate-50 text-sm"
+                        >
+                            Vazgeç
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveLog}
+                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                        >
+                            Kaydet
                         </button>
                     </div>
                 </div>

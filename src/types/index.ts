@@ -313,6 +313,60 @@ export interface ProcurementDispatchChangeRequest {
     decidedAt?: string;
     createdAt: string;
 }
+
+export type ProductionJobStatus = 'queued' | 'active' | 'completed' | 'cancelled';
+
+export interface ProductionJob {
+    id: string;
+    dispatchId?: string;
+    orderId: string;
+    productId?: string;
+    productName?: string;
+    machineId?: string;
+    plannedQuantity: number;
+    producedBody: number;
+    producedLid: number;
+    producedBottom: number;
+    scrapBody: number;
+    scrapLid: number;
+    scrapBottom: number;
+    status: ProductionJobStatus;
+    startedAt?: string;
+    completedAt?: string;
+    createdAt: string;
+}
+
+export interface ProductionLog {
+    id: string;
+    jobId: string;
+    reportedAt: string;
+    bodyQty: number;
+    lidQty: number;
+    bottomQty: number;
+    scrapBody: number;
+    scrapLid: number;
+    scrapBottom: number;
+    locationCode?: string;
+    note?: string;
+    createdAt: string;
+}
+
+export interface WarehouseLocation {
+    code: string;
+    label?: string;
+    createdAt: string;
+}
+
+export interface WarehouseStockRow {
+    id: string;
+    locationCode: string;
+    orderId: string;
+    productId?: string;
+    productName?: string;
+    part: 'body' | 'lid' | 'bottom';
+    quantity: number;
+    updatedAt: string;
+}
 export interface WindowState {
     id: string;
     title: string;

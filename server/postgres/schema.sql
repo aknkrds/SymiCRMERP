@@ -121,6 +121,58 @@ CREATE TABLE IF NOT EXISTS procurement_dispatch_change_requests (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS warehouse_locations (
+  code TEXT PRIMARY KEY,
+  label TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS production_jobs (
+  id TEXT PRIMARY KEY,
+  dispatch_id TEXT,
+  order_id TEXT NOT NULL,
+  product_id TEXT,
+  product_name TEXT,
+  machine_id TEXT,
+  planned_quantity INTEGER NOT NULL,
+  produced_body INTEGER NOT NULL,
+  produced_lid INTEGER NOT NULL,
+  produced_bottom INTEGER NOT NULL,
+  scrap_body INTEGER NOT NULL,
+  scrap_lid INTEGER NOT NULL,
+  scrap_bottom INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS production_logs (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL,
+  reported_at TEXT NOT NULL,
+  body_qty INTEGER NOT NULL,
+  lid_qty INTEGER NOT NULL,
+  bottom_qty INTEGER NOT NULL,
+  scrap_body INTEGER NOT NULL,
+  scrap_lid INTEGER NOT NULL,
+  scrap_bottom INTEGER NOT NULL,
+  location_code TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_stock (
+  id TEXT PRIMARY KEY,
+  location_code TEXT NOT NULL,
+  order_id TEXT NOT NULL,
+  product_id TEXT,
+  product_name TEXT,
+  part TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS counters (
   name TEXT PRIMARY KEY,
   value INTEGER NOT NULL

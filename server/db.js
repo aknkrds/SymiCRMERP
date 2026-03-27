@@ -202,6 +202,87 @@ const initDb = () => {
     db.prepare('INSERT OR IGNORE INTO counters (name, value) VALUES (?, ?)').run('procurement_dispatch', maxVal);
   } catch (e) {}
 
+  // Warehouse Locations (Depo alanları)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS warehouse_locations (
+      code TEXT PRIMARY KEY,
+      label TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Production Jobs (Üretim kuyruğu)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS production_jobs (
+      id TEXT PRIMARY KEY,
+      dispatchId TEXT,
+      orderId TEXT NOT NULL,
+      productId TEXT,
+      productName TEXT,
+      machineId TEXT,
+      plannedQuantity INTEGER NOT NULL,
+      producedBody INTEGER NOT NULL,
+      producedLid INTEGER NOT NULL,
+      producedBottom INTEGER NOT NULL,
+      scrapBody INTEGER NOT NULL,
+      scrapLid INTEGER NOT NULL,
+      scrapBottom INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      startedAt TEXT,
+      completedAt TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Production Logs (Üretim girişleri)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS production_logs (
+      id TEXT PRIMARY KEY,
+      jobId TEXT NOT NULL,
+      reportedAt TEXT NOT NULL,
+      bodyQty INTEGER NOT NULL,
+      lidQty INTEGER NOT NULL,
+      bottomQty INTEGER NOT NULL,
+      scrapBody INTEGER NOT NULL,
+      scrapLid INTEGER NOT NULL,
+      scrapBottom INTEGER NOT NULL,
+      locationCode TEXT,
+      note TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Warehouse Stock Balances (konum bazlı stok)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS warehouse_stock (
+      id TEXT PRIMARY KEY,
+      locationCode TEXT NOT NULL,
+      orderId TEXT NOT NULL,
+      productId TEXT,
+      productName TEXT,
+      part TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      updatedAt TEXT NOT NULL
+    )
+  `);
+
+  try {
+    const existingLocations = db.prepare('SELECT code FROM warehouse_locations LIMIT 1').get();
+    if (!existingLocations) {
+      const now = new Date().toISOString();
+      const insert = db.prepare('INSERT INTO warehouse_locations (code, label, createdAt) VALUES (?, ?, ?)');
+      const codes = [
+        'A1','A2','A3','A4','A5',
+        'B1','B2','B3','B4','B5',
+        'C1','C2','C3','C4','C5',
+        'D1','D2','D3','D4','D5'
+      ];
+      for (const code of codes) {
+        insert.run(code, `Raf ${code}`, now);
+      }
+    }
+  } catch (e) {}
+
   // Stock Items
   db.exec(`
     CREATE TABLE IF NOT EXISTS stock_items (

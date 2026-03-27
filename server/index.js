@@ -1573,6 +1573,234 @@ app.patch('/api/procurement-dispatches/:id/production-receipt', async (req, res)
   }
 });
 
+// --- WAREHOUSE (Locations + Stock) ---
+
+app.get('/api/warehouse-locations', async (req, res) => {
+  try {
+    const rows = await db.prepare('SELECT * FROM warehouse_locations ORDER BY code ASC').all();
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/warehouse-stock', async (req, res) => {
+  try {
+    const { locationCode, orderId, productId } = req.query || {};
+    const clauses = [];
+    const params = [];
+    if (locationCode) { clauses.push('locationCode = ?'); params.push(String(locationCode)); }
+    if (orderId) { clauses.push('orderId = ?'); params.push(String(orderId)); }
+    if (productId) { clauses.push('productId = ?'); params.push(String(productId)); }
+    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+    const rows = await db.prepare(`SELECT * FROM warehouse_stock ${where} ORDER BY updatedAt DESC`).all(...params);
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- PRODUCTION (Jobs + Logs) ---
+
+app.get('/api/production-jobs', async (req, res) => {
+  try {
+    const rows = await db.prepare('SELECT * FROM production_jobs ORDER BY createdAt DESC').all();
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/production-jobs/from-dispatch', async (req, res) => {
+  try {
+    const { dispatchId } = req.body || {};
+    if (!dispatchId) return res.status(400).json({ error: 'dispatchId gerekli' });
+
+    const dispatch = await db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(dispatchId);
+    if (!dispatch) return res.status(404).json({ error: 'Sevk kaydı bulunamadı' });
+    if (dispatch.productionApprovedAt) return res.status(409).json({ error: 'Bu sevk zaten üretim tarafından teslim alınmış' });
+
+    const lines = parseJsonField(dispatch.lines, []);
+    if (!Array.isArray(lines) || lines.length === 0) return res.status(400).json({ error: 'Sevk satırı bulunamadı' });
+
+    const now = new Date().toISOString();
+    const insertJob = db.prepare(`
+      INSERT INTO production_jobs (
+        id, dispatchId, orderId, productId, productName, machineId,
+        plannedQuantity, producedBody, producedLid, producedBottom,
+        scrapBody, scrapLid, scrapBottom,
+        status, startedAt, completedAt, createdAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const created = [];
+    for (const l of lines) {
+      const orderId = l?.orderId ? String(l.orderId) : null;
+      if (!orderId) continue;
+      const planned = Number(l.total) || (Number(l.plateQuantity) || 0) * (Number(l.printQuantity) || 0) || 0;
+      const jobId = crypto.randomUUID();
+      insertJob.run(
+        jobId,
+        String(dispatchId),
+        orderId,
+        l?.productId ? String(l.productId) : null,
+        l?.productName ? String(l.productName) : null,
+        null,
+        planned,
+        0, 0, 0,
+        0, 0, 0,
+        'queued',
+        null,
+        null,
+        now
+      );
+      created.push(jobId);
+    }
+
+    if (created.length === 0) return res.status(400).json({ error: 'Üretime aktarılacak satır bulunamadı' });
+
+    await db.prepare(`
+      UPDATE procurement_dispatches
+      SET productionReceipt = ?, productionApprovedAt = ?
+      WHERE id = ?
+    `).run(JSON.stringify(lines), now, String(dispatchId));
+
+    const jobs = await db.prepare(`SELECT * FROM production_jobs WHERE id IN (${created.map(() => '?').join(',')})`).all(...created);
+    res.status(201).json({ jobs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/production-jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body || {};
+    const allowed = ['machineId', 'plannedQuantity', 'status', 'startedAt', 'completedAt'];
+    const safe = {};
+    for (const k of allowed) {
+      if (updates[k] !== undefined) safe[k] = updates[k];
+    }
+    const fields = Object.keys(safe).map(key => `${key} = ?`).join(', ');
+    const values = [...Object.values(safe), id];
+    if (fields.length > 0) {
+      await db.prepare(`UPDATE production_jobs SET ${fields} WHERE id = ?`).run(...values);
+    }
+    const job = await db.prepare('SELECT * FROM production_jobs WHERE id = ?').get(id);
+    if (!job) return res.status(404).json({ error: 'Üretim işi bulunamadı' });
+    res.json(job);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/production-logs', async (req, res) => {
+  try {
+    const jobId = req.query.jobId ? String(req.query.jobId) : null;
+    const where = jobId ? 'WHERE jobId = ?' : '';
+    const rows = await db.prepare(`SELECT * FROM production_logs ${where} ORDER BY reportedAt DESC`).all(...(jobId ? [jobId] : []));
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/production-logs', async (req, res) => {
+  try {
+    const { id, jobId, reportedAt, bodyQty, lidQty, bottomQty, scrapBody, scrapLid, scrapBottom, locationCode, note, createdAt } = req.body || {};
+    if (!id || !jobId || !reportedAt || !createdAt) {
+      return res.status(400).json({ error: 'Eksik alanlar' });
+    }
+
+    const job = await db.prepare('SELECT * FROM production_jobs WHERE id = ?').get(jobId);
+    if (!job) return res.status(404).json({ error: 'Üretim işi bulunamadı' });
+
+    const bq = Number(bodyQty) || 0;
+    const lq = Number(lidQty) || 0;
+    const boq = Number(bottomQty) || 0;
+    const sb = Number(scrapBody) || 0;
+    const sl = Number(scrapLid) || 0;
+    const sbo = Number(scrapBottom) || 0;
+
+    await db.prepare(`
+      INSERT INTO production_logs (
+        id, jobId, reportedAt, bodyQty, lidQty, bottomQty, scrapBody, scrapLid, scrapBottom, locationCode, note, createdAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      jobId,
+      reportedAt,
+      bq, lq, boq,
+      sb, sl, sbo,
+      locationCode || null,
+      note || null,
+      createdAt
+    );
+
+    await db.prepare(`
+      UPDATE production_jobs
+      SET producedBody = producedBody + ?, producedLid = producedLid + ?, producedBottom = producedBottom + ?,
+          scrapBody = scrapBody + ?, scrapLid = scrapLid + ?, scrapBottom = scrapBottom + ?
+      WHERE id = ?
+    `).run(bq, lq, boq, sb, sl, sbo, jobId);
+
+    const updatedJob = await db.prepare('SELECT * FROM production_jobs WHERE id = ?').get(jobId);
+
+    const upsertStock = (part, qty) => {
+      if (!qty) return;
+      const loc = locationCode ? String(locationCode) : 'GENEL';
+      const existing = db.prepare(`
+        SELECT id, quantity FROM warehouse_stock
+        WHERE locationCode = ? AND orderId = ? AND productId IS ? AND part = ?
+      `).get(loc, String(job.orderId), job.productId || null, part);
+
+      if (existing) {
+        db.prepare('UPDATE warehouse_stock SET quantity = ?, updatedAt = ? WHERE id = ?')
+          .run((Number(existing.quantity) || 0) + qty, new Date().toISOString(), existing.id);
+      } else {
+        db.prepare(`
+          INSERT INTO warehouse_stock (id, locationCode, orderId, productId, productName, part, quantity, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          crypto.randomUUID(),
+          loc,
+          String(job.orderId),
+          job.productId || null,
+          job.productName || null,
+          part,
+          qty,
+          new Date().toISOString()
+        );
+      }
+    };
+
+    upsertStock('body', bq);
+    upsertStock('lid', lq);
+    upsertStock('bottom', boq);
+
+    const insertStockItem = db.prepare(`
+      INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, productId, notes, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const stockNow = new Date().toISOString();
+    const stockNumber = `PRD-${String(jobId).slice(0, 8)}-${Date.now()}`;
+    const notes = JSON.stringify({ jobId, orderId: job.orderId, locationCode: locationCode || null });
+    if (bq) insertStockItem.run(crypto.randomUUID(), `${stockNumber}-B`, 'Üretim', `${job.productName || 'Ürün'} (Gövde)`, bq, 'adet', 'finished', job.productId || null, notes, stockNow);
+    if (lq) insertStockItem.run(crypto.randomUUID(), `${stockNumber}-K`, 'Üretim', `${job.productName || 'Ürün'} (Kapak)`, lq, 'adet', 'finished', job.productId || null, notes, stockNow);
+    if (boq) insertStockItem.run(crypto.randomUUID(), `${stockNumber}-D`, 'Üretim', `${job.productName || 'Ürün'} (Dip)`, boq, 'adet', 'finished', job.productId || null, notes, stockNow);
+    if (sb || sl || sbo) {
+      const totalScrap = sb + sl + sbo;
+      insertStockItem.run(crypto.randomUUID(), `${stockNumber}-S`, 'Üretim', `${job.productName || 'Ürün'} (Fire)`, totalScrap, 'adet', 'scrap', job.productId || null, notes, stockNow);
+    }
+
+    res.status(201).json({ logId: id, job: updatedJob });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get('/api/procurement-dispatch-change-requests', async (req, res) => {
   try {
     const rows = await db.prepare('SELECT * FROM procurement_dispatch_change_requests ORDER BY createdAt DESC').all();
