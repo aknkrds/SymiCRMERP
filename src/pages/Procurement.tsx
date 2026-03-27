@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useProducts } from '../hooks/useProducts';
 import { useStock } from '../hooks/useStock';
-import { Eye, Network, CheckCircle2, Plus, Trash2, Package, FileText, Pencil, AlertTriangle, Menu } from 'lucide-react';
+import { Eye, Network, CheckCircle2, Plus, Trash2, Package, FileText, Pencil, AlertTriangle, Menu, ChevronDown, ChevronUp } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
@@ -95,6 +95,7 @@ export default function Procurement() {
         notes: '',
         lines: [createEmptyDispatchLine()]
     });
+    const [openDispatchLineIndex, setOpenDispatchLineIndex] = useState(0);
 
     const fetchDispatches = async () => {
         try {
@@ -283,6 +284,7 @@ export default function Procurement() {
                     notes: '',
                     lines: [createEmptyDispatchLine()]
                 });
+                setOpenDispatchLineIndex(0);
                 setIsDispatchModalOpen(true);
             } catch (e) {
                 alert('Fiş numarası oluşturulamadı.');
@@ -333,20 +335,23 @@ export default function Procurement() {
     const handleOpenEditDispatch = (dispatch: ProcurementDispatch) => {
         const normalizedLines = Array.isArray(dispatch.lines) ? dispatch.lines : [];
         setDispatchMode('edit');
+        const nextLines = normalizedLines.length > 0
+            ? normalizedLines.map((l) => ({
+                ...createEmptyDispatchLine(),
+                ...l,
+                total: (Number(l?.plateQuantity) || 0) * (Number(l?.printQuantity) || 0)
+            }))
+            : [createEmptyDispatchLine()];
+
         setDispatchForm({
             id: dispatch.id,
             dispatchDate: dispatch.dispatchDate,
             vehiclePlate: dispatch.vehiclePlate || '',
             driverNames: dispatch.driverNames || '',
             notes: dispatch.notes || '',
-            lines: normalizedLines.length > 0
-                ? normalizedLines.map((l) => ({
-                    ...createEmptyDispatchLine(),
-                    ...l,
-                    total: (Number(l?.plateQuantity) || 0) * (Number(l?.printQuantity) || 0)
-                }))
-                : [createEmptyDispatchLine()]
+            lines: nextLines
         });
+        setOpenDispatchLineIndex(0);
         setIsDispatchModalOpen(true);
     };
 
@@ -369,11 +374,17 @@ export default function Procurement() {
 
     const handleAddDispatchLine = () => {
         setDispatchForm(prev => ({ ...prev, lines: [...prev.lines, createEmptyDispatchLine()] }));
+        setOpenDispatchLineIndex(prev => prev + 1);
     };
 
     const handleRemoveDispatchLine = (index: number) => {
         setDispatchForm(prev => {
             const nextLines = prev.lines.filter((_, i) => i !== index);
+            setOpenDispatchLineIndex(curr => {
+                if (curr === index) return Math.max(0, index - 1);
+                if (curr > index) return curr - 1;
+                return curr;
+            });
             return { ...prev, lines: nextLines.length > 0 ? nextLines : [createEmptyDispatchLine()] };
         });
     };
@@ -1479,22 +1490,32 @@ export default function Procurement() {
                 size="xl"
                 theme="minimal"
             >
-                <div className="space-y-6">
-                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-5">
+                    <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-main)] p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             <div>
-                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Fiş No</label>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Fiş No</div>
                                 <input
                                     type="text"
                                     value={dispatchForm.id}
                                     readOnly
-                                    className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] font-mono text-sm text-[var(--text-main)]"
+                                    className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-surface)] font-mono text-sm text-[var(--text-main)]"
                                     aria-label="Fiş Numarası"
                                     title="Fiş Numarası"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Sevk Araç Plakası</label>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Sevk Tarihi</div>
+                                <input
+                                    type="date"
+                                    value={dispatchForm.dispatchDate}
+                                    onChange={e => setDispatchForm(prev => ({ ...prev, dispatchDate: e.target.value }))}
+                                    className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                    aria-label="Sevk Tarihi"
+                                />
+                            </div>
+                            <div>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Araç Plaka</div>
                                 <input
                                     type="text"
                                     value={dispatchForm.vehiclePlate}
@@ -1505,7 +1526,7 @@ export default function Procurement() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Şöför İsimleri</label>
+                                <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Şöför</div>
                                 <input
                                     type="text"
                                     value={dispatchForm.driverNames}
@@ -1516,16 +1537,6 @@ export default function Procurement() {
                                 />
                             </div>
                         </div>
-                        <div className="w-full lg:w-56">
-                            <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Sevk Tarihi</label>
-                            <input
-                                type="date"
-                                value={dispatchForm.dispatchDate}
-                                onChange={e => setDispatchForm(prev => ({ ...prev, dispatchDate: e.target.value }))}
-                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                aria-label="Sevk Tarihi"
-                            />
-                        </div>
                     </div>
 
                     <div className="space-y-3">
@@ -1533,16 +1544,38 @@ export default function Procurement() {
                             const order = dispatchOrderOptions.find(o => o.id === line.orderId);
                             const orderItems = order?.items || [];
                             const productOptions = Array.from(new Set(orderItems.map(i => i.productId))).filter(Boolean);
+                            const isOpen = idx === openDispatchLineIndex;
+                            const orderLabel = line.orderId ? `#${line.orderId.slice(0, 8)}` : 'Sipariş seç';
+                            const productLabel = line.productName || 'Ürün seç';
+                            const qtyLabel = (() => {
+                                const a = Number(line.plateQuantity) || 0;
+                                const b = Number(line.printQuantity) || 0;
+                                if (!a && !b) return '';
+                                return `${a}×${b}`;
+                            })();
                             return (
-                                <div key={idx} className="border border-[var(--border-subtle)] rounded-2xl p-4 bg-[var(--bg-surface)]">
-                                    <div className="flex items-center justify-between mb-3">
-                                        <div className="font-semibold text-[var(--text-main)]">Satır {idx + 1}</div>
-                                        <div className="flex items-center gap-2">
+                                <div key={idx} className="border border-[var(--border-subtle)] rounded-2xl overflow-hidden bg-[var(--bg-surface)]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpenDispatchLineIndex(idx)}
+                                        className={`w-full px-4 py-3 flex items-center justify-between gap-3 text-left ${isOpen ? 'bg-white/5' : 'hover:bg-white/5'}`}
+                                        aria-label={`Satır ${idx + 1}`}
+                                        title={`Satır ${idx + 1}`}
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="text-sm font-semibold text-[var(--text-main)]">Satır {idx + 1}</div>
+                                            <div className="text-[11px] text-[var(--text-muted)] mt-0.5 flex items-center gap-2 flex-wrap">
+                                                <span className="font-mono">{orderLabel}</span>
+                                                <span className="truncate max-w-[16rem]">{productLabel}</span>
+                                                {qtyLabel && <span className="px-2 py-0.5 rounded-full border border-[var(--border-subtle)] text-[10px] font-mono">{qtyLabel}</span>}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
                                             <div className="text-xs text-[var(--text-muted)] font-mono">Toplam: {line.total || 0}</div>
                                             {dispatchForm.lines.length > 1 && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleRemoveDispatchLine(idx)}
+                                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveDispatchLine(idx); }}
                                                     className="px-2 py-1 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 text-xs font-semibold"
                                                     title="Satırı Sil"
                                                     aria-label="Satırı Sil"
@@ -1550,139 +1583,144 @@ export default function Procurement() {
                                                     Sil
                                                 </button>
                                             )}
+                                            {isOpen ? <ChevronUp size={16} className="text-[var(--text-muted)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
                                         </div>
-                                    </div>
+                                    </button>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Sipariş Numarası</label>
-                                            <select
-                                                value={line.orderId}
-                                                onChange={e => handleDispatchOrderSelect(idx, e.target.value)}
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                                aria-label="Sipariş Numarası"
-                                            >
-                                                <option value="">Seçiniz</option>
-                                                {dispatchOrderOptions.map(o => (
-                                                    <option key={o.id} value={o.id}>
-                                                        #{o.id.slice(0, 8)} - {o.customerName}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
+                                    {isOpen && (
+                                        <div className="p-4 border-t border-[var(--border-subtle)]">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Sipariş</div>
+                                                    <select
+                                                        value={line.orderId}
+                                                        onChange={e => handleDispatchOrderSelect(idx, e.target.value)}
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                                        aria-label="Sipariş Numarası"
+                                                    >
+                                                        <option value="">Seçiniz</option>
+                                                        {dispatchOrderOptions.map(o => (
+                                                            <option key={o.id} value={o.id}>
+                                                                #{o.id.slice(0, 8)} - {o.customerName}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Firma</label>
-                                            <input
-                                                type="text"
-                                                value={line.customerName}
-                                                readOnly
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] text-[var(--text-main)]"
-                                                aria-label="Firma Adı"
-                                            />
-                                        </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Firma</div>
+                                                    <input
+                                                        type="text"
+                                                        value={line.customerName}
+                                                        readOnly
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] text-[var(--text-main)]"
+                                                        aria-label="Firma Adı"
+                                                    />
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Ürün Kodu</label>
-                                            <select
-                                                value={line.productId}
-                                                onChange={e => handleDispatchProductSelect(idx, e.target.value)}
-                                                disabled={!line.orderId}
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-[var(--bg-main)] bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                                aria-label="Ürün Kodu"
-                                            >
-                                                <option value="">Seçiniz</option>
-                                                {productOptions.map(pid => {
-                                                    const p = products.find(pr => pr.id === pid);
-                                                    return (
-                                                        <option key={pid} value={pid}>
-                                                            {p?.code || '-'}
-                                                        </option>
-                                                    );
-                                                })}
-                                            </select>
-                                        </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Ürün Kodu</div>
+                                                    <select
+                                                        value={line.productId}
+                                                        onChange={e => handleDispatchProductSelect(idx, e.target.value)}
+                                                        disabled={!line.orderId}
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-[var(--bg-main)] bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                                        aria-label="Ürün Kodu"
+                                                    >
+                                                        <option value="">Seçiniz</option>
+                                                        {productOptions.map(pid => {
+                                                            const p = products.find(pr => pr.id === pid);
+                                                            return (
+                                                                <option key={pid} value={pid}>
+                                                                    {p?.code || '-'}
+                                                                </option>
+                                                            );
+                                                        })}
+                                                    </select>
+                                                </div>
 
-                                        <div className="md:col-span-2">
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Ürün Adı</label>
-                                            <input
-                                                type="text"
-                                                value={line.productName}
-                                                readOnly
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] text-[var(--text-main)]"
-                                                aria-label="Ürün Adı"
-                                            />
-                                        </div>
+                                                <div className="md:col-span-2">
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Ürün Adı</div>
+                                                    <input
+                                                        type="text"
+                                                        value={line.productName}
+                                                        readOnly
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] text-[var(--text-main)]"
+                                                        aria-label="Ürün Adı"
+                                                    />
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Baskılı Levha Adeti</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={line.plateQuantity || ''}
-                                                onChange={e => handleDispatchLineChange(idx, { plateQuantity: parseInt(e.target.value) || 0 })}
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                                aria-label="Baskılı Levha Adeti"
-                                            />
-                                        </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Levha Adeti</div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={line.plateQuantity || ''}
+                                                        onChange={e => handleDispatchLineChange(idx, { plateQuantity: parseInt(e.target.value) || 0 })}
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                                        aria-label="Baskılı Levha Adeti"
+                                                    />
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Baskı Türü</label>
-                                            <select
-                                                value={line.printType}
-                                                onChange={e => handleDispatchLineChange(idx, { printType: e.target.value as ProcurementDispatchPrintType })}
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                                aria-label="Baskı Türü"
-                                            >
-                                                <option value="Gövde">Gövde</option>
-                                                <option value="Kapak">Kapak</option>
-                                                <option value="Dip">Dip</option>
-                                                <option value="Diğer">Diğer</option>
-                                            </select>
-                                        </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Baskı Türü</div>
+                                                    <select
+                                                        value={line.printType}
+                                                        onChange={e => handleDispatchLineChange(idx, { printType: e.target.value as ProcurementDispatchPrintType })}
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                                        aria-label="Baskı Türü"
+                                                    >
+                                                        <option value="Gövde">Gövde</option>
+                                                        <option value="Kapak">Kapak</option>
+                                                        <option value="Dip">Dip</option>
+                                                        <option value="Diğer">Diğer</option>
+                                                    </select>
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Baskı Adeti</label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={line.printQuantity || ''}
-                                                onChange={e => handleDispatchLineChange(idx, { printQuantity: parseInt(e.target.value) || 0 })}
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                                aria-label="Baskı Adeti"
-                                            />
-                                        </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Baskı Adeti</div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={line.printQuantity || ''}
+                                                        onChange={e => handleDispatchLineChange(idx, { printQuantity: parseInt(e.target.value) || 0 })}
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                                        aria-label="Baskı Adeti"
+                                                    />
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Toplam</label>
-                                            <input
-                                                type="number"
-                                                value={line.total || 0}
-                                                readOnly
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] font-semibold text-[var(--text-main)]"
-                                                aria-label="Toplam"
-                                            />
-                                        </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Toplam</div>
+                                                    <input
+                                                        type="number"
+                                                        value={line.total || 0}
+                                                        readOnly
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] font-semibold text-[var(--text-main)]"
+                                                        aria-label="Toplam"
+                                                    />
+                                                </div>
 
-                                        <div>
-                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Levha Ölçüsü</label>
-                                            <input
-                                                type="text"
-                                                value={line.plateSize}
-                                                onChange={e => handleDispatchLineChange(idx, { plateSize: e.target.value })}
-                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
-                                                aria-label="Levha Ölçüsü"
-                                                placeholder="Örn: 70x100"
-                                            />
+                                                <div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Levha Ölçüsü</div>
+                                                    <input
+                                                        type="text"
+                                                        value={line.plateSize}
+                                                        onChange={e => handleDispatchLineChange(idx, { plateSize: e.target.value })}
+                                                        className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
+                                                        aria-label="Levha Ölçüsü"
+                                                        placeholder="Örn: 70x100"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             );
                         })}
                         <button
                             type="button"
                             onClick={handleAddDispatchLine}
-                            className="w-full px-4 py-3 rounded-2xl border border-[var(--border-subtle)] bg-white/5 hover:bg-white/10 text-[var(--text-main)] text-sm font-semibold"
+                            className="w-full px-4 py-3 rounded-2xl border border-dashed border-[var(--border-subtle)] bg-white/5 hover:bg-white/10 text-[var(--text-main)] text-sm font-semibold"
                             title="Satır Ekle"
                             aria-label="Satır Ekle"
                         >
