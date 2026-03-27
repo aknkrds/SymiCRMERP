@@ -93,7 +93,7 @@ export default function Procurement() {
         vehiclePlate: '',
         driverNames: '',
         notes: '',
-        lines: Array.from({ length: 10 }, () => createEmptyDispatchLine())
+        lines: [createEmptyDispatchLine()]
     });
 
     const fetchDispatches = async () => {
@@ -281,7 +281,7 @@ export default function Procurement() {
                     vehiclePlate: '',
                     driverNames: '',
                     notes: '',
-                    lines: Array.from({ length: 10 }, () => createEmptyDispatchLine())
+                    lines: [createEmptyDispatchLine()]
                 });
                 setIsDispatchModalOpen(true);
             } catch (e) {
@@ -339,11 +339,13 @@ export default function Procurement() {
             vehiclePlate: dispatch.vehiclePlate || '',
             driverNames: dispatch.driverNames || '',
             notes: dispatch.notes || '',
-            lines: Array.from({ length: 10 }, (_, i) => normalizedLines[i] ? {
-                ...createEmptyDispatchLine(),
-                ...normalizedLines[i],
-                total: (Number(normalizedLines[i]?.plateQuantity) || 0) * (Number(normalizedLines[i]?.printQuantity) || 0)
-            } : createEmptyDispatchLine())
+            lines: normalizedLines.length > 0
+                ? normalizedLines.map((l) => ({
+                    ...createEmptyDispatchLine(),
+                    ...l,
+                    total: (Number(l?.plateQuantity) || 0) * (Number(l?.printQuantity) || 0)
+                }))
+                : [createEmptyDispatchLine()]
         });
         setIsDispatchModalOpen(true);
     };
@@ -362,6 +364,17 @@ export default function Procurement() {
                 return updated;
             });
             return { ...prev, lines: nextLines };
+        });
+    };
+
+    const handleAddDispatchLine = () => {
+        setDispatchForm(prev => ({ ...prev, lines: [...prev.lines, createEmptyDispatchLine()] }));
+    };
+
+    const handleRemoveDispatchLine = (index: number) => {
+        setDispatchForm(prev => {
+            const nextLines = prev.lines.filter((_, i) => i !== index);
+            return { ...prev, lines: nextLines.length > 0 ? nextLines : [createEmptyDispatchLine()] };
         });
     };
 
@@ -1462,7 +1475,7 @@ export default function Procurement() {
             <Modal
                 isOpen={isDispatchModalOpen}
                 onClose={() => setIsDispatchModalOpen(false)}
-                title="Yeni Sevkiyat"
+                title={dispatchMode === 'edit' ? 'Sevkiyat Düzenle' : 'Yeni Sevkiyat'}
                 size="xl"
                 theme="minimal"
             >
@@ -1470,46 +1483,46 @@ export default function Procurement() {
                     <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Fiş No</label>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Fiş No</label>
                                 <input
                                     type="text"
                                     value={dispatchForm.id}
                                     readOnly
-                                    className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 font-mono text-sm"
+                                    className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] font-mono text-sm text-[var(--text-main)]"
                                     aria-label="Fiş Numarası"
                                     title="Fiş Numarası"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Sevk Araç Plakası</label>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Sevk Araç Plakası</label>
                                 <input
                                     type="text"
                                     value={dispatchForm.vehiclePlate}
                                     onChange={e => setDispatchForm(prev => ({ ...prev, vehiclePlate: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                     placeholder="34 ABC 123"
                                     aria-label="Sevk Araç Plakası"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Şöför İsimleri</label>
+                                <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Şöför İsimleri</label>
                                 <input
                                     type="text"
                                     value={dispatchForm.driverNames}
                                     onChange={e => setDispatchForm(prev => ({ ...prev, driverNames: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                     placeholder="Ad Soyad"
                                     aria-label="Şöför İsimleri"
                                 />
                             </div>
                         </div>
                         <div className="w-full lg:w-56">
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Sevk Tarihi</label>
+                            <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Sevk Tarihi</label>
                             <input
                                 type="date"
                                 value={dispatchForm.dispatchDate}
                                 onChange={e => setDispatchForm(prev => ({ ...prev, dispatchDate: e.target.value }))}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                 aria-label="Sevk Tarihi"
                             />
                         </div>
@@ -1521,19 +1534,32 @@ export default function Procurement() {
                             const orderItems = order?.items || [];
                             const productOptions = Array.from(new Set(orderItems.map(i => i.productId))).filter(Boolean);
                             return (
-                                <div key={idx} className="border border-slate-200 rounded-lg p-4 bg-white">
+                                <div key={idx} className="border border-[var(--border-subtle)] rounded-2xl p-4 bg-[var(--bg-surface)]">
                                     <div className="flex items-center justify-between mb-3">
-                                        <div className="font-semibold text-slate-800">Satır {idx + 1}</div>
-                                        <div className="text-xs text-slate-500 font-mono">Toplam: {line.total || 0}</div>
+                                        <div className="font-semibold text-[var(--text-main)]">Satır {idx + 1}</div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="text-xs text-[var(--text-muted)] font-mono">Toplam: {line.total || 0}</div>
+                                            {dispatchForm.lines.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveDispatchLine(idx)}
+                                                    className="px-2 py-1 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 text-xs font-semibold"
+                                                    title="Satırı Sil"
+                                                    aria-label="Satırı Sil"
+                                                >
+                                                    Sil
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Sipariş Numarası</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Sipariş Numarası</label>
                                             <select
                                                 value={line.orderId}
                                                 onChange={e => handleDispatchOrderSelect(idx, e.target.value)}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                                 aria-label="Sipariş Numarası"
                                             >
                                                 <option value="">Seçiniz</option>
@@ -1546,23 +1572,23 @@ export default function Procurement() {
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Firma</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Firma</label>
                                             <input
                                                 type="text"
                                                 value={line.customerName}
                                                 readOnly
-                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] text-[var(--text-main)]"
                                                 aria-label="Firma Adı"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Ürün Kodu</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Ürün Kodu</label>
                                             <select
                                                 value={line.productId}
                                                 onChange={e => handleDispatchProductSelect(idx, e.target.value)}
                                                 disabled={!line.orderId}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-50"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-[var(--bg-main)] bg-[var(--bg-surface)] text-[var(--text-main)]"
                                                 aria-label="Ürün Kodu"
                                             >
                                                 <option value="">Seçiniz</option>
@@ -1578,34 +1604,34 @@ export default function Procurement() {
                                         </div>
 
                                         <div className="md:col-span-2">
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Ürün Adı</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Ürün Adı</label>
                                             <input
                                                 type="text"
                                                 value={line.productName}
                                                 readOnly
-                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] text-[var(--text-main)]"
                                                 aria-label="Ürün Adı"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Baskılı Levha Adeti</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Baskılı Levha Adeti</label>
                                             <input
                                                 type="number"
                                                 min="0"
                                                 value={line.plateQuantity || ''}
                                                 onChange={e => handleDispatchLineChange(idx, { plateQuantity: parseInt(e.target.value) || 0 })}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                                 aria-label="Baskılı Levha Adeti"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Baskı Türü</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Baskı Türü</label>
                                             <select
                                                 value={line.printType}
                                                 onChange={e => handleDispatchLineChange(idx, { printType: e.target.value as ProcurementDispatchPrintType })}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                                 aria-label="Baskı Türü"
                                             >
                                                 <option value="Gövde">Gövde</option>
@@ -1616,35 +1642,35 @@ export default function Procurement() {
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Baskı Adeti</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Baskı Adeti</label>
                                             <input
                                                 type="number"
                                                 min="0"
                                                 value={line.printQuantity || ''}
                                                 onChange={e => handleDispatchLineChange(idx, { printQuantity: parseInt(e.target.value) || 0 })}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                                 aria-label="Baskı Adeti"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Toplam</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Toplam</label>
                                             <input
                                                 type="number"
                                                 value={line.total || 0}
                                                 readOnly
-                                                className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 font-semibold text-slate-800"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl bg-[var(--bg-main)] font-semibold text-[var(--text-main)]"
                                                 aria-label="Toplam"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-medium text-slate-600 mb-1">Levha Ölçüsü</label>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Levha Ölçüsü</label>
                                             <input
                                                 type="text"
                                                 value={line.plateSize}
                                                 onChange={e => handleDispatchLineChange(idx, { plateSize: e.target.value })}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                                                className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-[var(--bg-surface)] text-[var(--text-main)]"
                                                 aria-label="Levha Ölçüsü"
                                                 placeholder="Örn: 70x100"
                                             />
@@ -1653,31 +1679,40 @@ export default function Procurement() {
                                 </div>
                             );
                         })}
+                        <button
+                            type="button"
+                            onClick={handleAddDispatchLine}
+                            className="w-full px-4 py-3 rounded-2xl border border-[var(--border-subtle)] bg-white/5 hover:bg-white/10 text-[var(--text-main)] text-sm font-semibold"
+                            title="Satır Ekle"
+                            aria-label="Satır Ekle"
+                        >
+                            + Satır Ekle
+                        </button>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Açıklamalar</label>
+                        <label className="block text-sm font-medium text-[var(--text-main)] mb-1">Açıklamalar</label>
                         <textarea
                             value={dispatchForm.notes}
                             onChange={e => setDispatchForm(prev => ({ ...prev, notes: e.target.value }))}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 min-h-24"
+                            className="w-full px-3 py-2 border border-[var(--border-subtle)] rounded-xl outline-none focus:ring-2 focus:ring-blue-500 min-h-24 bg-[var(--bg-surface)] text-[var(--text-main)]"
                             placeholder="Notlar..."
                             aria-label="Açıklamalar"
                         />
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">
                         <button
                             type="button"
                             onClick={() => setIsDispatchModalOpen(false)}
-                            className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="px-4 py-2 text-[var(--text-muted)] hover:bg-white/5 rounded-xl transition-colors"
                         >
                             İptal
                         </button>
                         <button
                             type="button"
                             onClick={handleSaveDispatch}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium"
                         >
                             Gönder
                         </button>
