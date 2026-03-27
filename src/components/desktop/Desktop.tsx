@@ -22,7 +22,7 @@ export function Desktop() {
     const { settings } = useCompanySettings();
     const { logout, user } = useAuth();
     const { addItem, fetchDesktopData, setUsername: setDesktopUsername } = useDesktopStore();
-    const appVersion = '0.9.6.0';
+    const appVersion = '0.9.6.1';
     const { orders } = useOrders();
 
     const defaultBg = "url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=3000&auto=format&fit=crop')";
