@@ -35,7 +35,8 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
     };
 
     const navItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', to: '/', permission: 'dashboard' },
+        { icon: LayoutDashboard, label: 'Dashboard', to: '/dashboard', permission: 'dashboard' },
+        { icon: Calendar, label: 'Toplantılar', to: '/meetings' },
         { icon: Users, label: 'Müşteriler', to: '/customers', permission: 'orders' },
         { icon: Package, label: 'Ürünler & Reçeteler', to: '/products', permission: 'products' },
         { icon: FileText, label: 'Siparişler', to: '/orders', permission: 'orders' },
@@ -47,7 +48,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
         { icon: Truck, label: 'Sevkiyat', to: '/logistics', permission: 'logistics' },
         { icon: CheckCircle, label: 'Onaylar', to: '/approvals', permission: 'all_except_settings' },
         { icon: Package, label: 'Stok', to: '/stock', permission: 'all_except_settings' },
-        { icon: Users, label: 'İnsan Kaynakları', to: '/human-resources', permission: 'all_except_settings' },
+        { icon: Users, label: 'İnsan Kaynakları', to: '/hr', permission: 'all_except_settings' },
         { icon: BarChart2, label: 'Raporlar', to: '/reports', permission: 'all_except_settings' },
     ];
 
@@ -127,7 +128,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
                 <nav className="flex-1 py-4 overflow-y-auto">
                     <ul className="space-y-1.5 px-2">
                         {navItems.map(item => {
-                            if (!hasPermission(item.permission)) return null;
+                            if (item.permission && !hasPermission(item.permission)) return null;
 
                             return (
                                 <li key={item.to}>
@@ -186,7 +187,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
 
                     {isOpen && (
                         <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
-                            <p className="font-medium">Symi CRM v.0.9.6.1</p>
+                            <p className="font-medium">Symi CRM v.0.9.6.2</p>
                             <p className="text-[10px] mt-0.5 text-slate-500">
                                 Tasarım & Geliştirme:{' '}
                                 <span className="font-semibold text-slate-200">Akın KARADAŞ - Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti</span>
