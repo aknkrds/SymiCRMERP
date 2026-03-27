@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useMemo, useEffect, Component } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, MessageCircle, Send, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { useMessages } from '../../hooks/useMessages';
@@ -7,6 +8,7 @@ import { useOrders } from '../../hooks/useOrders';
 import { useAuth } from '../../context/AuthContext';
 import { format, isValid } from 'date-fns';
 import { tr } from 'date-fns/locale';
+import type { Message } from '../../types';
 
 // Safe date formatter helper
 const safeFormatDate = (dateString: string | Date | undefined, formatStr: string): string => {
@@ -20,6 +22,8 @@ const safeFormatDate = (dateString: string | Date | undefined, formatStr: string
     return 'Tarih hatası';
   }
 };
+
+const notNull = <T,>(value: T | null): value is T => value !== null;
 
 // Error Boundary Component
 class MessagingErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
@@ -50,7 +54,7 @@ class MessagingErrorBoundary extends Component<{ children: ReactNode }, { hasErr
   }
 }
 
-export const Messaging: React.FC = () => {
+export const Messaging: React.FC<{ variant?: 'app' | 'desktop' }> = ({ variant = 'app' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { messages, sendMessage, markAsRead, refresh } = useMessages();
   const userOptions = useMemo(() => ({ includeAdmins: true }), []);
@@ -78,18 +82,17 @@ export const Messaging: React.FC = () => {
     if (!Array.isArray(messages) || !user) return [];
     
     try {
-      const threadMap = new Map();
+      const threadMap = new Map<string, Message[]>();
       
-      messages.forEach(msg => {
+      messages.forEach((msg) => {
         if (!msg || !msg.threadId) return;
-        if (!threadMap.has(msg.threadId)) {
-          threadMap.set(msg.threadId, []);
-        }
-        threadMap.get(msg.threadId).push(msg);
+        const list = threadMap.get(msg.threadId) || [];
+        list.push(msg);
+        threadMap.set(msg.threadId, list);
       });
       
       // Convert to array and sort by latest message date
-      return Array.from(threadMap.values()).map(msgs => {
+      return Array.from(threadMap.values()).map((msgs) => {
         if (!msgs.length) return null;
         // Sort messages in thread by date (oldest to newest)
         msgs.sort((a, b) => {
@@ -104,12 +107,11 @@ export const Messaging: React.FC = () => {
           threadId: msgs[0].threadId,
           messages: msgs,
           latestMessage: latestMsg,
-          hasUnread: msgs.some(m => !m.isRead && m.recipientId === user?.id)
+          hasUnread: msgs.some((m) => !m.isRead && m.recipientId === user?.id)
         };
       })
-      .filter(Boolean) // Remove nulls
+      .filter(notNull)
       .sort((a, b) => {
-        if (!a || !b) return 0;
         const dateA = new Date(b.latestMessage.createdAt).getTime();
         const dateB = new Date(a.latestMessage.createdAt).getTime();
         return (isNaN(dateA) ? 0 : dateA) - (isNaN(dateB) ? 0 : dateB);
@@ -122,23 +124,29 @@ export const Messaging: React.FC = () => {
 
   const handleSend = async () => {
     if (!content.trim()) return;
+    if (view === 'detail' && (!selectedThreadId || !selectedThread)) return;
     
     const recipient = users.find(u => u.id === recipientId);
+    const detailRecipientId =
+      selectedThread && selectedThread.latestMessage.senderId === user?.id
+        ? selectedThread.latestMessage.recipientId
+        : selectedThread?.latestMessage.senderId;
+
+    const detailRecipientName =
+      selectedThread && selectedThread.latestMessage.senderId === user?.id
+        ? selectedThread.latestMessage.recipientName
+        : selectedThread?.latestMessage.senderName;
     
     try {
       await sendMessage({
-        threadId: view === 'detail' ? selectedThreadId! : undefined,
+        threadId: view === 'detail' ? (selectedThreadId ?? undefined) : undefined,
         senderId: user?.id,
         senderName: user?.fullName || user?.username,
         recipientId: view === 'detail' 
-          ? (selectedThread?.latestMessage.senderId === user?.id 
-              ? selectedThread.latestMessage.recipientId 
-              : selectedThread?.latestMessage.senderId)
+          ? detailRecipientId
           : recipientId,
         recipientName: view === 'detail'
-          ? (selectedThread?.latestMessage.senderId === user?.id 
-              ? selectedThread.latestMessage.recipientName 
-              : selectedThread?.latestMessage.senderName)
+          ? detailRecipientName
           : recipient?.fullName || recipient?.username,
         subject: view === 'detail' ? selectedThread?.latestMessage.subject : subject,
         content,
@@ -169,7 +177,7 @@ export const Messaging: React.FC = () => {
     // Mark unread messages in this thread as read
     const thread = threads.find(t => t.threadId === threadId);
     if (thread) {
-      thread.messages.forEach(m => {
+      thread.messages.forEach((m) => {
         if (!m.isRead && m.recipientId === user?.id) {
           markAsRead(m.id);
         }
@@ -186,7 +194,11 @@ export const Messaging: React.FC = () => {
           refresh();
           setView('inbox');
         }}
-        className="relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none flex items-center gap-2 group"
+        className={
+          variant === 'desktop'
+            ? 'relative p-2 rounded-full border border-white/20 bg-black/20 text-white shadow-sm hover:bg-white/10 transition-all outline-none flex items-center gap-2 group'
+            : 'relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none flex items-center gap-2 group'
+        }
         title="Mesajlar"
       >
         <div className="relative">

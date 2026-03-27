@@ -49,41 +49,47 @@ export function WindowFrame({ windowState, children }: WindowFrameProps) {
             onMouseDown={() => focusWindow(id)}
             style={{ zIndex }}
             className={`pointer-events-auto absolute !flex flex-col rounded-xl overflow-hidden shadow-2xl transition-shadow ${isActive ? 'shadow-black/30 ring-1 ring-black/5' : 'shadow-black/10 ring-1 ring-black/5 opacity-95'
-                } bg-white`}
+                } bg-[var(--bg-surface)]`}
         >
             {/* Titlebar (macOS style) */}
             <div
-                className="window-titlebar h-12 flex items-center px-4 shrink-0 bg-white/40 border-b border-slate-200/50 backdrop-blur-xl group select-none cursor-default"
+                className="window-titlebar h-12 flex items-center px-4 shrink-0 bg-[var(--bg-surface)] border-b border-[var(--border-subtle)] backdrop-blur-xl group select-none cursor-default"
                 onDoubleClick={() => maximizeWindow(id)}
             >
                 <div className="flex items-center gap-2 w-20 shrink-0">
                     <button
                         onClick={(e) => { e.stopPropagation(); closeWindow(id); }}
                         className="w-3.5 h-3.5 rounded-full bg-[#FF5F56] border border-[#E0443E] flex items-center justify-center text-transparent hover:text-black/50 transition-colors"
+                        title="Kapat"
+                        aria-label="Kapat"
                     >
                         <X size={10} strokeWidth={3} />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); minimizeWindow(id); }}
                         className="w-3.5 h-3.5 rounded-full bg-[#FFBD2E] border border-[#DEA123] flex items-center justify-center text-transparent hover:text-black/50 transition-colors"
+                        title="Simge Durumu"
+                        aria-label="Simge Durumu"
                     >
                         <Minus size={10} strokeWidth={3} />
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); maximizeWindow(id); }}
                         className="w-3.5 h-3.5 rounded-full bg-[#27C93F] border border-[#1AAB29] flex items-center justify-center text-transparent hover:text-black/50 transition-colors"
+                        title="Büyüt"
+                        aria-label="Büyüt"
                     >
                         <Maximize2 size={8} strokeWidth={4} />
                     </button>
                 </div>
 
-                <div className="flex-1 text-center font-medium text-sm text-slate-700 truncate pr-20">
+                <div className="flex-1 text-center font-medium text-sm text-[var(--text-main)] truncate pr-20">
                     {title}
                 </div>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-auto w-full bg-white relative">
+            <div className="flex-1 overflow-auto w-full bg-[var(--bg-surface)] relative">
                 {children}
             </div>
         </Rnd>

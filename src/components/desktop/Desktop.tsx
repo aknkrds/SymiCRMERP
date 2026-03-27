@@ -2,34 +2,41 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useWindowStore } from '../../store/windowStore';
 import { appsConfig } from '../../config/apps';
 import { WindowFrame } from './WindowFrame';
-import { Dock } from './Dock';
+import { Dock, DEFAULT_DOCK_SETTINGS } from './Dock';
+import type { DockSettings } from './Dock';
 import { DesktopIcons } from './DesktopIcons';
 import { useDesktopStore } from '../../store/desktopStore';
 import { Notifications } from '../ui/Notifications';
 import { DepartmentTasks } from '../ui/DepartmentTasks';
 import { Messaging } from '../ui/Messaging';
-import { ThemeSwitcher } from '../ui/ThemeSwitcher';
+import { BackgroundSwitcher } from '../ui/BackgroundSwitcher';
+import { DarkModeToggle } from '../ui/DarkModeToggle';
+import { Modal } from '../ui/Modal';
 import { OctaviaChat } from '../ai/OctaviaChat';
 import { useCompanySettings } from '../../hooks/useCompanySettings';
 import { LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useOrders } from '../../hooks/useOrders';
+import { useUsers } from '../../hooks/useUsers';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths } from 'date-fns';
 import { tr } from 'date-fns/locale';
 
 export function Desktop() {
     const { windows, openWindow, closeAllWindows, setWindows, setUsername: setWindowUsername } = useWindowStore();
     const { settings } = useCompanySettings();
-    const { logout, user } = useAuth();
+    const { logout, user, hasPermission } = useAuth();
     const { addItem, fetchDesktopData, setUsername: setDesktopUsername } = useDesktopStore();
     const appVersion = '0.9.6.1';
     const { orders } = useOrders();
 
-    const defaultBg = "url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=3000&auto=format&fit=crop')";
+    const defaultBg = "url('/wallpapers/gradient-01.svg')";
     const [bgImage, setBgImage] = useState(defaultBg);
+    const [dockSettings, setDockSettings] = useState<DockSettings>(DEFAULT_DOCK_SETTINGS);
 
-    const [fileMenuOpen, setFileMenuOpen] = useState(false);
-    const fileMenuRef = useRef<HTMLDivElement>(null);
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+    const [activeShortcutAppId, setActiveShortcutAppId] = useState<string | null>(null);
+    const menubarRef = useRef<HTMLDivElement>(null);
+    const menuCloseTimerRef = useRef<number | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [currentTime, setCurrentTime] = useState<string>(format(new Date(), 'HH:mm'));
@@ -42,13 +49,53 @@ export function Desktop() {
     const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
     const [showOrders, setShowOrders] = useState(true);
     const [showMeetings, setShowMeetings] = useState(true);
-    const [meetings, setMeetings] = useState<{ id?: string; title?: string; date: string }[]>([]);
+    const [meetings, setMeetings] = useState<{ id: string; title?: string; date: string; organizerId?: string; organizerName?: string; status?: string }[]>([]);
+    const { users: activeUsers } = useUsers({ includeAdmins: true });
+    const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
+    const [meetingTitle, setMeetingTitle] = useState('');
+    const [meetingDateTimeLocal, setMeetingDateTimeLocal] = useState('');
+    const [meetingUserSearch, setMeetingUserSearch] = useState('');
+    const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>([]);
+
+    useEffect(() => {
+        const m = bgImage.match(/url\(['"]?(.*?)['"]?\)/);
+        const url = m?.[1];
+        if (!url) return;
+        const img = new Image();
+        img.onload = () => {};
+        img.onerror = () => {
+            if (bgImage !== defaultBg) setBgImage(defaultBg);
+        };
+        img.src = url;
+        return () => {
+            img.onload = null;
+            img.onerror = null;
+        };
+    }, [bgImage, defaultBg]);
 
     // Initial load and store synchronization
     useEffect(() => {
         if (user?.username) {
             setDesktopUsername(user.username);
             setWindowUsername(user.username);
+
+            const dockKey = user?.id ? `symi-dock:${user.id}` : 'symi-dock:guest';
+            const savedDock = localStorage.getItem(dockKey);
+            if (savedDock) {
+                try {
+                    const parsed = JSON.parse(savedDock) as Partial<DockSettings>;
+                    const next: DockSettings = {
+                        ...DEFAULT_DOCK_SETTINGS,
+                        ...parsed,
+                        scale: typeof parsed.scale === 'number' ? Math.min(1.4, Math.max(0.8, parsed.scale)) : DEFAULT_DOCK_SETTINGS.scale,
+                        magnifyScale: typeof parsed.magnifyScale === 'number' ? Math.min(1.6, Math.max(1, parsed.magnifyScale)) : DEFAULT_DOCK_SETTINGS.magnifyScale,
+                        autoHide: typeof parsed.autoHide === 'boolean' ? parsed.autoHide : DEFAULT_DOCK_SETTINGS.autoHide,
+                        magnifyEnabled: typeof parsed.magnifyEnabled === 'boolean' ? parsed.magnifyEnabled : DEFAULT_DOCK_SETTINGS.magnifyEnabled,
+                        position: parsed.position === 'left' || parsed.position === 'right' || parsed.position === 'bottom' ? parsed.position : DEFAULT_DOCK_SETTINGS.position
+                    };
+                    setDockSettings(next);
+                } catch {}
+            }
             
             fetch(`/api/users/${user.username}/desktop-data`)
                 .then(res => res.json())
@@ -57,6 +104,22 @@ export function Desktop() {
                         if (data.desktopItems) fetchDesktopData(user.username); 
                         if (data.windows) setWindows(data.windows);
                         if (data.preferences?.bgImage) setBgImage(data.preferences.bgImage);
+                        const dockKey = user?.id ? `symi-dock:${user.id}` : 'symi-dock:guest';
+                        const fromServer = data.preferences?.dock || (typeof data.preferences?.dockScale === 'number' ? { scale: data.preferences.dockScale } : null);
+                        if (fromServer) {
+                            const parsed = fromServer as Partial<DockSettings>;
+                            const next: DockSettings = {
+                                ...DEFAULT_DOCK_SETTINGS,
+                                ...parsed,
+                                scale: typeof parsed.scale === 'number' ? Math.min(1.4, Math.max(0.8, parsed.scale)) : DEFAULT_DOCK_SETTINGS.scale,
+                                magnifyScale: typeof parsed.magnifyScale === 'number' ? Math.min(1.6, Math.max(1, parsed.magnifyScale)) : DEFAULT_DOCK_SETTINGS.magnifyScale,
+                                autoHide: typeof parsed.autoHide === 'boolean' ? parsed.autoHide : DEFAULT_DOCK_SETTINGS.autoHide,
+                                magnifyEnabled: typeof parsed.magnifyEnabled === 'boolean' ? parsed.magnifyEnabled : DEFAULT_DOCK_SETTINGS.magnifyEnabled,
+                                position: parsed.position === 'left' || parsed.position === 'right' || parsed.position === 'bottom' ? parsed.position : DEFAULT_DOCK_SETTINGS.position
+                            };
+                            setDockSettings(next);
+                            localStorage.setItem(dockKey, JSON.stringify(next));
+                        }
                     }
                 })
                 .catch(e => console.error('Failed to load initial desktop data', e));
@@ -65,15 +128,19 @@ export function Desktop() {
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (fileMenuRef.current && !fileMenuRef.current.contains(event.target as Node)) {
-                setFileMenuOpen(false);
-            }
+            if (menubarRef.current && !menubarRef.current.contains(event.target as Node)) setActiveMenuId(null);
             if (userAreaRef.current && !userAreaRef.current.contains(event.target as Node)) {
                 setIsCalOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (menuCloseTimerRef.current) window.clearTimeout(menuCloseTimerRef.current);
+        };
     }, []);
 
     // Close all windows on unmount
@@ -112,9 +179,10 @@ export function Desktop() {
     useEffect(() => {
         if (!isCalOpen) return;
         let cancelled = false;
-        (async () => {
+        const fetchMeetings = async () => {
             try {
-                const res = await fetch('/api/meetings');
+                const qs = user?.id ? `?userId=${encodeURIComponent(user.id)}&includePending=0` : '';
+                const res = await fetch(`/api/meetings${qs}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 if (cancelled) return;
@@ -122,23 +190,33 @@ export function Desktop() {
                 const normalized = arr.map((m: any) => {
                     const dt = m.date || m.startAt || m.startDate || m.when;
                     if (!dt) return null;
-                    return { id: m.id, title: m.title || m.subject || m.name, date: dt };
-                }).filter(Boolean) as { id?: string; title?: string; date: string }[];
+                    return {
+                        id: String(m.id),
+                        title: m.title || m.subject || m.name,
+                        date: dt,
+                        organizerId: m.organizerId ? String(m.organizerId) : undefined,
+                        organizerName: m.organizerName,
+                        status: m.status
+                    };
+                }).filter(Boolean) as { id: string; title?: string; date: string; organizerId?: string; organizerName?: string; status?: string }[];
                 setMeetings(normalized);
             } catch {
                 setMeetings([]);
             }
-        })();
-        return () => { cancelled = true; };
-    }, [isCalOpen]);
+        };
+        fetchMeetings();
+        const onUpdated = () => fetchMeetings();
+        window.addEventListener('symi:meetingsUpdated', onUpdated);
+        return () => { cancelled = true; window.removeEventListener('symi:meetingsUpdated', onUpdated); };
+    }, [isCalOpen, user?.id]);
 
-    const meetingsByDate: Record<string, { id?: string; title?: string }[]> = {};
+    const meetingsByDate: Record<string, { id: string; title?: string; date: string; organizerId?: string }[]> = {};
     meetings.forEach(m => {
         try {
             const d = new Date(m.date);
             const key = format(d, 'yyyy-MM-dd');
             if (!meetingsByDate[key]) meetingsByDate[key] = [];
-            meetingsByDate[key].push({ id: m.id, title: m.title });
+            meetingsByDate[key].push({ id: m.id, title: m.title, date: m.date, organizerId: m.organizerId });
         } catch {}
     });
 
@@ -151,9 +229,11 @@ export function Desktop() {
 
     const handleAddFolder = () => {
         setContextMenu(null);
+        const name = (window.prompt('Klasör adı:', 'Yeni Klasör') || '').trim();
+        if (!name) return;
         addItem({
             type: 'folder',
-            name: 'Yeni Klasör',
+            name,
             x: contextMenu?.x || 100,
             y: contextMenu?.y || 100
         });
@@ -190,6 +270,176 @@ export function Desktop() {
         }
     };
 
+    const handleBackgroundChange = async (nextBgImage: string) => {
+        setBgImage(nextBgImage);
+        if (!user?.username) return;
+        try {
+            await fetch(`/api/users/${user.username}/desktop-data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preferences: { bgImage: nextBgImage, dock: dockSettings } })
+            });
+        } catch (e) {
+            console.error('Failed to save background preference', e);
+        }
+    };
+
+    const handleDockSettingsChange = async (next: DockSettings) => {
+        setDockSettings(next);
+        const dockKey = user?.id ? `symi-dock:${user.id}` : 'symi-dock:guest';
+        localStorage.setItem(dockKey, JSON.stringify(next));
+        if (!user?.username) return;
+        try {
+            await fetch(`/api/users/${user.username}/desktop-data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ preferences: { bgImage, dock: next } })
+            });
+        } catch (e) {
+            console.error('Failed to save dock preference', e);
+        }
+    };
+
+    const handleDockReset = () => {
+        const next = DEFAULT_DOCK_SETTINGS;
+        handleDockSettingsChange(next);
+    };
+
+    const openMeetingPlanner = () => {
+        const base = format(selectedDate || new Date(), 'yyyy-MM-dd');
+        setMeetingDateTimeLocal(`${base}T09:00`);
+        setMeetingTitle('');
+        setMeetingUserSearch('');
+        setSelectedParticipantIds([]);
+        setEditingMeetingId(null);
+        setIsMeetingModalOpen(true);
+    };
+
+    const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
+
+    const openMeetingEditor = async (meetingId: string) => {
+        if (!user?.id) return;
+        try {
+            const res = await fetch(`/api/meetings/${meetingId}?userId=${encodeURIComponent(user.id)}`);
+            if (!res.ok) throw new Error('not ok');
+            const m = await res.json();
+            setEditingMeetingId(meetingId);
+            setMeetingTitle(String(m.title || ''));
+            const iso = String(m.scheduledAt || '');
+            const d = iso ? new Date(iso) : new Date();
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            setMeetingDateTimeLocal(local);
+            const p = Array.isArray(m.participants) ? m.participants : [];
+            setSelectedParticipantIds(
+                p
+                    .map((x: any) => x && x.userId)
+                    .filter(Boolean)
+                    .map((x: any) => String(x))
+                    .filter((id: string) => id !== String(user.id))
+            );
+            setMeetingUserSearch('');
+            setIsMeetingModalOpen(true);
+        } catch {
+            alert('Toplantı bilgileri alınamadı.');
+        }
+    };
+
+    const handleSaveMeeting = async () => {
+        if (!user?.id) return;
+        const title = meetingTitle.trim();
+        const dt = meetingDateTimeLocal.trim();
+        if (!title || !dt) return;
+        const scheduledAt = new Date(dt).toISOString();
+        try {
+            const isEdit = !!editingMeetingId;
+            const res = await fetch(isEdit ? `/api/meetings/${editingMeetingId}` : '/api/meetings', {
+                method: isEdit ? 'PUT' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    organizerId: user.id,
+                    scheduledAt,
+                    title,
+                    participantIds: selectedParticipantIds
+                })
+            });
+            if (!res.ok) throw new Error('Toplantı planlanamadı');
+            setIsMeetingModalOpen(false);
+            setEditingMeetingId(null);
+            window.dispatchEvent(new Event('symi:meetingsUpdated'));
+        } catch (e) {
+            alert('Toplantı kaydedilirken hata oluştu.');
+        }
+    };
+
+    const handleDeleteMeeting = async (meetingId: string) => {
+        if (!user?.id) return;
+        const ok = window.confirm('Toplantı silinsin mi?');
+        if (!ok) return;
+        try {
+            const res = await fetch(`/api/meetings/${meetingId}?organizerId=${encodeURIComponent(user.id)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('not ok');
+            window.dispatchEvent(new Event('symi:meetingsUpdated'));
+        } catch {
+            alert('Toplantı silinemedi.');
+        }
+    };
+
+    type SubmenuItem = { label: string; onClick: () => void };
+
+    const menuItems: string[] = appsConfig
+        .filter((a) => a.id !== 'preview')
+        .filter((a) => !a.permission || hasPermission(a.permission))
+        .map((a) => a.id);
+
+    const openApp = (id: string) => {
+        const app = appsConfig.find((a) => a.id === id);
+        if (!app) return;
+        openWindow(app.id, app.title);
+        setActiveMenuId(null);
+    };
+
+    const fireShortcut = (eventName: string) => {
+        try {
+            sessionStorage.setItem(`symi:shortcut:${eventName}`, String(Date.now()));
+        } catch {}
+        window.setTimeout(() => window.dispatchEvent(new Event(eventName)), 0);
+    };
+
+    const triggerAndOpen = (id: string, eventName: string) => {
+        fireShortcut(eventName);
+        openApp(id);
+    };
+
+    const getSubmenu = (id: string): SubmenuItem[] => {
+        if (id === 'orders') {
+            return [
+                { label: 'Mevcut Siparişler', onClick: () => openApp('orders') },
+                { label: 'Yeni Sipariş Oluştur', onClick: () => triggerAndOpen('orders', 'symi:orders:create') },
+            ];
+        }
+        if (id === 'customers') {
+            return [
+                { label: 'Mevcut Müşteriler', onClick: () => openApp('customers') },
+                { label: 'Yeni Müşteri Ekle', onClick: () => triggerAndOpen('customers', 'symi:customers:create') },
+            ];
+        }
+        if (id === 'products') {
+            return [
+                { label: 'Mevcut Ürünler', onClick: () => openApp('products') },
+                { label: 'Yeni Ürün Ekle', onClick: () => triggerAndOpen('products', 'symi:products:create') },
+            ];
+        }
+        if (id === 'notes') {
+            return [
+                { label: 'Notlar', onClick: () => openApp('notes') },
+                { label: 'Yeni Not', onClick: () => triggerAndOpen('notes', 'symi:notes:create') },
+            ];
+        }
+        const app = appsConfig.find((a) => a.id === id);
+        return [{ label: app?.title || 'Aç', onClick: () => openApp(id) }];
+    };
+
     return (
         <div
             className="fixed inset-0 w-full h-full overflow-hidden bg-cover bg-center bg-no-repeat bg-slate-900 transition-all duration-1000"
@@ -198,6 +448,101 @@ export function Desktop() {
             onClick={() => setContextMenu(null)}
         >
             {/* Menubar */}
+            <Modal
+                isOpen={isMeetingModalOpen}
+                onClose={() => setIsMeetingModalOpen(false)}
+                title="Toplantı Planla"
+                size="lg"
+                theme="minimal"
+            >
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Tarih & Saat</div>
+                            <input
+                                type="datetime-local"
+                                value={meetingDateTimeLocal}
+                                onChange={(e) => setMeetingDateTimeLocal(e.target.value)}
+                                aria-label="Tarih ve saat"
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                            />
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Konu</div>
+                            <input
+                                value={meetingTitle}
+                                onChange={(e) => setMeetingTitle(e.target.value)}
+                                placeholder="Toplantı konusu..."
+                                className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="flex items-center justify-between">
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Katılımcılar</div>
+                            <div className="text-[10px] text-[var(--text-muted)]">{selectedParticipantIds.length} kişi</div>
+                        </div>
+                        <input
+                            value={meetingUserSearch}
+                            onChange={(e) => setMeetingUserSearch(e.target.value)}
+                            placeholder="Kişi ara..."
+                            className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none mb-2"
+                        />
+                        <div className="max-h-56 overflow-y-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                            {activeUsers
+                                .filter(u => u.id !== user?.id)
+                                .filter(u => {
+                                    const q = meetingUserSearch.trim().toLowerCase();
+                                    if (!q) return true;
+                                    return (
+                                        (u.fullName || '').toLowerCase().includes(q) ||
+                                        (u.username || '').toLowerCase().includes(q) ||
+                                        (u.roleName || '').toLowerCase().includes(q)
+                                    );
+                                })
+                                .map(u => {
+                                    const checked = selectedParticipantIds.includes(u.id);
+                                    return (
+                                        <label key={u.id} className="flex items-center gap-2 px-3 py-2 border-b border-[var(--border-subtle)] last:border-b-0 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={(e) => {
+                                                    setSelectedParticipantIds(prev => {
+                                                        if (e.target.checked) return Array.from(new Set([...prev, u.id]));
+                                                        return prev.filter(x => x !== u.id);
+                                                    });
+                                                }}
+                                            />
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-medium text-[var(--text-main)] truncate">{u.fullName}</div>
+                                                <div className="text-[10px] text-[var(--text-muted)] truncate">{u.roleName} • {u.username}</div>
+                                            </div>
+                                        </label>
+                                    );
+                                })}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsMeetingModalOpen(false)}
+                            className="px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-slate-50 text-sm"
+                        >
+                            Vazgeç
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSaveMeeting}
+                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                        >
+                            {editingMeetingId ? 'Kaydet' : 'Planla'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
             <header className="absolute top-0 left-0 right-0 h-8 bg-black/20 backdrop-blur-md border-b border-white/10 z-[110] flex items-center justify-between px-4 text-sm text-white font-medium select-none shadow-sm">
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 font-bold cursor-pointer hover:text-white/80 transition-colors">
@@ -208,34 +553,82 @@ export function Desktop() {
                         )}
                         <span className="drop-shadow-md">{settings.companyName || 'Symi CRM'}</span>
                     </div>
-                    <div className="flex items-center gap-3 relative">
-                        <div className="relative" ref={fileMenuRef}>
-                            <span
-                                className={`px-2 py-0.5 rounded cursor-pointer transition-colors ${fileMenuOpen ? 'bg-white/20' : 'hover:bg-white/20'}`}
-                                onClick={() => setFileMenuOpen(!fileMenuOpen)}
-                            >
-                                Dosya
-                            </span>
+                    <div
+                        className="flex items-center gap-2 relative"
+                        ref={menubarRef}
+                        onMouseLeave={() => {
+                            if (menuCloseTimerRef.current) window.clearTimeout(menuCloseTimerRef.current);
+                            menuCloseTimerRef.current = window.setTimeout(() => setActiveMenuId(null), 240);
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className={`px-2 py-0.5 rounded cursor-default transition-colors ${activeMenuId === 'shortcuts' ? 'bg-white/20' : 'hover:bg-white/20'}`}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onMouseEnter={() => {
+                                if (menuCloseTimerRef.current) window.clearTimeout(menuCloseTimerRef.current);
+                            }}
+                            onClick={() => {
+                                setActiveMenuId((prev) => (prev === 'shortcuts' ? null : 'shortcuts'));
+                                const first = menuItems[0] || null;
+                                setActiveShortcutAppId((p) => p || first);
+                            }}
+                            title="Kısayollar"
+                        >
+                            Kısayollar
+                        </button>
 
-                            {fileMenuOpen && (
-                                <div className="absolute top-full left-0 mt-1.5 w-56 bg-slate-800/90 backdrop-blur-3xl border border-white/20 rounded-xl shadow-2xl py-1 z-50 overflow-hidden text-slate-200">
-                                    <button onClick={() => { setFileMenuOpen(false); openWindow('orders', 'Siparişler'); }} className="w-full text-left px-4 py-2 text-sm hover:bg-blue-500 hover:text-white transition-colors">Yeni Sipariş Oluştur</button>
-                                    <button onClick={() => { setFileMenuOpen(false); openWindow('customers', 'Müşteriler'); }} className="w-full text-left px-4 py-2 text-sm hover:bg-blue-500 hover:text-white transition-colors">Yeni Müşteri Oluştur</button>
-                                    <div className="h-px bg-white/10 my-1 mx-2 border-0"></div>
-                                    <button onClick={() => { setFileMenuOpen(false); openWindow('shortcuts', 'Kısayol Yöneticisi'); }} className="w-full text-left px-4 py-2 text-sm hover:bg-blue-500 hover:text-white transition-colors">Kısayol Ekle...</button>
+                        {activeMenuId === 'shortcuts' && (
+                            <div
+                                className="absolute top-full left-0 mt-1.5 bg-slate-800/90 backdrop-blur-3xl border border-white/20 rounded-xl shadow-2xl z-50 overflow-hidden text-slate-200 flex"
+                                onMouseEnter={() => {
+                                    if (menuCloseTimerRef.current) window.clearTimeout(menuCloseTimerRef.current);
+                                    if (!activeShortcutAppId) setActiveShortcutAppId(menuItems[0] || null);
+                                }}
+                            >
+                                <div className="w-64 py-1">
+                                    {menuItems.map((id: string) => {
+                                        const app = appsConfig.find((a) => a.id === id);
+                                        const active = activeShortcutAppId === id;
+                                        return (
+                                            <button
+                                                key={id}
+                                                type="button"
+                                                className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center justify-between ${active ? 'bg-white/10 text-white' : 'hover:bg-blue-500 hover:text-white'}`}
+                                                onMouseEnter={() => setActiveShortcutAppId(id)}
+                                                onClick={() => openApp(id)}
+                                                title={app?.title}
+                                            >
+                                                <span className="truncate pr-3">{app?.title || id}</span>
+                                                <ChevronRight size={14} className="opacity-70" />
+                                            </button>
+                                        );
+                                    })}
                                 </div>
-                            )}
-                        </div>
-                        <span className="hover:bg-white/20 px-2 py-0.5 rounded cursor-pointer transition-colors" onClick={() => openWindow('settings', 'Ayarlar')}>Ayarlar</span>
-                        <span className="hover:bg-white/20 px-2 py-0.5 rounded cursor-pointer transition-colors" onClick={() => openWindow('notes', 'Notlar')}>Notlar</span>
+                                <div className="w-px bg-white/10 my-1" />
+                                <div className="w-72 py-1">
+                                    {getSubmenu(activeShortcutAppId || menuItems[0]).map((it: SubmenuItem) => (
+                                        <button
+                                            key={it.label}
+                                            type="button"
+                                            onClick={it.onClick}
+                                            className="w-full text-left px-4 py-2 text-sm hover:bg-blue-500 hover:text-white transition-colors"
+                                        >
+                                            {it.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <ThemeSwitcher />
-                    <Messaging />
-                    <DepartmentTasks />
-                    <Notifications />
+                    <BackgroundSwitcher value={bgImage} onChange={handleBackgroundChange} />
+                    <DarkModeToggle />
+                    <Messaging variant="desktop" />
+                    <DepartmentTasks variant="desktop" />
+                    <Notifications variant="desktop" />
 
                     <div className="flex items-center gap-2 ml-2 pl-2 border-l border-white/30 relative" ref={userAreaRef}>
                         <span className="text-xs font-mono flex items-center gap-1"><Clock3 size={12} /> {currentTime}</span>
@@ -264,6 +657,7 @@ export function Desktop() {
                                             <button className={`px-2 py-1 text-[10px] ${viewMode==='month'?'bg-blue-50 text-blue-700':''}`} onClick={() => setViewMode('month')} title="Ay">Ay</button>
                                             <button className={`px-2 py-1 text-[10px] ${viewMode==='week'?'bg-blue-50 text-blue-700':''}`} onClick={() => setViewMode('week')} title="Hafta">Hafta</button>
                                         </div>
+                                        <button className="px-2 py-1 text-[10px] rounded border border-slate-200 hover:bg-white" onClick={openMeetingPlanner} title="Toplantı Planla">Toplantı Planla</button>
                                         <button className="px-2 py-1 text-[10px] rounded border border-slate-200 hover:bg-white" onClick={() => { const now = new Date(); setCalMonth(now); setSelectedDate(now); }} title="Bugün">Bugün</button>
                                     </div>
                                 </div>
@@ -351,12 +745,48 @@ export function Desktop() {
                                                     <div className="text-[10px] font-mono text-slate-500">#{e.id.slice(0,8)}</div>
                                                 </div>
                                             ))}
-                                            {showMeetings && (meetingsByDate[format(selectedDate, 'yyyy-MM-dd')] || []).map((m, i) => (
-                                                <div key={`m${i}`} className="flex items-center justify-between px-2 py-1.5 rounded border border-slate-200 bg-white hover:bg-blue-50 transition-colors">
-                                                    <div className="text-[11px] font-medium">{m.title || 'Toplantı'}</div>
-                                                    <div className="text-[10px] font-mono text-slate-500">TOPLANTI</div>
-                                                </div>
-                                            ))}
+                                            {showMeetings && (meetingsByDate[format(selectedDate, 'yyyy-MM-dd')] || []).map((m, i) => {
+                                                const canEdit = user?.id && m.organizerId && String(m.organizerId) === String(user.id);
+                                                const time = (() => {
+                                                    try {
+                                                        const d = new Date(m.date);
+                                                        if (isNaN(d.getTime())) return '';
+                                                        const hh = String(d.getHours()).padStart(2, '0');
+                                                        const mm = String(d.getMinutes()).padStart(2, '0');
+                                                        return `${hh}:${mm}`;
+                                                    } catch {
+                                                        return '';
+                                                    }
+                                                })();
+                                                return (
+                                                    <div key={`m${i}`} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-slate-200 bg-white hover:bg-blue-50 transition-colors">
+                                                        <div className="min-w-0">
+                                                            <div className="text-[11px] font-medium truncate">{m.title || 'Toplantı'}</div>
+                                                            <div className="text-[10px] text-slate-500 font-mono">{time || 'TOPLANTI'}</div>
+                                                        </div>
+                                                        {canEdit && (
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => openMeetingEditor(m.id)}
+                                                                    className="px-2 py-1 text-[10px] rounded border border-slate-200 hover:bg-white"
+                                                                    title="Düzenle"
+                                                                >
+                                                                    Düzenle
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteMeeting(m.id)}
+                                                                    className="px-2 py-1 text-[10px] rounded border border-red-200 text-red-600 hover:bg-red-50"
+                                                                    title="Sil"
+                                                                >
+                                                                    Sil
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                             {((showOrders ? (ordersByDate[format(selectedDate, 'yyyy-MM-dd')] || []).length : 0) + (showMeetings ? (meetingsByDate[format(selectedDate, 'yyyy-MM-dd')] || []).length : 0) === 0) && (
                                                 <div className="text-[10px] text-slate-400 text-center py-2">Kayıt yok</div>
                                             )}
@@ -414,7 +844,7 @@ export function Desktop() {
                 </div>
             </div>
 
-            <Dock />
+            <Dock settings={dockSettings} onSettingsChange={handleDockSettingsChange} onReset={handleDockReset} />
             <OctaviaChat />
         </div>
     );

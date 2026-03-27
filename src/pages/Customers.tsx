@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit2, Trash2, Phone, Mail, User, ChevronLeft, ChevronRight, Filter, Star, Menu } from 'lucide-react';
 import { useCustomers } from '../hooks/useCustomers';
 import type { Customer, CustomerFormData } from '../types';
@@ -28,7 +28,7 @@ export default function Customers() {
         if (newPage >= 1 && newPage <= totalPages) setCurrentPage(newPage);
     };
 
-    const handleAdd = () => { setEditingCustomer(undefined); setIsModalOpen(true); };
+    const handleAdd = useCallback(() => { setEditingCustomer(undefined); setIsModalOpen(true); }, []);
     const handleEdit = (customer: Customer) => { setEditingCustomer(customer); setIsModalOpen(true); };
     const handleSubmit = (data: CustomerFormData) => {
         if (editingCustomer) updateCustomer(editingCustomer.id, data);
@@ -38,6 +38,19 @@ export default function Customers() {
     const handleDelete = (id: string) => {
         if (confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) deleteCustomer(id);
     };
+
+    useEffect(() => {
+        const onCreate = () => handleAdd();
+        window.addEventListener('symi:customers:create', onCreate);
+        try {
+            const key = 'symi:shortcut:symi:customers:create';
+            if (sessionStorage.getItem(key)) {
+                sessionStorage.removeItem(key);
+                handleAdd();
+            }
+        } catch {}
+        return () => window.removeEventListener('symi:customers:create', onCreate);
+    }, [handleAdd]);
 
     return (
         <>
@@ -132,7 +145,10 @@ export default function Customers() {
                         </p>
                         <nav className="flex items-center gap-1">
                             <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}
-                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Önceki"
+                                aria-label="Önceki"
+                            >
                                 <ChevronLeft size={14} />
                             </button>
                             {[...Array(Math.min(totalPages, 7))].map((_, i) => {
@@ -145,7 +161,10 @@ export default function Customers() {
                                 );
                             })}
                             <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}
-                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed">
+                                className="p-1 rounded border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                                title="Sonraki"
+                                aria-label="Sonraki"
+                            >
                                 <ChevronRight size={14} />
                             </button>
                         </nav>

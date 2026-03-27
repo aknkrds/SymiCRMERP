@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Eye, FileDown, CheckCircle, Edit, Filter, Star, Menu } from 'lucide-react';
 import { useOrders } from '../hooks/useOrders';
 import type { Order, OrderFormData } from '../types';
@@ -59,10 +59,23 @@ export default function Orders() {
         o.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleAdd = () => {
+    const handleAdd = useCallback(() => {
         setEditingOrder(undefined); setIsViewOnly(false); setSelectedTypePrefix(null);
         setIsTypeModalOpen(true); trackAction('open_create_order_modal');
-    };
+    }, [trackAction]);
+
+    useEffect(() => {
+        const onCreate = () => handleAdd();
+        window.addEventListener('symi:orders:create', onCreate);
+        try {
+            const key = 'symi:shortcut:symi:orders:create';
+            if (sessionStorage.getItem(key)) {
+                sessionStorage.removeItem(key);
+                handleAdd();
+            }
+        } catch {}
+        return () => window.removeEventListener('symi:orders:create', onCreate);
+    }, [handleAdd]);
 
     const handleSubmit = async (data: OrderFormData) => {
         if (editingOrder) {

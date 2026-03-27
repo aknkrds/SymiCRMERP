@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { Modal } from './Modal';
 
 interface Notification {
     id: string;
@@ -12,9 +13,12 @@ interface Notification {
     createdAt: string;
 }
 
-export function Notifications() {
+export function Notifications({ variant = 'app' }: { variant?: 'app' | 'desktop' }) {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isOpen, setIsOpen] = useState(false);
+    const [declineOpen, setDeclineOpen] = useState(false);
+    const [declineReason, setDeclineReason] = useState('');
+    const [activeInvite, setActiveInvite] = useState<Notification | null>(null);
     const { user } = useAuth();
     const navigate = useNavigate();
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -62,6 +66,7 @@ export function Notifications() {
     };
 
     const handleNotificationClick = async (notification: Notification) => {
+        if (notification.type === 'meeting_invite') return;
         await handleMarkRead([notification.id]);
         if (notification.relatedId) {
             // Simple navigation logic
@@ -82,11 +87,73 @@ export function Notifications() {
         }
     };
 
+    const respondMeeting = async (notification: Notification, response: 'accepted' | 'declined', reason?: string) => {
+        if (!notification.relatedId || !user?.id) return;
+        try {
+            const res = await fetch(`/api/meetings/${notification.relatedId}/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, response, reason })
+            });
+            if (!res.ok) throw new Error('Failed');
+            await handleMarkRead([notification.id]);
+            window.dispatchEvent(new Event('symi:meetingsUpdated'));
+        } catch (e) {
+            alert('Toplantı yanıtı gönderilemedi.');
+        }
+    };
+
     return (
         <div className="relative" ref={dropdownRef}>
+            <Modal
+                isOpen={declineOpen}
+                onClose={() => { setDeclineOpen(false); setDeclineReason(''); setActiveInvite(null); }}
+                title="Toplantıya Katılamıyorum"
+                size="md"
+                theme="minimal"
+            >
+                <div className="space-y-3">
+                    <div className="text-sm text-[var(--text-muted)]">Neden katılamayacağınızı yazın.</div>
+                    <textarea
+                        value={declineReason}
+                        onChange={(e) => setDeclineReason(e.target.value)}
+                        placeholder="Örn: Aynı saatte başka toplantım var."
+                        className="w-full min-h-24 px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none resize-none"
+                    />
+                    <div className="flex justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => { setDeclineOpen(false); setDeclineReason(''); setActiveInvite(null); }}
+                            className="px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-slate-50 text-sm"
+                        >
+                            Vazgeç
+                        </button>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                if (!activeInvite) return;
+                                const r = declineReason.trim();
+                                if (!r) return;
+                                await respondMeeting(activeInvite, 'declined', r);
+                                setDeclineOpen(false);
+                                setDeclineReason('');
+                                setActiveInvite(null);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-semibold"
+                        >
+                            Gönder
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none"
+                className={
+                  variant === 'desktop'
+                    ? 'relative p-2 rounded-full border border-white/20 bg-black/20 text-white shadow-sm hover:bg-white/10 transition-all outline-none'
+                    : 'relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none'
+                }
             >
                 <Bell size={20} />
                 {notifications.length > 0 && (
@@ -136,6 +203,34 @@ export function Notifications() {
                                         </span>
                                     </div>
                                     <p className="text-xs text-slate-500 line-clamp-2">{notification.message}</p>
+
+                                    {notification.type === 'meeting_invite' && notification.relatedId && (
+                                        <div className="mt-2 flex items-center justify-end gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setActiveInvite(notification);
+                                                    setDeclineOpen(true);
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold"
+                                            >
+                                                Katılamayacağım
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    respondMeeting(notification, 'accepted');
+                                                }}
+                                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                                            >
+                                                Katılacağım
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             ))
                         )}

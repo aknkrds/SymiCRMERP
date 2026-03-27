@@ -65,26 +65,26 @@ export function Modal({
                     "relative w-full overflow-hidden flex flex-col animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300 rounded-2xl border max-h-[85vh]",
                     sizeClasses[size],
                     theme === 'glass' 
-                        ? "bg-white/80 backdrop-blur-2xl border-white/40 shadow-black/20"
+                        ? "bg-[var(--bg-surface)] backdrop-blur-2xl border-[var(--border-subtle)] shadow-black/20"
                         : isMinimal
-                          ? "bg-white border-slate-200 shadow-black/10"
-                          : "bg-white border-slate-200 shadow-slate-200/50",
+                          ? "bg-[var(--bg-surface)] border-[var(--border-subtle)] shadow-black/10"
+                          : "bg-[var(--bg-surface)] border-[var(--border-subtle)] shadow-slate-200/50",
                     isFull && "h-[90vh]"
                 )}
             >
                 {/* Header */}
                 <div className={cn(
-                    "flex items-center justify-between border-b border-slate-200/50 shrink-0",
-                    isMinimal ? "px-4 py-2.5 bg-white/80" : "px-6 py-4"
+                    "flex items-center justify-between border-b border-[var(--border-subtle)] shrink-0",
+                    isMinimal ? "px-4 py-2.5 bg-[var(--bg-surface)]" : "px-6 py-4"
                 )}>
                     <h3 className={cn(
-                        "text-slate-800 tracking-tight",
+                        "text-[var(--text-main)] tracking-tight",
                         isMinimal ? "text-sm font-semibold" : "text-lg font-bold"
                     )}>{title}</h3>
                     <button
                         onClick={onClose}
                         className={cn(
-                            "rounded-full transition-colors text-slate-400 hover:text-slate-600",
+                            "rounded-full transition-colors text-[var(--text-muted)] hover:text-[var(--text-main)]",
                             isMinimal ? "p-1 hover:bg-black/5" : "p-1.5 hover:bg-black/5"
                         )}
                         title="Kapat"

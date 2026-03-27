@@ -329,3 +329,15 @@ CREATE TABLE IF NOT EXISTS user_desktop_data (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+
+CREATE TABLE IF NOT EXISTS meetings (
+  id TEXT PRIMARY KEY,
+  organizer_id TEXT NOT NULL,
+  organizer_name TEXT,
+  title TEXT NOT NULL,
+  scheduled_at TEXT NOT NULL,
+  participants JSONB NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_meetings_scheduled_at ON meetings(scheduled_at);

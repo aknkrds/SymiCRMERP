@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type React from 'react';
 import { useAuth } from './AuthContext';
 
-export type ThemeId = 'light' | 'candy' | 'sunset' | 'forest';
+export type ThemeId = 'light' | 'candy' | 'sunset' | 'forest' | 'dark';
 
 type ThemeContextType = {
   theme: ThemeId;
@@ -15,7 +15,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 const THEME_STORAGE_PREFIX = 'symi-theme:';
 
 const isValidTheme = (value: string | null): value is ThemeId => {
-  return value === 'light' || value === 'candy' || value === 'sunset' || value === 'forest';
+  return value === 'light' || value === 'candy' || value === 'sunset' || value === 'forest' || value === 'dark';
 };
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -43,10 +43,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // Sadece data-theme ile çalışıyoruz, Tailwind'in .dark sınıfını kullanmıyoruz
     root.dataset.theme = theme;
-    root.classList.remove('dark');
+    root.classList.toggle('dark', theme === 'dark');
 
     const key = `${THEME_STORAGE_PREFIX}${user?.id ?? 'guest'}`;
     localStorage.setItem(key, theme);
+
+    if (theme !== 'dark') {
+      const lastKey = `${THEME_STORAGE_PREFIX}${user?.id ?? 'guest'}:last-non-dark`;
+      localStorage.setItem(lastKey, theme);
+    }
   }, [theme, user?.id, isLoaded]);
 
   const setTheme = (t: ThemeId) => setThemeState(t);
@@ -54,6 +59,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Basit bir toggle: candy <-> light arasında geçiş
   const toggle = () =>
     setThemeState(prev => {
+      if (prev === 'dark') {
+        const lastKey = `${THEME_STORAGE_PREFIX}${user?.id ?? 'guest'}:last-non-dark`;
+        const saved = localStorage.getItem(lastKey);
+        if (isValidTheme(saved) && saved !== 'dark') return saved;
+        return 'candy';
+      }
       if (prev === 'candy') return 'light';
       if (prev === 'light') return 'candy';
       return 'candy';

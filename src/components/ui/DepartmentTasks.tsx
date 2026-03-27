@@ -7,7 +7,7 @@ import { tr } from 'date-fns/locale';
 import { ORDER_STATUS_MAP } from '../../constants/orderStatus';
 import type { Order } from '../../types';
 
-export function DepartmentTasks() {
+export function DepartmentTasks({ variant = 'app' }: { variant?: 'app' | 'desktop' }) {
     const { orders } = useOrders();
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
@@ -55,7 +55,7 @@ export function DepartmentTasks() {
         }
     };
 
-    const userRoleName = user?.role?.name || '';
+    const userRoleName = user?.roleName || '';
     const targetStatuses = getRoleStatuses(userRoleName);
     
     // Filter orders
@@ -67,11 +67,11 @@ export function DepartmentTasks() {
         const isAssignedToUser = user?.id && order.assignedUserId === user.id;
         
         // 3. Check if assigned to the user's role (alternative to status mapping)
-        const isAssignedToRole = user?.role?.name && order.assignedRoleName === user.role.name;
+        const isAssignedToRole = user?.roleName && order.assignedRoleName === user.roleName;
 
         // Order must be active (not completed or cancelled) to appear in "Pending" list
         // unless the status itself is 'completed' but still relevant (like shipping_completed for final approval)
-        const isCompleted = order.status === 'order_completed' || order.status === 'order_cancelled' || order.status === 'cancelled';
+        const isCompleted = order.status === 'order_completed' || order.status === 'order_cancelled' || order.status === 'production_cancelled';
         
         // Exception: If the user needs to see completed items (e.g. for final check), let getRoleStatuses handle it.
         // But generally, if it's assigned to me, and it's cancelled, I probably shouldn't see it as "Pending work".
@@ -84,11 +84,21 @@ export function DepartmentTasks() {
     // Or show 0. User said "o departmanın elindeki işler".
     // If Admin, showing 0 is fine if no logic defined.
 
+    const buttonClassName =
+        variant === 'desktop'
+            ? 'relative p-2 rounded-full border border-white/20 bg-black/20 text-white shadow-sm hover:bg-white/10 transition-all outline-none flex items-center gap-2 group'
+            : 'relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none flex items-center gap-2 group';
+
+    const labelClassName =
+        variant === 'desktop'
+            ? 'text-sm font-medium hidden md:block group-hover:text-white/90 transition-colors'
+            : 'text-sm font-medium hidden md:block group-hover:text-indigo-600 transition-colors';
+
     return (
         <div className="relative" ref={dropdownRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 text-slate-600 hover:bg-slate-100 rounded-full transition-colors outline-none flex items-center gap-2 group"
+                className={buttonClassName}
                 title="Bekleyen İşler"
             >
                 <div className="relative">
@@ -99,7 +109,7 @@ export function DepartmentTasks() {
                         </span>
                     )}
                 </div>
-                <span className="text-sm font-medium hidden md:block group-hover:text-indigo-600 transition-colors">
+                <span className={labelClassName}>
                     İş Listesi
                 </span>
             </button>
@@ -138,7 +148,7 @@ export function DepartmentTasks() {
                                             <span className="text-[10px] text-slate-400">
                                                 {(() => {
                                                     try {
-                                                        const dateStr = order.updatedAt || order.createdAt;
+                                                        const dateStr = (order as any).updatedAt || order.createdAt;
                                                         if (!dateStr) return '';
                                                         const date = new Date(dateStr);
                                                         return isNaN(date.getTime()) ? '' : format(date, 'dd MMM HH:mm', { locale: tr });

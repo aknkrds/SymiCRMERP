@@ -909,6 +909,322 @@ app.post('/api/notifications/mark-read', async (req, res) => {
   }
 });
 
+app.get('/api/meetings', async (req, res) => {
+  try {
+    const userId = req.query.userId ? String(req.query.userId) : null;
+    const includePending = String(req.query.includePending || '') === '1';
+
+    const rows = await db.prepare('SELECT * FROM meetings ORDER BY scheduled_at ASC').all();
+    const meetings = rows.map((r) => ({
+      id: r.id,
+      organizerId: r.organizerId,
+      organizerName: r.organizerName,
+      title: r.title,
+      scheduledAt: r.scheduledAt,
+      participants: parseJsonField(r.participants, []),
+      createdAt: r.createdAt
+    }));
+
+    if (!userId) return res.json(meetings);
+
+    const filtered = meetings.filter((m) => {
+      if (m.organizerId === userId) return true;
+      const p = Array.isArray(m.participants) ? m.participants : [];
+      const mine = p.find((x) => x && String(x.userId) === userId);
+      if (!mine) return false;
+      if (mine.status === 'accepted') return true;
+      if (includePending && mine.status === 'pending') return true;
+      return false;
+    }).map((m) => {
+      const p = Array.isArray(m.participants) ? m.participants : [];
+      const mine = p.find((x) => x && String(x.userId) === userId);
+      return {
+        id: m.id,
+        title: m.title,
+        date: m.scheduledAt,
+        organizerId: m.organizerId,
+        organizerName: m.organizerName,
+        status: mine?.status || (m.organizerId === userId ? 'accepted' : 'unknown'),
+      };
+    });
+
+    res.json(filtered);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/meetings/:id', async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const userId = req.query.userId ? String(req.query.userId) : null;
+    if (!userId) return res.status(400).json({ error: 'userId gerekli' });
+
+    const meeting = await db.prepare('SELECT * FROM meetings WHERE id = ?').get(meetingId);
+    if (!meeting) return res.status(404).json({ error: 'Toplantı bulunamadı' });
+
+    const participants = parseJsonField(meeting.participants, []);
+    const allowed =
+      String(meeting.organizerId) === String(userId) ||
+      (Array.isArray(participants) && participants.some((p) => p && String(p.userId) === String(userId)));
+    if (!allowed) return res.status(403).json({ error: 'Yetkisiz' });
+
+    res.json({
+      id: meeting.id,
+      organizerId: meeting.organizerId,
+      organizerName: meeting.organizerName,
+      title: meeting.title,
+      scheduledAt: meeting.scheduledAt,
+      participants,
+      createdAt: meeting.createdAt
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/meetings', async (req, res) => {
+  try {
+    const { organizerId, scheduledAt, title, participantIds } = req.body || {};
+    if (!organizerId || !scheduledAt || !title || !Array.isArray(participantIds)) {
+      return res.status(400).json({ error: 'organizerId, scheduledAt, title, participantIds gerekli' });
+    }
+
+    const organizer = await db.prepare('SELECT id, fullName FROM users WHERE id = ?').get(organizerId);
+    if (!organizer) return res.status(404).json({ error: 'Organizatör bulunamadı' });
+
+    const uniqueParticipantIds = Array.from(new Set(participantIds.map((x) => String(x)).filter(Boolean)));
+    const invitedIds = uniqueParticipantIds.filter((id) => id !== String(organizerId));
+
+    let invitedUsers = [];
+    if (invitedIds.length > 0) {
+      const placeholders = invitedIds.map(() => '?').join(',');
+      invitedUsers = await db.prepare(`SELECT id, fullName FROM users WHERE id IN (${placeholders})`).all(...invitedIds);
+    }
+
+    const participants = [
+      { userId: organizer.id, fullName: organizer.fullName, status: 'accepted' },
+      ...invitedIds.map((id) => {
+        const u = invitedUsers.find((x) => String(x.id) === String(id));
+        return { userId: id, fullName: u?.fullName || null, status: 'pending' };
+      })
+    ];
+
+    const meetingId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await db.prepare(
+      'INSERT INTO meetings (id, organizer_id, organizer_name, title, scheduled_at, participants, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      meetingId,
+      organizer.id,
+      organizer.fullName,
+      String(title),
+      String(scheduledAt),
+      JSON.stringify(participants),
+      now
+    );
+
+    for (const id of invitedIds) {
+      createNotification({
+        userId: id,
+        roleId: null,
+        title: 'Toplantı Daveti',
+        message: `${organizer.fullName} sizi toplantıya davet etti: ${String(title)}`,
+        type: 'meeting_invite',
+        relatedId: meetingId
+      });
+    }
+
+    res.json({ success: true, id: meetingId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/meetings/:id', async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const { organizerId, scheduledAt, title, participantIds } = req.body || {};
+    if (!organizerId || !scheduledAt || !title || !Array.isArray(participantIds)) {
+      return res.status(400).json({ error: 'organizerId, scheduledAt, title, participantIds gerekli' });
+    }
+
+    const meeting = await db.prepare('SELECT * FROM meetings WHERE id = ?').get(meetingId);
+    if (!meeting) return res.status(404).json({ error: 'Toplantı bulunamadı' });
+    if (String(meeting.organizerId) !== String(organizerId)) return res.status(403).json({ error: 'Yetkisiz' });
+
+    const organizer = await db.prepare('SELECT id, fullName FROM users WHERE id = ?').get(organizerId);
+    if (!organizer) return res.status(404).json({ error: 'Organizatör bulunamadı' });
+
+    const prevParticipants = parseJsonField(meeting.participants, []);
+    const prevMap = new Map(
+      (Array.isArray(prevParticipants) ? prevParticipants : [])
+        .filter(Boolean)
+        .map((p) => [String(p.userId), p])
+    );
+
+    const uniqueParticipantIds = Array.from(new Set(participantIds.map((x) => String(x)).filter(Boolean)));
+    const invitedIds = uniqueParticipantIds.filter((id) => id !== String(organizerId));
+
+    let invitedUsers = [];
+    if (invitedIds.length > 0) {
+      const placeholders = invitedIds.map(() => '?').join(',');
+      invitedUsers = await db.prepare(`SELECT id, fullName FROM users WHERE id IN (${placeholders})`).all(...invitedIds);
+    }
+
+    const nextParticipants = [
+      { userId: organizer.id, fullName: organizer.fullName, status: 'accepted' },
+      ...invitedIds.map((id) => {
+        const prev = prevMap.get(String(id));
+        const u = invitedUsers.find((x) => String(x.id) === String(id));
+        const fullName = u?.fullName || prev?.fullName || null;
+        const status = prev?.status && prev.status !== 'declined' ? prev.status : 'pending';
+        return { ...prev, userId: id, fullName, status };
+      })
+    ];
+
+    await db.prepare(
+      'UPDATE meetings SET title = ?, scheduled_at = ?, participants = ? WHERE id = ?'
+    ).run(String(title), String(scheduledAt), JSON.stringify(nextParticipants), meetingId);
+
+    const prevIds = new Set((Array.isArray(prevParticipants) ? prevParticipants : []).map((p) => String(p.userId)));
+    const nextIds = new Set(nextParticipants.map((p) => String(p.userId)));
+
+    for (const id of invitedIds) {
+      if (!prevIds.has(String(id))) {
+        createNotification({
+          userId: id,
+          roleId: null,
+          title: 'Toplantı Daveti',
+          message: `${organizer.fullName} sizi toplantıya davet etti: ${String(title)}`,
+          type: 'meeting_invite',
+          relatedId: meetingId
+        });
+      } else {
+        createNotification({
+          userId: id,
+          roleId: null,
+          title: 'Toplantı Güncellendi',
+          message: `${organizer.fullName} toplantıyı güncelledi: ${String(title)}`,
+          type: 'meeting_updated',
+          relatedId: meetingId
+        });
+      }
+    }
+
+    for (const id of prevIds) {
+      if (id === String(organizerId)) continue;
+      if (!nextIds.has(id)) {
+        createNotification({
+          userId: id,
+          roleId: null,
+          title: 'Toplantı Bilgisi',
+          message: `${organizer.fullName} sizi toplantıdan çıkardı: ${String(meeting.title)}`,
+          type: 'meeting_removed',
+          relatedId: meetingId
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/meetings/:id', async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const organizerId = req.query.organizerId ? String(req.query.organizerId) : null;
+    if (!organizerId) return res.status(400).json({ error: 'organizerId gerekli' });
+
+    const meeting = await db.prepare('SELECT * FROM meetings WHERE id = ?').get(meetingId);
+    if (!meeting) return res.status(404).json({ error: 'Toplantı bulunamadı' });
+    if (String(meeting.organizerId) !== String(organizerId)) return res.status(403).json({ error: 'Yetkisiz' });
+
+    const participants = parseJsonField(meeting.participants, []);
+    const p = Array.isArray(participants) ? participants : [];
+    const notifyIds = p.map((x) => x && String(x.userId)).filter(Boolean).filter((id) => id !== String(organizerId));
+
+    await db.prepare('DELETE FROM meetings WHERE id = ?').run(meetingId);
+
+    const organizer = await db.prepare('SELECT id, fullName FROM users WHERE id = ?').get(organizerId);
+    const organizerName = organizer?.fullName || meeting.organizerName || 'Organizatör';
+    for (const id of notifyIds) {
+      createNotification({
+        userId: id,
+        roleId: null,
+        title: 'Toplantı İptal',
+        message: `${organizerName} toplantıyı iptal etti: ${meeting.title}`,
+        type: 'meeting_cancelled',
+        relatedId: meetingId
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/meetings/:id/respond', async (req, res) => {
+  try {
+    const meetingId = req.params.id;
+    const { userId, response, reason } = req.body || {};
+    if (!userId || (response !== 'accepted' && response !== 'declined')) {
+      return res.status(400).json({ error: 'userId ve response(accepted|declined) gerekli' });
+    }
+
+    const meeting = await db.prepare('SELECT * FROM meetings WHERE id = ?').get(meetingId);
+    if (!meeting) return res.status(404).json({ error: 'Toplantı bulunamadı' });
+
+    const responder = await db.prepare('SELECT id, fullName FROM users WHERE id = ?').get(userId);
+
+    const participants = parseJsonField(meeting.participants, []);
+    const next = (Array.isArray(participants) ? participants : []).map((p) => {
+      if (p && String(p.userId) === String(userId)) {
+        const patch = { status: response };
+        if (response === 'declined') {
+          const r = typeof reason === 'string' ? reason.trim() : '';
+          return { ...p, ...patch, declineReason: r || null };
+        }
+        return { ...p, ...patch, declineReason: null };
+      }
+      return p;
+    });
+
+    await db.prepare('UPDATE meetings SET participants = ? WHERE id = ?').run(JSON.stringify(next), meetingId);
+
+    if (meeting.organizerId && String(meeting.organizerId) !== String(userId)) {
+      const responderName = responder?.fullName || 'Kullanıcı';
+      if (response === 'accepted') {
+        createNotification({
+          userId: meeting.organizerId,
+          roleId: null,
+          title: 'Toplantı Onayı',
+          message: `${responderName} toplantıya katılacağını onayladı: ${meeting.title}`,
+          type: 'meeting_response',
+          relatedId: meetingId
+        });
+      } else {
+        const r = typeof reason === 'string' ? reason.trim() : '';
+        createNotification({
+          userId: meeting.organizerId,
+          roleId: null,
+          title: 'Toplantı Yanıtı',
+          message: r ? `${responderName} toplantıya katılamayacağını bildirdi: ${meeting.title} • Neden: ${r}` : `${responderName} toplantıya katılamayacağını bildirdi: ${meeting.title}`,
+          type: 'meeting_response',
+          relatedId: meetingId
+        });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- PLANNING ---
 
 // MONTHLY PLANS

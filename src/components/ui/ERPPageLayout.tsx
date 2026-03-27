@@ -26,10 +26,10 @@ export function ERPPageLayout({
   sidebarIcons,
 }: ERPPageLayoutProps) {
   return (
-    <div className="flex h-full min-h-0 bg-white font-sans">
+    <div className="flex h-full min-h-0 bg-[var(--bg-surface)] font-sans">
       {/* Left Mini-Sidebar */}
       {sidebarIcons && (
-        <div className="w-11 flex-shrink-0 bg-slate-100 border-r border-slate-200 flex flex-col items-center py-2 gap-1">
+        <div className="w-11 flex-shrink-0 bg-slate-100 border-r border-[var(--border-subtle)] flex flex-col items-center py-2 gap-1">
           {sidebarIcons}
         </div>
       )}
@@ -38,12 +38,12 @@ export function ERPPageLayout({
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Breadcrumb + Nav */}
         {(breadcrumbs || toolbar || toolbarRight) && (
-          <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-200 bg-white/80 shrink-0">
-            <div className="flex items-center gap-1 text-xs text-slate-500 select-none">
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] shrink-0">
+            <div className="flex items-center gap-1 text-xs text-[var(--text-muted)] select-none">
               {breadcrumbs?.map((b, i) => (
                 <React.Fragment key={i}>
                   {i > 0 && <ChevronRight size={12} className="text-slate-300" />}
-                  <span className={b.active ? 'text-blue-600 font-medium' : 'hover:text-slate-700 cursor-default'}>
+                  <span className={b.active ? 'text-blue-600 font-medium' : 'hover:text-[var(--text-main)] cursor-default'}>
                     {b.label}
                   </span>
                 </React.Fragment>
@@ -62,7 +62,7 @@ export function ERPPageLayout({
 
         {/* Toolbar */}
         {(toolbar || toolbarRight) && (
-          <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 bg-slate-50/50 shrink-0 gap-2">
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-[var(--border-subtle)] bg-slate-50/50 shrink-0 gap-2">
             <div className="flex items-center gap-1">{toolbar}</div>
             <div className="flex items-center gap-2">{toolbarRight}</div>
           </div>

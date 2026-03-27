@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit2, Trash2, Package, Eye, Filter, Star, Menu } from 'lucide-react';
 import { useProducts } from '../hooks/useProducts';
 import type { Product, ProductFormData } from '../types';
@@ -20,7 +20,7 @@ export default function Products() {
         (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
     );
 
-    const handleAdd = () => { setEditingProduct(undefined); setIsModalOpen(true); };
+    const handleAdd = useCallback(() => { setEditingProduct(undefined); setIsModalOpen(true); }, []);
     const handleEdit = (product: Product) => { setEditingProduct(product); setIsModalOpen(true); };
     const handleView = (product: Product) => { setViewingProduct(product); setIsViewModalOpen(true); };
     const handleSubmit = (data: ProductFormData) => {
@@ -31,6 +31,19 @@ export default function Products() {
     const handleDelete = (id: string) => {
         if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) deleteProduct(id);
     };
+
+    useEffect(() => {
+        const onCreate = () => handleAdd();
+        window.addEventListener('symi:products:create', onCreate);
+        try {
+            const key = 'symi:shortcut:symi:products:create';
+            if (sessionStorage.getItem(key)) {
+                sessionStorage.removeItem(key);
+                handleAdd();
+            }
+        } catch {}
+        return () => window.removeEventListener('symi:products:create', onCreate);
+    }, [handleAdd]);
 
     return (
         <>

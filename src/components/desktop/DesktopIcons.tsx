@@ -6,7 +6,7 @@ import { Rnd } from 'react-rnd';
 import { appsConfig } from '../../config/apps';
 
 export function DesktopIcons() {
-    const { items, updateItemPosition, deleteItem, setActiveFileId } = useDesktopStore();
+    const { items, updateItemPosition, deleteItem, renameItem, setActiveFileId } = useDesktopStore();
     const { openWindow } = useWindowStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -73,6 +73,7 @@ export function DesktopIcons() {
                         onContextMenu={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
+                            setSelectedId(item.id);
                             setContextMenu({ id: item.id, x: e.clientX, y: e.clientY });
                         }}
                     >
@@ -95,6 +96,23 @@ export function DesktopIcons() {
                     style={{ top: contextMenu.y, left: contextMenu.x }}
                     onClick={(e) => e.stopPropagation()}
                 >
+                    {(() => {
+                        const item = items.find(i => i.id === contextMenu.id);
+                        if (!item || item.type !== 'folder') return null;
+                        return (
+                            <button
+                                onClick={() => {
+                                    const next = (window.prompt('Klasör adını değiştir:', item.name) || '').trim();
+                                    if (!next) return;
+                                    renameItem(item.id, next);
+                                    setContextMenu(null);
+                                }}
+                                className="w-full text-left px-4 py-1.5 hover:bg-blue-500 hover:text-white transition-colors flex items-center gap-2 text-slate-200"
+                            >
+                                Yeniden Adlandır
+                            </button>
+                        );
+                    })()}
                     <button onClick={() => { deleteItem(contextMenu.id); setContextMenu(null); }} className="w-full text-left px-4 py-1.5 hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
                         <Trash2 size={14} /> Sil
                     </button>

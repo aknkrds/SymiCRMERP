@@ -24,7 +24,7 @@ export default function PreviewWindow() {
 
     if (!activeItem) {
         return (
-            <div className="flex items-center justify-center h-full bg-[#ECECEC] text-slate-500">
+            <div className="flex items-center justify-center h-full bg-[var(--bg-main)] text-[var(--text-muted)]">
                 Önizlenecek dosya bulunamadı.
             </div>
         );
@@ -33,9 +33,9 @@ export default function PreviewWindow() {
     if (activeItem.type === 'folder') {
         const folder = activeItem;
         return (
-            <div className="flex flex-col h-full bg-[#ECECEC]">
-                <div className="shrink-0 px-4 py-2 border-b border-slate-200 bg-white/80 backdrop-blur-sm flex items-center justify-between">
-                    <div className="text-[11px] font-bold uppercase tracking-widest text-slate-700">{folder.name}</div>
+            <div className="flex flex-col h-full bg-[var(--bg-main)]">
+                <div className="shrink-0 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-main)]">{folder.name}</div>
                     <div className="flex items-center gap-2">
                         <button
                             className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-colors"
@@ -79,7 +79,7 @@ export default function PreviewWindow() {
 
                 <div className="flex-1 overflow-auto p-4">
                     {folderChildren.length === 0 ? (
-                        <div className="h-full flex items-center justify-center text-slate-400 text-sm">
+                        <div className="h-full flex items-center justify-center text-[var(--text-muted)] text-sm">
                             Bu klasör boş.
                         </div>
                     ) : (
@@ -91,19 +91,19 @@ export default function PreviewWindow() {
                                 return (
                                     <div
                                         key={it.id}
-                                        className="group bg-white rounded-xl border border-slate-200 shadow-sm p-3 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer"
+                                        className="group bg-[var(--bg-surface)] rounded-xl border border-[var(--border-subtle)] shadow-sm p-3 hover:shadow-md transition-all cursor-pointer"
                                         onDoubleClick={() => { setActiveFileId(it.id); openWindow('preview', it.name); }}
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-center gap-2 min-w-0">
                                                 {icon}
                                                 <div className="min-w-0">
-                                                    <div className="text-[11px] font-semibold text-slate-700 truncate">{it.name}</div>
-                                                    <div className="text-[10px] text-slate-400 font-mono truncate">{it.extension || it.mimeType || ''}</div>
+                                                    <div className="text-[11px] font-semibold text-[var(--text-main)] truncate">{it.name}</div>
+                                                    <div className="text-[10px] text-[var(--text-muted)] font-mono truncate">{it.extension || it.mimeType || ''}</div>
                                                 </div>
                                             </div>
                                             <button
-                                                className="opacity-0 group-hover:opacity-100 text-red-500 hover:bg-red-50 rounded p-1 transition-all"
+                                                className="opacity-0 group-hover:opacity-100 text-red-400 hover:bg-white/10 rounded p-1 transition-all"
                                                 onClick={(e) => { e.stopPropagation(); deleteItem(it.id); }}
                                                 title="Sil"
                                                 aria-label="Sil"
@@ -126,11 +126,11 @@ export default function PreviewWindow() {
     const isPDF = activeItem.mimeType === 'application/pdf';
 
     return (
-        <div className="flex flex-col h-full bg-[#ECECEC]">
+        <div className="flex flex-col h-full bg-[var(--bg-main)]">
             {parentFolder && (
-                <div className="shrink-0 px-4 py-2 border-b border-slate-200 bg-white/80 backdrop-blur-sm flex items-center justify-between">
+                <div className="shrink-0 px-4 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] flex items-center justify-between">
                     <button
-                        className="text-[10px] font-bold uppercase tracking-widest text-blue-700 hover:text-blue-800"
+                        className="text-[10px] font-bold uppercase tracking-widest text-blue-600 hover:text-blue-500"
                         onClick={() => setActiveFileId(parentFolder.id)}
                         title="Klasöre dön"
                     >
@@ -139,7 +139,7 @@ export default function PreviewWindow() {
                     <a
                         href={src}
                         download={activeItem.name}
-                        className="text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:text-slate-800"
+                        className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] hover:text-[var(--text-main)]"
                         title="İndir"
                     >
                         İndir
@@ -151,13 +151,13 @@ export default function PreviewWindow() {
                     <img src={src} alt={activeItem.name} className="max-w-full max-h-full object-contain shadow-lg rounded" />
                 )}
                 {isPDF && src && (
-                    <iframe src={src} className="w-full h-full rounded shadow flex-1 bg-white" title={activeItem.name} />
+                    <iframe src={src} className="w-full h-full rounded shadow flex-1 bg-[var(--bg-surface)]" title={activeItem.name} />
                 )}
                 {!isImage && !isPDF && (
-                    <div className="bg-white p-12 rounded-xl shadow-lg flex flex-col items-center gap-4">
+                    <div className="bg-[var(--bg-surface)] p-12 rounded-xl shadow-lg flex flex-col items-center gap-4 border border-[var(--border-subtle)]">
                         {activeItem.mimeType?.includes('spreadsheet') ? <FileSpreadsheet size={64} className="text-emerald-500" /> : <FileText size={64} className="text-blue-500" />}
-                        <h3 className="font-semibold text-lg text-slate-700">{activeItem.name}</h3>
-                        <p className="text-slate-500 text-sm">Bu dosya türü için doğrudan önizleme kullanılamıyor.</p>
+                        <h3 className="font-semibold text-lg text-[var(--text-main)]">{activeItem.name}</h3>
+                        <p className="text-[var(--text-muted)] text-sm">Bu dosya türü için doğrudan önizleme kullanılamıyor.</p>
                         {src && <a href={src} download={activeItem.name} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">İndir</a>}
                     </div>
                 )}
