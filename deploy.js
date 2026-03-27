@@ -76,6 +76,10 @@ const main = async () => {
   const safeCmd = deployFull ? safeCmdFull : safeCmdFast;
 
   const agent = process.env.SSH_AUTH_SOCK;
+  console.log(`Deploy target: ${username}@${host}:${port}`);
+  if (!process.env.DEPLOY_PASSWORD) {
+    console.log('SSH Password is required. Type it and press Enter (input is hidden).');
+  }
   const password = process.env.DEPLOY_PASSWORD || await askHidden('SSH Password: ');
 
   const conn = new Client();
@@ -109,7 +113,10 @@ const main = async () => {
     port,
     username,
     password,
-    agent
+    agent,
+    tryKeyboard: true,
+    readyTimeout: 20000,
+    keepaliveInterval: 15000
   });
 };
 
