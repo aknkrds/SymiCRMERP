@@ -1613,7 +1613,7 @@ app.get('/api/production-jobs', async (req, res) => {
 
 app.post('/api/production-jobs/from-dispatch', async (req, res) => {
   try {
-    const { dispatchId } = req.body || {};
+    const { dispatchId, productionReceipt } = req.body || {};
     if (!dispatchId) return res.status(400).json({ error: 'dispatchId gerekli' });
 
     const dispatch = await db.prepare('SELECT * FROM procurement_dispatches WHERE id = ?').get(dispatchId);
@@ -1624,28 +1624,44 @@ app.post('/api/production-jobs/from-dispatch', async (req, res) => {
     if (!Array.isArray(lines) || lines.length === 0) return res.status(400).json({ error: 'Sevk satırı bulunamadı' });
 
     const now = new Date().toISOString();
+    const receipt = Array.isArray(productionReceipt)
+      ? productionReceipt
+      : lines.map((l) => ({
+          orderId: l?.orderId,
+          productId: l?.productId,
+          productName: l?.productName,
+          expectedTotal: Number(l?.total) || 0,
+          receivedTotal: Number(l?.total) || 0,
+          note: null
+        }));
+
+    if (!Array.isArray(receipt) || receipt.length === 0) {
+      return res.status(400).json({ error: 'Sayım sonucu (productionReceipt) gerekli' });
+    }
+
     const insertJob = db.prepare(`
       INSERT INTO production_jobs (
-        id, dispatchId, orderId, productId, productName, machineId,
+        id, dispatchId, orderId, productId, productName, shiftId, machineId,
         plannedQuantity, producedBody, producedLid, producedBottom,
         scrapBody, scrapLid, scrapBottom,
         status, startedAt, completedAt, createdAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const created = [];
-    for (const l of lines) {
-      const orderId = l?.orderId ? String(l.orderId) : null;
+    for (const r of receipt) {
+      const orderId = r?.orderId ? String(r.orderId) : null;
       if (!orderId) continue;
-      const planned = Number(l.total) || (Number(l.plateQuantity) || 0) * (Number(l.printQuantity) || 0) || 0;
+      const planned = Math.max(0, Number(r.receivedTotal) || 0);
       const jobId = crypto.randomUUID();
       insertJob.run(
         jobId,
         String(dispatchId),
         orderId,
-        l?.productId ? String(l.productId) : null,
-        l?.productName ? String(l.productName) : null,
+        r?.productId ? String(r.productId) : null,
+        r?.productName ? String(r.productName) : null,
+        null,
         null,
         planned,
         0, 0, 0,
@@ -1664,7 +1680,7 @@ app.post('/api/production-jobs/from-dispatch', async (req, res) => {
       UPDATE procurement_dispatches
       SET productionReceipt = ?, productionApprovedAt = ?
       WHERE id = ?
-    `).run(JSON.stringify(lines), now, String(dispatchId));
+    `).run(JSON.stringify(receipt), now, String(dispatchId));
 
     const jobs = await db.prepare(`SELECT * FROM production_jobs WHERE id IN (${created.map(() => '?').join(',')})`).all(...created);
     res.status(201).json({ jobs });
@@ -1677,7 +1693,7 @@ app.patch('/api/production-jobs/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body || {};
-    const allowed = ['machineId', 'plannedQuantity', 'status', 'startedAt', 'completedAt'];
+    const allowed = ['shiftId', 'machineId', 'plannedQuantity', 'status', 'startedAt', 'completedAt'];
     const safe = {};
     for (const k of allowed) {
       if (updates[k] !== undefined) safe[k] = updates[k];

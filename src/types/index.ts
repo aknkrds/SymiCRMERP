@@ -291,6 +291,15 @@ export interface ProcurementDispatchLine {
     plateSize: string;
 }
 
+export interface ProcurementProductionReceiptLine {
+    orderId: string;
+    productId: string;
+    productName: string;
+    expectedTotal: number;
+    receivedTotal: number;
+    note?: string | null;
+}
+
 export interface ProcurementDispatch {
     id: string;
     dispatchDate: string;
@@ -298,7 +307,7 @@ export interface ProcurementDispatch {
     driverNames?: string;
     notes?: string;
     lines: ProcurementDispatchLine[];
-    productionReceipt?: ProcurementDispatchLine[];
+    productionReceipt?: ProcurementProductionReceiptLine[];
     productionApprovedAt?: string;
     createdAt: string;
 }

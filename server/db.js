@@ -219,6 +219,7 @@ const initDb = () => {
       orderId TEXT NOT NULL,
       productId TEXT,
       productName TEXT,
+      shiftId TEXT,
       machineId TEXT,
       plannedQuantity INTEGER NOT NULL,
       producedBody INTEGER NOT NULL,
@@ -233,6 +234,8 @@ const initDb = () => {
       createdAt TEXT NOT NULL
     )
   `);
+
+  try { db.exec('ALTER TABLE production_jobs ADD COLUMN shiftId TEXT'); } catch (e) {}
 
   // Production Logs (Üretim girişleri)
   db.exec(`
@@ -384,9 +387,14 @@ const initDb = () => {
       actualQuantity INTEGER,
       wasteQuantity INTEGER,
       status TEXT NOT NULL, -- 'planned', 'active', 'completed'
+      producedQuantity REAL,
+      scrapQuantity REAL,
       createdAt TEXT NOT NULL
     )
   `);
+
+  try { db.exec('ALTER TABLE shifts ADD COLUMN producedQuantity REAL'); } catch (e) {}
+  try { db.exec('ALTER TABLE shifts ADD COLUMN scrapQuantity REAL'); } catch (e) {}
 
   // Logs
   db.exec(`

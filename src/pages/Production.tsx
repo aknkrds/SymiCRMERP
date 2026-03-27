@@ -6,7 +6,7 @@ import { Modal } from '../components/ui/Modal';
 import { useStock } from '../hooks/useStock';
 import { useProducts } from '../hooks/useProducts';
 import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
-import type { Order, Personnel, Machine, Shift, ProcurementDispatch, ProductionJob, WarehouseLocation } from '../types';
+import type { Order, Personnel, Machine, Shift, ProcurementDispatch, ProductionJob, WarehouseLocation, ProcurementProductionReceiptLine } from '../types';
 
 const API_URL = '/api';
 
@@ -23,7 +23,14 @@ export default function Production() {
 
     const [isStartModalOpen, setIsStartModalOpen] = useState(false);
     const [selectedJob, setSelectedJob] = useState<ProductionJob | null>(null);
-    const [prodForm, setProdForm] = useState({ machineId: '', target: 0 });
+    const [prodForm, setProdForm] = useState({
+        machineId: '',
+        supervisorId: '',
+        personnelIds: [] as string[],
+        shiftStartLocal: '',
+        shiftEndLocal: '',
+        target: 0
+    });
 
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
     const [logForm, setLogForm] = useState({
@@ -36,6 +43,10 @@ export default function Production() {
         locationCode: 'GENEL',
         note: ''
     });
+
+    const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+    const [selectedDispatch, setSelectedDispatch] = useState<ProcurementDispatch | null>(null);
+    const [receiveLines, setReceiveLines] = useState<ProcurementProductionReceiptLine[]>([]);
 
     const fetchData = async () => {
         try {
@@ -66,10 +77,32 @@ export default function Production() {
     const handleStartProduction = async () => {
         if (!selectedJob) return;
         try {
+            const shiftId = crypto.randomUUID();
+            const startTime = new Date(prodForm.shiftStartLocal).toISOString();
+            const endTime = new Date(prodForm.shiftEndLocal).toISOString();
+            await fetch(`${API_URL}/shifts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: shiftId,
+                    orderId: selectedJob.orderId,
+                    machineId: prodForm.machineId,
+                    supervisorId: prodForm.supervisorId,
+                    personnelIds: prodForm.personnelIds,
+                    startTime,
+                    endTime,
+                    plannedQuantity: prodForm.target,
+                    producedQuantity: 0,
+                    scrapQuantity: 0,
+                    status: 'active',
+                    createdAt: new Date().toISOString()
+                })
+            });
             await fetch(`${API_URL}/production-jobs/${selectedJob.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    shiftId,
                     machineId: prodForm.machineId,
                     plannedQuantity: prodForm.target,
                     status: 'active',
@@ -81,16 +114,34 @@ export default function Production() {
         } catch(e) { alert('Hata.'); }
     };
 
-    const handleReceiveDispatch = async (dispatchId: string) => {
+    const openReceiveModal = (dispatch: ProcurementDispatch) => {
+        const receipt: ProcurementProductionReceiptLine[] = (dispatch.lines || []).map((l) => ({
+            orderId: l.orderId,
+            productId: l.productId,
+            productName: l.productName,
+            expectedTotal: Number(l.total) || 0,
+            receivedTotal: Number(l.total) || 0,
+            note: null
+        }));
+        setSelectedDispatch(dispatch);
+        setReceiveLines(receipt);
+        setIsReceiveModalOpen(true);
+    };
+
+    const handleReceiveDispatch = async () => {
+        if (!selectedDispatch) return;
         try {
             const res = await fetch(`${API_URL}/production-jobs/from-dispatch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dispatchId })
+                body: JSON.stringify({ dispatchId: selectedDispatch.id, productionReceipt: receiveLines })
             });
             if (!res.ok) throw new Error('not ok');
             await fetchData();
             setActiveTab('line');
+            setIsReceiveModalOpen(false);
+            setSelectedDispatch(null);
+            setReceiveLines([]);
         } catch (e) {
             alert('Sevk teslim alınamadı.');
         }
@@ -151,6 +202,12 @@ export default function Production() {
         if (!selectedJob) return null;
         return orders.find(o => o.id === selectedJob.orderId) || null;
     }, [orders, selectedJob]);
+
+    const personnelMap = useMemo(() => {
+        const m = new Map<string, Personnel>();
+        personnel.forEach(p => m.set(p.id, p));
+        return m;
+    }, [personnel]);
 
     return (
         <ERPPageLayout
@@ -222,7 +279,23 @@ export default function Production() {
                                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                             {j.status === 'queued' && (
                                                                 <button
-                                                                    onClick={() => { setSelectedJob(j); setProdForm({ machineId: '', target: j.plannedQuantity || 0 }); setIsStartModalOpen(true); }}
+                                                                    onClick={() => {
+                                                                        const now = new Date();
+                                                                        const pad = (n: number) => String(n).padStart(2, '0');
+                                                                        const start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+                                                                        const endDate = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+                                                                        const end = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}T${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
+                                                                        setSelectedJob(j);
+                                                                        setProdForm({
+                                                                            machineId: '',
+                                                                            supervisorId: '',
+                                                                            personnelIds: [],
+                                                                            shiftStartLocal: start,
+                                                                            shiftEndLocal: end,
+                                                                            target: j.plannedQuantity || 0
+                                                                        });
+                                                                        setIsStartModalOpen(true);
+                                                                    }}
                                                                     className="p-1.5 px-4 bg-white text-blue-600 rounded-lg text-[9px] font-bold border border-blue-100 hover:bg-blue-50 hover:shadow-sm transition-all uppercase tracking-tighter"
                                                                 >
                                                                     BAŞLAT
@@ -322,10 +395,10 @@ export default function Production() {
                                         </td>
                                         <td className="px-5 py-4 text-right">
                                             <button 
-                                                onClick={() => handleReceiveDispatch(d.id)} 
+                                                onClick={() => openReceiveModal(d)} 
                                                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-blue-700 shadow-md shadow-blue-100 transition-all active:scale-95"
                                             >
-                                                <Plus size={11} /> TESLİM AL
+                                                <Plus size={11} /> KABUL ET
                                             </button>
                                         </td>
                                     </tr>
@@ -405,7 +478,7 @@ export default function Production() {
                             <select 
                                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 font-bold transition-all" 
                                 value={prodForm.machineId} 
-                                onChange={e => setProdForm({...prodForm, machineId: e.target.value})}
+                                onChange={e => setProdForm(prev => ({...prev, machineId: e.target.value}))}
                                 title="Üretim Hattı / Makine"
                                 aria-label="Üretim Hattı / Makine"
                             >
@@ -421,9 +494,80 @@ export default function Production() {
                                 type="number" 
                                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 font-mono font-bold transition-all" 
                                 value={prodForm.target} 
-                                onChange={e => setProdForm({...prodForm, target: Number(e.target.value)})} 
+                                onChange={e => setProdForm(prev => ({...prev, target: Number(e.target.value) }))} 
                                 placeholder="0"
                             />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Vardiya Başlangıç</label>
+                            <input
+                                type="datetime-local"
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 font-mono font-bold transition-all"
+                                value={prodForm.shiftStartLocal}
+                                onChange={(e) => setProdForm(prev => ({ ...prev, shiftStartLocal: e.target.value }))}
+                                aria-label="Vardiya Başlangıç"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Vardiya Bitiş</label>
+                            <input
+                                type="datetime-local"
+                                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 font-mono font-bold transition-all"
+                                value={prodForm.shiftEndLocal}
+                                onChange={(e) => setProdForm(prev => ({ ...prev, shiftEndLocal: e.target.value }))}
+                                aria-label="Vardiya Bitiş"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Vardiya Amiri</label>
+                        <select
+                            className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 font-bold transition-all"
+                            value={prodForm.supervisorId}
+                            onChange={(e) => setProdForm(prev => ({ ...prev, supervisorId: e.target.value }))}
+                            title="Vardiya Amiri"
+                            aria-label="Vardiya Amiri"
+                        >
+                            <option value="">Seçiniz</option>
+                            {personnel.map(p => (
+                                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.role})</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Vardiya Personelleri</label>
+                            <div className="text-[10px] font-mono text-slate-400">{prodForm.personnelIds.length} kişi</div>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl bg-slate-50">
+                            {personnel.map(p => {
+                                const checked = prodForm.personnelIds.includes(p.id);
+                                return (
+                                    <label key={p.id} className="flex items-center gap-2 px-3 py-2 border-b border-slate-200/70 last:border-b-0 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={(e) => {
+                                                setProdForm(prev => {
+                                                    const next = e.target.checked
+                                                        ? Array.from(new Set([...prev.personnelIds, p.id]))
+                                                        : prev.personnelIds.filter(x => x !== p.id);
+                                                    return { ...prev, personnelIds: next };
+                                                });
+                                            }}
+                                        />
+                                        <div className="min-w-0">
+                                            <div className="text-xs font-bold text-slate-700 truncate">{p.firstName} {p.lastName}</div>
+                                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest truncate">{p.role}</div>
+                                        </div>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -436,10 +580,78 @@ export default function Production() {
                         </button>
                         <button 
                             onClick={handleStartProduction} 
-                            disabled={!prodForm.machineId || !prodForm.target}
+                            disabled={!prodForm.machineId || !prodForm.target || !prodForm.supervisorId || prodForm.personnelIds.length === 0 || !prodForm.shiftStartLocal || !prodForm.shiftEndLocal}
                             className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-blue-700 shadow-xl shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-50 disabled:grayscale"
                         >
                             ÜRETİMİ BAŞLAT
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isReceiveModalOpen} onClose={() => setIsReceiveModalOpen(false)} title="Sevk Kabul / Sayım" size="lg" theme="minimal">
+                <div className="space-y-4">
+                    <div className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <div className="text-sm font-semibold text-[var(--text-main)]">Fiş: {selectedDispatch?.id}</div>
+                                <div className="text-[11px] text-[var(--text-muted)]">{selectedDispatch?.vehiclePlate || '-'} • {selectedDispatch?.driverNames || '-'}</div>
+                            </div>
+                            <div className="text-[11px] text-[var(--text-muted)] font-mono">{receiveLines.length} satır</div>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        {receiveLines.map((l, idx) => (
+                            <div key={`${l.orderId}-${l.productId}-${idx}`} className="rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-semibold text-[var(--text-main)] truncate">{l.productName}</div>
+                                        <div className="text-[11px] text-[var(--text-muted)] font-mono">#{l.orderId?.slice(0, 8)} • Beklenen: {l.expectedTotal}</div>
+                                    </div>
+                                    <div className="w-40">
+                                        <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Gelen</div>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={l.receivedTotal}
+                                            onChange={(e) => {
+                                                const v = Number(e.target.value) || 0;
+                                                setReceiveLines(prev => prev.map((x, i) => i === idx ? { ...x, receivedTotal: v } : x));
+                                            }}
+                                            className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                            aria-label="Gelen adet"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="mt-3">
+                                    <div className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] mb-1">Not</div>
+                                    <input
+                                        value={l.note || ''}
+                                        onChange={(e) => setReceiveLines(prev => prev.map((x, i) => i === idx ? { ...x, note: e.target.value } : x))}
+                                        className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] text-[var(--text-main)] text-sm outline-none"
+                                        placeholder="Eksik/fazla, hasarlı, vb."
+                                        aria-label="Not"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2">
+                        <button
+                            type="button"
+                            onClick={() => { setIsReceiveModalOpen(false); setSelectedDispatch(null); setReceiveLines([]); }}
+                            className="px-4 py-2 rounded-xl border border-[var(--border-subtle)] text-[var(--text-muted)] hover:bg-slate-50 text-sm"
+                        >
+                            Vazgeç
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleReceiveDispatch}
+                            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                        >
+                            Kabul Et
                         </button>
                     </div>
                 </div>

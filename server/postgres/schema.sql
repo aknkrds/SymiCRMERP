@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS production_jobs (
   order_id TEXT NOT NULL,
   product_id TEXT,
   product_name TEXT,
+  shift_id TEXT,
   machine_id TEXT,
   planned_quantity INTEGER NOT NULL,
   produced_body INTEGER NOT NULL,
