@@ -54,7 +54,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     const { customers } = useCustomers();
     const [customerProducts, setCustomerProducts] = useState<Product[]>([]);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-    const [activeLineIndex] = useState<number | null>(null);
+    const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
 
     const [customerSearch, setCustomerSearch] = useState('');
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
@@ -218,40 +218,59 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                             <FormCard compact={readOnly} key={field.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end relative overflow-visible">
                                 <div className="md:col-span-4 lg:col-span-5">
                                     <InputGroup compact={readOnly} label="Ürün">
-                                        {readOnly ? (
-                                            <input
-                                                type="text"
-                                                value={watch(`items.${index}.productName`) || ''}
-                                                disabled
-                                                aria-label="Ürün"
-                                                placeholder="Ürün"
-                                                className={premiumInputClass}
-                                            />
-                                        ) : (
-                                            <Controller
-                                                control={control}
-                                                name={`items.${index}.productId`}
-                                                render={({ field }) => (
-                                                    <select
-                                                        {...field}
-                                                        onChange={(e) => {
-                                                            const p = customerProducts.find(x => x.id === e.target.value);
-                                                            if (p) {
-                                                                setValue(`items.${index}.productName`, p.name);
-                                                                field.onChange(e.target.value);
-                                                            } else {
-                                                                setValue(`items.${index}.productName`, '');
-                                                                field.onChange(e.target.value);
-                                                            }
-                                                        }}
+                                        <div className="flex gap-2">
+                                            <div className="flex-1">
+                                                {readOnly ? (
+                                                    <input
+                                                        type="text"
+                                                        value={watch(`items.${index}.productName`) || ''}
+                                                        disabled
+                                                        aria-label="Ürün"
+                                                        placeholder="Ürün"
                                                         className={premiumInputClass}
-                                                    >
-                                                        <option value="">Seçiniz...</option>
-                                                        {customerProducts.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
-                                                    </select>
+                                                    />
+                                                ) : (
+                                                    <Controller
+                                                        control={control}
+                                                        name={`items.${index}.productId`}
+                                                        render={({ field }) => (
+                                                            <select
+                                                                {...field}
+                                                                onChange={(e) => {
+                                                                    const p = customerProducts.find(x => x.id === e.target.value);
+                                                                    if (p) {
+                                                                        setValue(`items.${index}.productName`, p.name);
+                                                                        field.onChange(e.target.value);
+                                                                    } else {
+                                                                        setValue(`items.${index}.productName`, '');
+                                                                        field.onChange(e.target.value);
+                                                                    }
+                                                                }}
+                                                                className={premiumInputClass}
+                                                            >
+                                                                <option value="">Seçiniz...</option>
+                                                                {customerProducts.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
+                                                            </select>
+                                                        )}
+                                                    />
                                                 )}
-                                            />
-                                        )}
+                                            </div>
+                                            {!readOnly && (
+                                                <button
+                                                    type="button"
+                                                    disabled={!watchedCustomerId}
+                                                    onClick={() => {
+                                                        if (!watchedCustomerId) return;
+                                                        setActiveLineIndex(index);
+                                                        setIsProductModalOpen(true);
+                                                    }}
+                                                    className="shrink-0 flex items-center justify-center w-[42px] bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-blue-100"
+                                                    title={watchedCustomerId ? "Bu müşteri için yeni ürün ekle" : "Önce müşteri seçmelisiniz"}
+                                                >
+                                                    <Plus size={20} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </InputGroup>
                                 </div>
                                 <div className="md:col-span-2">

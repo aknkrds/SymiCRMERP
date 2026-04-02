@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AIProvider } from './context/AIContext';
-import { Desktop } from './components/desktop/Desktop';
+
 import { Layout } from './components/layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -23,7 +23,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import NotesApp from './components/apps/NotesApp';
 import ShortcutManager from './components/apps/ShortcutManager';
-import { useIsMobile } from './hooks/useIsMobile';
+
 import Meetings from './pages/Meetings';
 
 // Protected Route Component
@@ -43,9 +43,7 @@ const ProtectedRoute = ({ children, permission }: { children: ReactElement, perm
 };
 
 const HomeGate = () => {
-  const isMobile = useIsMobile();
-  if (isMobile) return <Navigate to="/dashboard" replace />;
-  return <Desktop />;
+  return <Navigate to="/dashboard" replace />;
 };
 
 function App() {
