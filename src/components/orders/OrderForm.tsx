@@ -8,6 +8,7 @@ import type { OrderFormData, Product, ProductFormData } from '../../types';
 import { Modal } from '../ui/Modal';
 import { ProductForm } from '../products/ProductForm';
 import { FormSection, FormCard, InputGroup, premiumInputClass } from '../ui/FormLayouts';
+import { addDays, differenceInCalendarDays, format } from 'date-fns';
 
 const orderSchema = z.object({
     customerId: z.string().min(1, 'Müşteri seçimi zorunludur'),
@@ -55,6 +56,8 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     const [customerProducts, setCustomerProducts] = useState<Product[]>([]);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
+    const [maturityMode, setMaturityMode] = useState<'days' | 'date'>('days');
+    const [maturityDate, setMaturityDate] = useState('');
 
     const [customerSearch, setCustomerSearch] = useState('');
     const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
@@ -71,6 +74,14 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
         if (initialData) {
             reset(initialData);
             if (initialData.customerName) setCustomerSearch(initialData.customerName);
+            const md = Number(initialData.maturityDays) || 0;
+            if (md > 0) {
+                try {
+                    setMaturityDate(format(addDays(new Date(), md), 'yyyy-MM-dd'));
+                } catch {
+                    setMaturityDate('');
+                }
+            }
         }
     }, [initialData, reset]);
 
@@ -78,6 +89,9 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
 
     const watchedItems = watch('items');
     const watchedCustomerId = watch('customerId');
+    const watchedCustomerName = watch('customerName');
+    const watchedPaymentMethod = watch('paymentMethod');
+    const watchedMaturityDays = watch('maturityDays');
     const watchedGofreQuantity = watch('gofreQuantity');
     const watchedGofreUnitPrice = watch('gofreUnitPrice');
     const watchedGofreVatRate = watch('gofreVatRate');
@@ -106,6 +120,24 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
             setCustomerProducts([]);
         }
     }, [watchedCustomerId]);
+
+    useEffect(() => {
+        if (readOnly) return;
+        const usesMaturity = watchedPaymentMethod === 'cek' || watchedPaymentMethod === 'cari_hesap';
+        if (!usesMaturity) {
+            setValue('maturityDays', undefined);
+            setMaturityDate('');
+            return;
+        }
+        const md = Number(watchedMaturityDays) || 0;
+        if (md > 0 && maturityMode === 'days') {
+            try {
+                setMaturityDate(format(addDays(new Date(), md), 'yyyy-MM-dd'));
+            } catch {
+                setMaturityDate('');
+            }
+        }
+    }, [watchedPaymentMethod, watchedMaturityDays, maturityMode, readOnly, setValue]);
 
     const handleCreateProduct = async (data: ProductFormData) => {
         const newProduct = { ...data, id: crypto.randomUUID(), createdAt: new Date().toISOString() };
@@ -146,6 +178,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                     setCustomerSearch(e.target.value);
                                     setIsCustomerDropdownOpen(true);
                                     if (watchedCustomerId) setValue('customerId', '');
+                                    if (watchedCustomerName) setValue('customerName', '');
                                 }}
                                 onFocus={() => !readOnly && setIsCustomerDropdownOpen(true)}
                                 disabled={readOnly}
@@ -159,7 +192,12 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                 {customers.filter(c => c.companyName.toLowerCase().includes(customerSearch.toLowerCase())).map(c => (
                                     <button
                                         key={c.id} type="button"
-                                        onClick={() => { setValue('customerId', c.id); setCustomerSearch(c.companyName); setIsCustomerDropdownOpen(false); }}
+                                        onClick={() => {
+                                            setValue('customerId', c.id);
+                                            setValue('customerName', c.companyName);
+                                            setCustomerSearch(c.companyName);
+                                            setIsCustomerDropdownOpen(false);
+                                        }}
                                         className="w-full text-left px-4 py-2.5 hover:bg-blue-500 hover:text-white rounded-lg transition-all"
                                     >
                                         <div className="font-bold text-sm tracking-tight">{c.companyName}</div>
@@ -169,6 +207,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                             </div>
                         )}
                         <input type="hidden" {...register('customerId')} />
+                        <input type="hidden" {...register('customerName')} />
                     </InputGroup>
 
                     <InputGroup compact={readOnly} label="Termin Tarihi" error={errors.deadline?.message}>
@@ -194,6 +233,96 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                             <option value="cari_hesap">Cari Hesap</option>
                         </select>
                     </InputGroup>
+
+                    {(watchedPaymentMethod === 'cek' || watchedPaymentMethod === 'cari_hesap') && (
+                        <InputGroup compact={readOnly} label="Vade">
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={readOnly}
+                                        onClick={() => setMaturityMode('days')}
+                                        className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold uppercase tracking-widest transition-colors ${maturityMode === 'days' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        Gün
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={readOnly}
+                                        onClick={() => setMaturityMode('date')}
+                                        className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold uppercase tracking-widest transition-colors ${maturityMode === 'date' ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        Tarih
+                                    </button>
+                                    {Number(watchedMaturityDays) > 0 && (
+                                        <div className="text-[11px] text-slate-500 font-mono ml-auto">
+                                            {Number(watchedMaturityDays)} gün
+                                        </div>
+                                    )}
+                                </div>
+
+                                {maturityMode === 'days' ? (
+                                    <div className="space-y-1">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={Number(watchedMaturityDays) || ''}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? undefined : Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                setValue('maturityDays', val);
+                                                if (val && val > 0) {
+                                                    try {
+                                                        setMaturityDate(format(addDays(new Date(), val), 'yyyy-MM-dd'));
+                                                    } catch {
+                                                        setMaturityDate('');
+                                                    }
+                                                } else {
+                                                    setMaturityDate('');
+                                                }
+                                            }}
+                                            disabled={readOnly}
+                                            className={premiumInputClass}
+                                            placeholder="Vade gün (örn: 30)"
+                                            aria-label="Vade gün"
+                                        />
+                                        {maturityDate && (
+                                            <div className="text-[11px] text-slate-500">
+                                                Vade Tarihi: <span className="font-mono">{maturityDate}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1">
+                                        <input
+                                            type="date"
+                                            value={maturityDate}
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                setMaturityDate(v);
+                                                if (!v) {
+                                                    setValue('maturityDays', undefined);
+                                                    return;
+                                                }
+                                                const today = new Date();
+                                                const target = new Date(`${v}T00:00:00`);
+                                                const diff = Math.max(0, differenceInCalendarDays(target, today));
+                                                setValue('maturityDays', diff);
+                                            }}
+                                            disabled={readOnly}
+                                            className={premiumInputClass}
+                                            aria-label="Vade tarihi"
+                                        />
+                                        {Number(watchedMaturityDays) > 0 && (
+                                            <div className="text-[11px] text-slate-500">
+                                                Vade Gün: <span className="font-mono">{Number(watchedMaturityDays)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </InputGroup>
+                    )}
                 </FormSection>
 
                 {/* Items Section */}

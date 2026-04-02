@@ -2115,6 +2115,33 @@ const enrichOrderItems = async (orders) => {
   if (!orders || (Array.isArray(orders) && orders.length === 0)) return orders;
   
   const ordersArray = Array.isArray(orders) ? orders : [orders];
+
+  try {
+      const missingCustomerIds = new Set();
+      ordersArray.forEach(order => {
+          if (!order) return;
+          const name = (order.customerName || '').toString().trim();
+          if (name) return;
+          const cid = order.customerId || order.customer_id;
+          if (cid) missingCustomerIds.add(cid);
+      });
+
+      if (missingCustomerIds.size > 0) {
+          const placeholders = [...missingCustomerIds].map(() => '?').join(',');
+          const rows = await db.prepare(`SELECT id, companyName FROM customers WHERE id IN (${placeholders})`).all(...missingCustomerIds);
+          const map = new Map();
+          rows.forEach(r => map.set(r.id, r.companyName));
+          ordersArray.forEach(order => {
+              if (!order) return;
+              const name = (order.customerName || '').toString().trim();
+              if (name) return;
+              const cid = order.customerId || order.customer_id;
+              if (cid && map.has(cid)) order.customerName = map.get(cid);
+          });
+      }
+  } catch (e) {
+      console.error('Error enriching customer names:', e);
+  }
   
   const productIdsToFetch = new Set();
   ordersArray.forEach(order => {
@@ -2227,7 +2254,7 @@ app.post('/api/orders', async (req, res) => {
       assignedUserName || null,
       assignedRoleName || null,
       paymentMethod || null,
-      maturityDays || null,
+      maturityDays ?? null,
       prepaymentAmount || null,
       prepaymentRate || null,
       gofrePrice || null,
@@ -2237,7 +2264,10 @@ app.post('/api/orders', async (req, res) => {
       gofreQuantity || null,
       gofreUnitPrice || null
     );
-    res.status(201).json({ ...req.body, id: finalId, createdAt: finalCreatedAt });
+    const inserted = await db.prepare('SELECT * FROM orders WHERE id = ?').get(finalId);
+    const parsed = parseOrder(inserted);
+    const enriched = await enrichOrderItems(parsed);
+    res.status(201).json(enriched);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
