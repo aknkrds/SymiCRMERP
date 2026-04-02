@@ -41,7 +41,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
         { icon: Package, label: 'Ürünler & Reçeteler', to: '/products', permission: 'products' },
         { icon: FileText, label: 'Siparişler', to: '/orders', permission: 'orders' },
         { icon: Palette, label: 'Tasarım', to: '/design', permission: 'design' },
-        { icon: ShoppingCart, label: 'Tedarik', to: '/procurement', permission: 'procurement' },
+        { icon: ShoppingCart, label: 'Satın Alma', to: '/procurement', permission: 'procurement' },
         { icon: Calendar, label: 'Planlama', to: '/planning', permission: 'planning' },
         { icon: Factory, label: 'Üretim', to: '/production', permission: 'production' },
         { icon: Calculator, label: 'Muhasebe', to: '/accounting', permission: 'accounting' },

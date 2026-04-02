@@ -26,7 +26,7 @@ export const appsConfig = [
     { id: 'products', title: 'Ürünler', icon: Package, component: <Products />, permission: 'products', colorClass: 'bg-emerald-500' },
     { id: 'orders', title: 'Siparişler', icon: FileText, component: <Orders />, permission: 'orders', colorClass: 'bg-amber-500' },
     { id: 'design', title: 'Tasarım', icon: Palette, component: <Design />, permission: 'design', colorClass: 'bg-pink-500' },
-    { id: 'procurement', title: 'Tedarik', icon: ShoppingCart, component: <Procurement />, permission: 'procurement', colorClass: 'bg-cyan-500' },
+    { id: 'procurement', title: 'Satın Alma', icon: ShoppingCart, component: <Procurement />, permission: 'procurement', colorClass: 'bg-cyan-500' },
     { id: 'planning', title: 'Planlama', icon: Calendar, component: <Planning />, permission: 'planning', colorClass: 'bg-violet-500' },
     { id: 'production', title: 'Üretim', icon: Factory, component: <Production />, permission: 'production', colorClass: 'bg-orange-500' },
     { id: 'accounting', title: 'Muhasebe', icon: Calculator, component: <Accounting />, permission: 'accounting', colorClass: 'bg-teal-500' },
