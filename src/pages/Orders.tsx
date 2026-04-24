@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { useLocation } from 'react-router-dom';
 import { useAI } from '../context/AIContext';
+import { useAuth } from '../context/AuthContext';
 import { ORDER_STATUS_MAP } from '../constants/orderStatus';
 import { useProducts } from '../hooks/useProducts';
 import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
@@ -31,10 +32,33 @@ function StatusDot({ status }: { status: string }) {
     );
 }
 
+function getRepColor(name: string | null | undefined): string {
+    if (!name) return 'bg-slate-100 text-slate-500';
+    const colors = [
+        'bg-blue-100 text-blue-700 border border-blue-200',
+        'bg-emerald-100 text-emerald-700 border border-emerald-200',
+        'bg-violet-100 text-violet-700 border border-violet-200',
+        'bg-orange-100 text-orange-700 border border-orange-200',
+        'bg-pink-100 text-pink-700 border border-pink-200',
+        'bg-teal-100 text-teal-700 border border-teal-200',
+        'bg-indigo-100 text-indigo-700 border border-indigo-200',
+        'bg-rose-100 text-rose-700 border border-rose-200',
+        'bg-cyan-100 text-cyan-700 border border-cyan-200',
+        'bg-amber-100 text-amber-700 border border-amber-200'
+    ];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+}
+
 export default function Orders() {
     const { orders, addOrder, updateOrder, updateStatus } = useOrders();
     const { products } = useProducts();
     const { trackAction } = useAI();
+    const { user } = useAuth();
+    const isAdmin = user?.roleName === 'Admin' || user?.roleName === 'Genel Müdür';
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrder, setEditingOrder] = useState<Order | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
@@ -140,6 +164,7 @@ export default function Orders() {
                             <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Kod</th>
                             <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Sipariş Tarihi</th>
                             <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Müşteri</th>
+                            <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Satış Temsilcisi</th>
                             <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Teslimat Tarihi</th>
                             <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Toplam</th>
                             <th className="px-3 py-2 border-r border-slate-200 whitespace-nowrap text-[11px] uppercase tracking-wide">Aşama</th>
@@ -149,7 +174,7 @@ export default function Orders() {
                     <tbody>
                         {filteredOrders.length === 0 ? (
                             <tr>
-                                <td colSpan={8} className="px-4 py-10 text-center text-slate-400 text-xs">
+                                <td colSpan={9} className="px-4 py-10 text-center text-slate-400 text-xs">
                                     Kayıtlı sipariş bulunamadı.
                                 </td>
                             </tr>
@@ -169,6 +194,15 @@ export default function Orders() {
                                     <span className="text-orange-400 mr-1">→</span>
                                     {order.customerName}
                                 </td>
+                                <td className="px-3 py-2 border-r border-slate-100 whitespace-nowrap">
+                                    {order.salesRepName ? (
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getRepColor(order.salesRepName)}`}>
+                                            {order.salesRepName}
+                                        </span>
+                                    ) : (
+                                        <span className="text-slate-400 text-[10px] italic">Atanmamış</span>
+                                    )}
+                                </td>
                                 <td className="px-3 py-2 border-r border-slate-100 text-slate-500 whitespace-nowrap">
                                     {format(new Date(order.createdAt), 'dd-MM-yyyy', { locale: tr })}
                                 </td>
@@ -176,7 +210,23 @@ export default function Orders() {
                                     {order.grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} {order.currency}
                                 </td>
                                 <td className="px-3 py-2 border-r border-slate-100">
-                                    <StatusDot status={order.status} />
+                                    {isAdmin ? (
+                                        <select
+                                            value={order.status}
+                                            onChange={(e) => {
+                                                if (confirm(`Siparişin durumunu "${ORDER_STATUS_MAP[e.target.value]?.label || e.target.value}" olarak değiştirmek istediğinize emin misiniz?`)) {
+                                                    updateStatus(order.id, e.target.value as Order['status']);
+                                                }
+                                            }}
+                                            className="text-[10px] font-bold border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-400 max-w-[160px]"
+                                        >
+                                            {Object.entries(ORDER_STATUS_MAP).map(([key, val]) => (
+                                                <option key={key} value={key}>{val.label}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <StatusDot status={order.status} />
+                                    )}
                                 </td>
                                 <td className="px-3 py-2">
                                     <div className="flex items-center gap-1">

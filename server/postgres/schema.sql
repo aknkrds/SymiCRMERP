@@ -394,3 +394,34 @@ CREATE TABLE IF NOT EXISTS meetings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_meetings_scheduled_at ON meetings(scheduled_at);
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sales_rep_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sales_rep_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_user_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_user_name TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS assigned_role_name TEXT;
+
+CREATE TABLE IF NOT EXISTS goods_receipts (
+  id TEXT PRIMARY KEY,
+  receipt_date TEXT NOT NULL,
+  supplier TEXT,
+  plate_type TEXT,
+  quantity DOUBLE PRECISION,
+  dimensions TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id TEXT PRIMARY KEY,
+  order_date TEXT NOT NULL,
+  supplier TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  category TEXT,
+  quantity DOUBLE PRECISION,
+  unit TEXT,
+  unit_price DOUBLE PRECISION,
+  total_price DOUBLE PRECISION,
+  notes TEXT,
+  created_at TEXT NOT NULL
+);

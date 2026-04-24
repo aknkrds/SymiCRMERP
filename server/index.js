@@ -19,12 +19,12 @@ const appMeta = (() => {
   try {
     const pkgPath = path.join(__dirname, '../package.json');
     version = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || null;
-  } catch {}
+  } catch { }
 
   let commit = null;
   try {
     commit = execSync('git rev-parse --short HEAD', { cwd: path.join(__dirname, '..') }).toString().trim();
-  } catch {}
+  } catch { }
 
   return { version, commit };
 })();
@@ -43,17 +43,17 @@ app.get('/api/version', (req, res) => {
 
 // Database initialization & Schema Sync
 const dbInit = async () => {
-    try {
-        const schemaPath = path.join(__dirname, 'postgres', 'schema.sql');
-        if (fs.existsSync(schemaPath)) {
-            console.log('Syncing database schema...');
-            const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-            await pool.query(schemaSql);
-            console.log('Database schema synced successfully.');
-        }
-    } catch (error) {
-        console.error('Database initialization failed:', error);
+  try {
+    const schemaPath = path.join(__dirname, 'postgres', 'schema.sql');
+    if (fs.existsSync(schemaPath)) {
+      console.log('Syncing database schema...');
+      const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+      await pool.query(schemaSql);
+      console.log('Database schema synced successfully.');
     }
+  } catch (error) {
+    console.error('Database initialization failed:', error);
+  }
 };
 dbInit();
 
@@ -62,15 +62,15 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     let dir = 'server/img';
     if (req.query.folder === 'doc') {
-        dir = 'server/doc';
+      dir = 'server/doc';
     } else if (req.query.folder) {
-        // Sanitize folder name to prevent directory traversal
-        const folder = req.query.folder.replace(/[^a-zA-Z0-9\-_]/g, '');
-        dir = path.join(dir, folder);
+      // Sanitize folder name to prevent directory traversal
+      const folder = req.query.folder.replace(/[^a-zA-Z0-9\-_]/g, '');
+      dir = path.join(dir, folder);
     }
-    
-    if (!fs.existsSync(dir)){
-        fs.mkdirSync(dir, { recursive: true });
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
     cb(null, dir);
   },
@@ -78,7 +78,7 @@ const storage = multer.diskStorage({
     let originalName = file.originalname;
     // Sanitize filename to avoid issues
     originalName = originalName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.\-_]/g, '');
-    
+
     let name = path.parse(originalName).name;
     let ext = path.parse(originalName).ext;
     let finalName = originalName;
@@ -87,10 +87,10 @@ const storage = multer.diskStorage({
     // Determine directory
     let dir = 'server/img';
     if (req.query.folder === 'doc') {
-        dir = 'server/doc';
+      dir = 'server/doc';
     } else if (req.query.folder) {
-        const folder = req.query.folder.replace(/[^a-zA-Z0-9\-_]/g, '');
-        dir = path.join(dir, folder);
+      const folder = req.query.folder.replace(/[^a-zA-Z0-9\-_]/g, '');
+      dir = path.join(dir, folder);
     }
 
     // Check for duplicate filenames and append suffix if needed
@@ -159,7 +159,7 @@ const logError = (req, error, context = {}) => {
 app.get('/api/customers/:customerId/products', async (req, res) => {
   try {
     const { customerId } = req.params;
-    
+
     const orders = await db.prepare('SELECT items FROM orders WHERE customerId = ?').all(customerId);
     if (!Array.isArray(orders) || orders.length === 0) {
       return res.json([]);
@@ -186,7 +186,7 @@ app.get('/api/customers/:customerId/products', async (req, res) => {
 
     const placeholders = [...productIds].map(() => '?').join(',');
     const products = await db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`).all(...productIds);
-    
+
     const formattedProducts = products.map(p => ({
       ...p,
       dimensions: parseJsonField(p.dimensions, {}),
@@ -215,14 +215,14 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
     const protocol = req.protocol;
     const host = req.get('host');
     let fileUrl = '';
-    
+
     if (req.query.folder === 'doc') {
-        fileUrl = `${protocol}://${host}/doc/${req.file.filename}`;
+      fileUrl = `${protocol}://${host}/doc/${req.file.filename}`;
     } else {
-        const folder = req.query.folder ? req.query.folder.replace(/[^a-zA-Z0-9\-_]/g, '') + '/' : '';
-        fileUrl = `${protocol}://${host}/img/${folder}${req.file.filename}`;
+      const folder = req.query.folder ? req.query.folder.replace(/[^a-zA-Z0-9\-_]/g, '') + '/' : '';
+      fileUrl = `${protocol}://${host}/img/${folder}${req.file.filename}`;
     }
-    
+
     res.json({ url: fileUrl, filename: req.file.filename });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -243,13 +243,13 @@ app.get('/api/messages', (req, res) => {
       WHERE senderId = ? OR recipientId = ?
       ORDER BY createdAt DESC
     `).all(userId, userId);
-    
+
     // Convert isRead to boolean
     const formattedMessages = messages.map(m => ({
       ...m,
       isRead: !!m.isRead
     }));
-    
+
     res.json(formattedMessages);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -273,15 +273,15 @@ app.get('/api/admin/messages', async (req, res) => {
 // Send a message
 app.post('/api/messages', async (req, res) => {
   try {
-    const { 
-      threadId, 
-      senderId, 
-      senderName, 
-      recipientId, 
-      recipientName, 
-      subject, 
-      content, 
-      relatedOrderId 
+    const {
+      threadId,
+      senderId,
+      senderName,
+      recipientId,
+      recipientName,
+      subject,
+      content,
+      relatedOrderId
     } = req.body;
 
     if (!senderId || !recipientId || !content) {
@@ -347,13 +347,13 @@ app.put('/api/company-settings', async (req, res) => {
   try {
     const { companyName, contactName, address, phone, mobile, logoUrl } = req.body;
     const updatedAt = new Date().toISOString();
-    
+
     await db.prepare(`
       UPDATE company_settings 
       SET companyName = ?, contactName = ?, address = ?, phone = ?, mobile = ?, logoUrl = ?, updatedAt = ?
       WHERE id = '1'
     `).run(companyName, contactName, address, phone, mobile, logoUrl, updatedAt);
-    
+
     res.json({ success: true, updatedAt });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -393,7 +393,7 @@ app.post('/api/users/:username/desktop-data', async (req, res) => {
     const { username } = req.params;
     const data = req.body;
     const now = new Date().toISOString();
-    
+
     // Check if exists
     const row = await db.prepare('SELECT data FROM user_desktop_data WHERE username = ?').get(username);
     if (row) {
@@ -493,7 +493,7 @@ app.get('/api/backup/export', async (req, res) => {
       // Cleanup temp dir
       try {
         fs.rmSync(tmpDir, { recursive: true, force: true });
-      } catch {}
+      } catch { }
       if (err) {
         console.error('Backup download error:', err);
       }
@@ -541,15 +541,15 @@ app.post('/api/backup/import', backupUpload.single('archive'), async (req, res) 
     const docTarget = path.join(process.cwd(), 'server', 'doc');
     if (fs.existsSync(extractedImg)) {
       // Clean and copy
-      try { fs.rmSync(imgTarget, { recursive: true, force: true }); } catch {}
+      try { fs.rmSync(imgTarget, { recursive: true, force: true }); } catch { }
       fs.cpSync(extractedImg, imgTarget, { recursive: true });
     }
     if (fs.existsSync(extractedDoc)) {
-      try { fs.rmSync(docTarget, { recursive: true, force: true }); } catch {}
+      try { fs.rmSync(docTarget, { recursive: true, force: true }); } catch { }
       fs.cpSync(extractedDoc, docTarget, { recursive: true });
     }
     // Cleanup
-    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch { }
     // Advise restart (nodemon will pick up exit)
     res.json({ success: true, message: 'Yedek geri yüklendi. Sunucu yeniden başlatılacak.' });
     setTimeout(() => {
@@ -577,11 +577,11 @@ app.post('/api/reset-data', async (req, res) => {
       'products',
       // 'customers', // KORUNDU: Kullanıcı isteği üzerine müşteriler silinmeyecek
       'machines',
-              // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
-              'weekly_plans',
-              'monthly_plans'
-              // 'company_settings' // KORUNDU: Firma bilgileri silinmeyecek
-            ];
+      // 'personnel', // KORUNDU: Kullanıcı isteği üzerine personel/kullanıcılar silinmeyecek
+      'weekly_plans',
+      'monthly_plans'
+      // 'company_settings' // KORUNDU: Firma bilgileri silinmeyecek
+    ];
 
     const deleteTransaction = db.transaction(async (tx) => {
       for (const table of tablesToClear) {
@@ -644,15 +644,15 @@ app.post('/api/seed-data', (req, res) => {
       // 1. Generate Customers (10)
       const customers = [];
       const customerNames = [
-        'Yıldız Ambalaj', 'Demir Lojistik', 'Akdeniz Gıda', 'Ege Tekstil', 
-        'Marmara Yapı', 'Anadolu Tarım', 'Karadeniz Nakliyat', 'Güneş Plastik', 
+        'Yıldız Ambalaj', 'Demir Lojistik', 'Akdeniz Gıda', 'Ege Tekstil',
+        'Marmara Yapı', 'Anadolu Tarım', 'Karadeniz Nakliyat', 'Güneş Plastik',
         'Ay Metal', 'Deniz Kimya'
       ];
 
       for (let i = 0; i < 10; i++) {
         const id = crypto.randomUUID();
         const company = customerNames[i];
-        const contact = `Yetkili ${i+1}`;
+        const contact = `Yetkili ${i + 1}`;
         const email = `info@${company.toLowerCase().replace(/\s+/g, '')}.com`.replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c');
         const row = {
           id,
@@ -661,7 +661,7 @@ app.post('/api/seed-data', (req, res) => {
           email,
           phone: `0212 555 00 0${i}`,
           mobile: `0532 555 00 0${i}`,
-          address: `İstanbul Organize Sanayi Bölgesi, No: ${i+1}`,
+          address: `İstanbul Organize Sanayi Bölgesi, No: ${i + 1}`,
           createdAt: new Date().toISOString()
         };
         const { sql, values } = buildInsert('customers', row);
@@ -848,7 +848,7 @@ const createNotification = ({ userId, roleId, title, message, type, relatedId })
       INSERT INTO notifications (id, userId, roleId, title, message, type, relatedId, isRead, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
     `);
-    stmt.run(id, userId || null, roleId || null, title, message, type || 'info', relatedId || null, new Date().toISOString()).catch(() => {});
+    stmt.run(id, userId || null, roleId || null, title, message, type || 'info', relatedId || null, new Date().toISOString()).catch(() => { });
     return id;
   } catch (error) {
     console.error('Failed to create notification:', error);
@@ -859,15 +859,15 @@ const createNotification = ({ userId, roleId, title, message, type, relatedId })
 app.get('/api/notifications', async (req, res) => {
   try {
     const { userId, roleId } = req.query;
-    
+
     let query = 'SELECT * FROM notifications WHERE isRead = false AND (';
     const params = [];
-    
+
     // Logic: User sees notifications for their ID OR their Role OR global (both null? maybe not)
     // Actually, let's keep it simple: 
     // IF userId provided -> match userId
     // IF roleId provided -> match roleId
-    
+
     const conditions = [];
     if (userId) {
       conditions.push('userId = ?');
@@ -877,13 +877,13 @@ app.get('/api/notifications', async (req, res) => {
       conditions.push('roleId = ?');
       params.push(roleId);
     }
-    
+
     if (conditions.length === 0) {
       return res.json([]);
     }
-    
+
     query += conditions.join(' OR ') + ') ORDER BY createdAt DESC';
-    
+
     const stmt = db.prepare(query);
     const notifications = await stmt.all(...params);
     res.json(notifications);
@@ -898,11 +898,11 @@ app.post('/api/notifications/mark-read', async (req, res) => {
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.json({ success: true });
     }
-    
+
     const placeholders = ids.map(() => '?').join(',');
     const stmt = db.prepare(`UPDATE notifications SET isRead = true WHERE id IN (${placeholders})`);
     await stmt.run(...ids);
-    
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1244,7 +1244,7 @@ app.get('/api/planning/monthly', async (req, res) => {
 
     const stmt = db.prepare('SELECT * FROM monthly_plans WHERE month = ? AND year = ?');
     const plan = await stmt.get(month, year);
-    
+
     if (plan) {
       plan.planData = parseJsonField(plan.planData, {});
       res.json(plan);
@@ -1259,7 +1259,7 @@ app.get('/api/planning/monthly', async (req, res) => {
 app.post('/api/planning/monthly', async (req, res) => {
   try {
     const { month, year, planData } = req.body;
-    
+
     // Check if exists
     const checkStmt = db.prepare('SELECT id FROM monthly_plans WHERE month = ? AND year = ?');
     const existing = await checkStmt.get(month, year);
@@ -1310,12 +1310,12 @@ app.post('/api/planning/weekly', async (req, res) => {
     const { weekStartDate, weekEndDate, planData } = req.body;
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    
+
     const stmt = db.prepare(`
       INSERT INTO weekly_plans (id, weekStartDate, weekEndDate, planData, createdAt)
       VALUES (?, ?, ?, ?, ?)
     `);
-    
+
     await stmt.run(id, weekStartDate, weekEndDate, JSON.stringify(planData), createdAt);
     res.json({ success: true, id });
   } catch (error) {
@@ -1328,13 +1328,13 @@ app.put('/api/planning/weekly/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { planData } = req.body;
-    
+
     const stmt = db.prepare(`
       UPDATE weekly_plans 
       SET planData = ?
       WHERE id = ?
     `);
-    
+
     await stmt.run(JSON.stringify(planData), id);
     res.json({ success: true });
   } catch (error) {
@@ -1374,7 +1374,7 @@ app.post('/api/stock-items', async (req, res) => {
       INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, category, notes, productId, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    
+
     await stmt.run(id, stockNumber, company, product, quantity, unit, category, notes, productId || null, finalCreatedAt);
     res.status(201).json({ ...req.body, createdAt: finalCreatedAt });
   } catch (error) {
@@ -1397,34 +1397,34 @@ app.patch('/api/stock-items/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     // Check if it's a deduct/add operation (legacy support)
     if (updates.deduct !== undefined) {
       const stmt = db.prepare('UPDATE stock_items SET quantity = quantity - ? WHERE id = ?');
       await stmt.run(updates.deduct, id);
     } else if (updates.quantity !== undefined && Object.keys(updates).length === 1) {
-       // Simple quantity set
-       const stmt = db.prepare('UPDATE stock_items SET quantity = ? WHERE id = ?');
-       await stmt.run(updates.quantity, id);
+      // Simple quantity set
+      const stmt = db.prepare('UPDATE stock_items SET quantity = ? WHERE id = ?');
+      await stmt.run(updates.quantity, id);
     } else {
       // General update for any field
       // Remove 'deduct' if it exists to avoid trying to update a non-existent column
       const { deduct, ...fieldsToUpdate } = updates;
-      
+
       const fields = Object.keys(fieldsToUpdate).map(key => `${key} = ?`).join(', ');
       const values = [...Object.values(fieldsToUpdate), id];
-      
+
       if (fields.length > 0) {
         const stmt = db.prepare(`UPDATE stock_items SET ${fields} WHERE id = ?`);
         await stmt.run(...values);
       }
     }
-    
+
     const updatedItem = await db.prepare('SELECT * FROM stock_items WHERE id = ?').get(id);
     if (!updatedItem) {
       return res.status(404).json({ error: 'Stock item not found' });
     }
-    
+
     res.json(updatedItem);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1627,13 +1627,13 @@ app.post('/api/production-jobs/from-dispatch', async (req, res) => {
     const receipt = Array.isArray(productionReceipt)
       ? productionReceipt
       : lines.map((l) => ({
-          orderId: l?.orderId,
-          productId: l?.productId,
-          productName: l?.productName,
-          expectedTotal: Number(l?.total) || 0,
-          receivedTotal: Number(l?.total) || 0,
-          note: null
-        }));
+        orderId: l?.orderId,
+        productId: l?.productId,
+        productName: l?.productName,
+        expectedTotal: Number(l?.total) || 0,
+        receivedTotal: Number(l?.total) || 0,
+        note: null
+      }));
 
     if (!Array.isArray(receipt) || receipt.length === 0) {
       return res.status(400).json({ error: 'Sayım sonucu (productionReceipt) gerekli' });
@@ -1908,12 +1908,12 @@ app.patch('/api/customers/:id', async (req, res) => {
     const updates = req.body;
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
-    
+
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE customers SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare('SELECT * FROM customers WHERE id = ?').get(id);
     res.json(updated);
   } catch (error) {
@@ -1959,9 +1959,9 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
   try {
-    const { 
-      id, name, productType, boxShape, dimensions, features, 
-      details, windowDetails, lidDetails, images, inks, createdAt 
+    const {
+      id, name, productType, boxShape, dimensions, features,
+      details, windowDetails, lidDetails, images, inks, createdAt
     } = req.body;
 
     const finalId = id || crypto.randomUUID();
@@ -1987,17 +1987,17 @@ app.post('/api/products', async (req, res) => {
     `);
 
     await stmt.run(
-      finalId, 
-      newCode, 
+      finalId,
+      newCode,
       name,
       productType,
-      boxShape, 
-      JSON.stringify(dimensions), 
-      JSON.stringify(features), 
-      details, 
-      windowDetails ? JSON.stringify(windowDetails) : null, 
-      lidDetails ? JSON.stringify(lidDetails) : null, 
-      images ? JSON.stringify(images) : null, 
+      boxShape,
+      JSON.stringify(dimensions),
+      JSON.stringify(features),
+      details,
+      windowDetails ? JSON.stringify(windowDetails) : null,
+      lidDetails ? JSON.stringify(lidDetails) : null,
+      images ? JSON.stringify(images) : null,
       inks ? JSON.stringify(inks) : null,
       finalCreatedAt
     );
@@ -2012,7 +2012,7 @@ app.patch('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     // JSON fields handling
     const jsonFields = ['dimensions', 'features', 'windowDetails', 'lidDetails', 'images', 'inks'];
     jsonFields.forEach(field => {
@@ -2023,12 +2023,12 @@ app.patch('/api/products/:id', async (req, res) => {
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
-    
+
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE products SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     res.json(parseProduct(updated));
   } catch (error) {
@@ -2049,10 +2049,10 @@ app.delete('/api/products/:id', async (req, res) => {
 app.get('/api/customers/:id/products', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Get all orders for this customer to find their products
     const orders = await db.prepare('SELECT items FROM orders WHERE customerId = ?').all(id);
-    
+
     const productIds = new Set();
     orders.forEach(order => {
       try {
@@ -2072,7 +2072,7 @@ app.get('/api/customers/:id/products', async (req, res) => {
     const placeholders = [...productIds].map(() => '?').join(',');
     const stmt = db.prepare(`SELECT * FROM products WHERE id IN (${placeholders})`);
     const products = await stmt.all(...productIds);
-    
+
     const parsedProducts = products.map(parseProduct);
     res.json(parsedProducts);
   } catch (error) {
@@ -2084,7 +2084,7 @@ app.get('/api/customers/:id/products', async (req, res) => {
 
 const parseOrder = (order) => {
   if (!order) return null;
-  
+
   const items = parseJsonField(order.items, []);
 
   const designImages = parseJsonField(order.designImages, []);
@@ -2113,80 +2113,80 @@ const parseOrder = (order) => {
 
 const enrichOrderItems = async (orders) => {
   if (!orders || (Array.isArray(orders) && orders.length === 0)) return orders;
-  
+
   const ordersArray = Array.isArray(orders) ? orders : [orders];
 
   try {
-      const missingCustomerIds = new Set();
-      ordersArray.forEach(order => {
-          if (!order) return;
-          const name = (order.customerName || '').toString().trim();
-          if (name) return;
-          const cid = order.customerId || order.customer_id;
-          if (cid) missingCustomerIds.add(cid);
-      });
+    const missingCustomerIds = new Set();
+    ordersArray.forEach(order => {
+      if (!order) return;
+      const name = (order.customerName || '').toString().trim();
+      if (name) return;
+      const cid = order.customerId || order.customer_id;
+      if (cid) missingCustomerIds.add(cid);
+    });
 
-      if (missingCustomerIds.size > 0) {
-          const placeholders = [...missingCustomerIds].map(() => '?').join(',');
-          const rows = await db.prepare(`SELECT id, companyName FROM customers WHERE id IN (${placeholders})`).all(...missingCustomerIds);
-          const map = new Map();
-          rows.forEach(r => map.set(r.id, r.companyName));
-          ordersArray.forEach(order => {
-              if (!order) return;
-              const name = (order.customerName || '').toString().trim();
-              if (name) return;
-              const cid = order.customerId || order.customer_id;
-              if (cid && map.has(cid)) order.customerName = map.get(cid);
-          });
-      }
+    if (missingCustomerIds.size > 0) {
+      const placeholders = [...missingCustomerIds].map(() => '?').join(',');
+      const rows = await db.prepare(`SELECT id, companyName FROM customers WHERE id IN (${placeholders})`).all(...missingCustomerIds);
+      const map = new Map();
+      rows.forEach(r => map.set(r.id, r.companyName));
+      ordersArray.forEach(order => {
+        if (!order) return;
+        const name = (order.customerName || '').toString().trim();
+        if (name) return;
+        const cid = order.customerId || order.customer_id;
+        if (cid && map.has(cid)) order.customerName = map.get(cid);
+      });
+    }
   } catch (e) {
-      console.error('Error enriching customer names:', e);
+    console.error('Error enriching customer names:', e);
   }
-  
+
   const productIdsToFetch = new Set();
   ordersArray.forEach(order => {
-      if (order && order.items && Array.isArray(order.items)) {
-          order.items.forEach(item => {
-              if (item.productId && (!item.productName || item.productName.trim() === '')) {
-                  productIdsToFetch.add(item.productId);
-              }
-          });
-      }
+    if (order && order.items && Array.isArray(order.items)) {
+      order.items.forEach(item => {
+        if (item.productId && (!item.productName || item.productName.trim() === '')) {
+          productIdsToFetch.add(item.productId);
+        }
+      });
+    }
   });
 
   if (productIdsToFetch.size === 0) return orders;
 
   try {
-      const placeholders = [...productIdsToFetch].map(() => '?').join(',');
-      const products = await db.prepare(`SELECT id, name, code, details, dimensions FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
-      
-      const productMap = new Map();
-      products.forEach(p => {
-           let dims = '';
-           try {
-               const d = typeof p.dimensions === 'string' ? JSON.parse(p.dimensions) : p.dimensions;
-               if (d && (d.length || d.width || d.depth)) {
-                   const parts = [d.length, d.width, d.depth].filter(v => v && Number(v) > 0);
-                   if (parts.length > 0) dims = ` (${parts.join('x')}mm)`;
-               }
-           } catch (e) {}
-           const name = `${p.code ? p.code + ' - ' : ''}${p.name}${dims}${p.details ? ' - ' + p.details : ''}`;
-           productMap.set(p.id, name);
-      });
+    const placeholders = [...productIdsToFetch].map(() => '?').join(',');
+    const products = await db.prepare(`SELECT id, name, code, details, dimensions FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
 
-      ordersArray.forEach(order => {
-          if (order && order.items && Array.isArray(order.items)) {
-              order.items.forEach(item => {
-                  if (item.productId && (!item.productName || item.productName.trim() === '') && productMap.has(item.productId)) {
-                      item.productName = productMap.get(item.productId);
-                  }
-              });
+    const productMap = new Map();
+    products.forEach(p => {
+      let dims = '';
+      try {
+        const d = typeof p.dimensions === 'string' ? JSON.parse(p.dimensions) : p.dimensions;
+        if (d && (d.length || d.width || d.depth)) {
+          const parts = [d.length, d.width, d.depth].filter(v => v && Number(v) > 0);
+          if (parts.length > 0) dims = ` (${parts.join('x')}mm)`;
+        }
+      } catch (e) { }
+      const name = `${p.code ? p.code + ' - ' : ''}${p.name}${dims}${p.details ? ' - ' + p.details : ''}`;
+      productMap.set(p.id, name);
+    });
+
+    ordersArray.forEach(order => {
+      if (order && order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          if (item.productId && (!item.productName || item.productName.trim() === '') && productMap.has(item.productId)) {
+            item.productName = productMap.get(item.productId);
           }
-      });
+        });
+      }
+    });
   } catch (e) {
-      console.error('Error enriching order items:', e);
+    console.error('Error enriching order items:', e);
   }
-  
+
   return orders;
 };
 
@@ -2219,8 +2219,8 @@ app.get('/api/orders/:id', async (req, res) => {
 
 app.post('/api/orders', async (req, res) => {
   try {
-    const { 
-      id, customerId, customerName, items, currency, 
+    const {
+      id, customerId, customerName, items, currency,
       subtotal, vatTotal, grandTotal, status, designImages, deadline, createdAt,
       assignedUserId, assignedUserName, assignedRoleName,
       paymentMethod, maturityDays,
@@ -2248,17 +2248,17 @@ app.post('/api/orders', async (req, res) => {
     `);
 
     await stmt.run(
-      finalId, 
-      customerId, 
-      customerName, 
-      JSON.stringify(items), 
-      currency, 
-      subtotal, 
-      vatTotal, 
-      grandTotal, 
-      status, 
+      finalId,
+      customerId,
+      customerName,
+      JSON.stringify(items),
+      currency,
+      subtotal,
+      vatTotal,
+      grandTotal,
+      status,
       designImages ? JSON.stringify(designImages) : null,
-      deadline, 
+      deadline,
       finalCreatedAt,
       assignedUserId || null,
       assignedUserName || null,
@@ -2290,130 +2290,130 @@ app.patch('/api/orders/:id', async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
     console.log(`[PATCH] Order Update for ${id}:`, JSON.stringify(updates, null, 2));
-    
+
     const current = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
-    
+
     // Notification Logic for Assignment
     if (updates.assignedUserId && updates.assignedUserId !== current.assignedUserId) {
       createNotification({
         userId: updates.assignedUserId,
         title: 'Yeni İş Ataması',
-        message: `Sipariş #${id.slice(0,8)} (${current.customerName}) size atandı.`,
+        message: `Sipariş #${id.slice(0, 8)} (${current.customerName}) size atandı.`,
         type: 'task',
         relatedId: id
       });
     } else if (updates.assignedRoleName && updates.assignedRoleName !== current.assignedRoleName) {
-       // Try to find role ID
-       const role = await db.prepare('SELECT id FROM roles WHERE name = ?').get(updates.assignedRoleName);
-       if (role) {
-         createNotification({
-            roleId: role.id,
-            title: 'Departman İş Ataması',
-            message: `Sipariş #${id.slice(0,8)} (${current.customerName}) departmanınıza atandı.`,
-            type: 'task',
-            relatedId: id
-         });
-       }
+      // Try to find role ID
+      const role = await db.prepare('SELECT id FROM roles WHERE name = ?').get(updates.assignedRoleName);
+      if (role) {
+        createNotification({
+          roleId: role.id,
+          title: 'Departman İş Ataması',
+          message: `Sipariş #${id.slice(0, 8)} (${current.customerName}) departmanınıza atandı.`,
+          type: 'task',
+          relatedId: id
+        });
+      }
     }
 
     // Automatic Notification based on Status Change (Workflow Handoffs)
     if (updates.status && updates.status !== current.status) {
-        let targetRoleName = '';
-        let notifTitle = '';
-        let notifMessage = '';
+      let targetRoleName = '';
+      let notifTitle = '';
+      let notifMessage = '';
 
-        switch (updates.status) {
-            case 'offer_accepted':
-                // Legacy support if needed, but we now move to supply_design_process
-                targetRoleName = 'Tasarımcı';
-                notifTitle = 'Yeni Tasarım İş Emri';
-                notifMessage = `Sipariş #${id.slice(0,8)} için tasarım onayı bekleniyor.`;
-                break;
-            case 'supply_design_process':
-                // Notify Designer
-                const designRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Tasarımcı');
-                if (designRole) {
-                    createNotification({
-                    roleId: designRole.id,
-                    title: 'Yeni Tasarım İş Emri',
-                    message: `Sipariş #${id.slice(0,8)} için işlem bekleniyor.`,
-                    type: 'task',
-                    relatedId: id
-                    });
-                }
-                
-                // Notify Procurement
-                let supplyRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Tedarik');
-                if (!supplyRole) supplyRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
-                
-                if (supplyRole) {
-                    createNotification({
-                    roleId: supplyRole.id,
-                    title: 'Yeni Tedarik İş Emri',
-                    message: `Sipariş #${id.slice(0,8)} için işlem bekleniyor.`,
-                    type: 'task',
-                    relatedId: id
-                    });
-                }
-                break;
-            case 'design_approved':
-                targetRoleName = 'Tedarik'; // Or 'Matbaa' depending on setup, user said 'Tedarik'
-                notifTitle = 'Hammadde Tedarik Talebi';
-                notifMessage = `Sipariş #${id.slice(0,8)} için malzeme tedariği bekleniyor.`;
-                break;
-            case 'supply_completed':
-                targetRoleName = 'Fabrika Müdürü'; // Assuming Production Manager
-                notifTitle = 'Üretim Planlama Talebi';
-                notifMessage = `Sipariş #${id.slice(0,8)} için hammadde hazır, üretim planlanmalı.`;
-                break;
-            case 'production_completed':
-                targetRoleName = 'Muhasebe';
-                notifTitle = 'Fatura/İrsaliye Talebi';
-                notifMessage = `Sipariş #${id.slice(0,8)} üretimi tamamlandı, evrak bekleniyor.`;
-                break;
-            case 'invoice_added':
-                targetRoleName = 'Sevkiyat';
-                notifTitle = 'Sevkiyat Talebi';
-                notifMessage = `Sipariş #${id.slice(0,8)} evrakları hazır, sevkiyat bekleniyor.`;
-                break;
-            case 'shipping_completed':
-                targetRoleName = 'Admin'; // Or specific role for GM
-                notifTitle = 'Sipariş Tamamlama Onayı';
-                notifMessage = `Sipariş #${id.slice(0,8)} sevk edildi, kapatma onayı bekleniyor.`;
-                break;
+      switch (updates.status) {
+        case 'offer_accepted':
+          // Legacy support if needed, but we now move to supply_design_process
+          targetRoleName = 'Tasarımcı';
+          notifTitle = 'Yeni Tasarım İş Emri';
+          notifMessage = `Sipariş #${id.slice(0, 8)} için tasarım onayı bekleniyor.`;
+          break;
+        case 'supply_design_process':
+          // Notify Designer
+          const designRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Tasarımcı');
+          if (designRole) {
+            createNotification({
+              roleId: designRole.id,
+              title: 'Yeni Tasarım İş Emri',
+              message: `Sipariş #${id.slice(0, 8)} için işlem bekleniyor.`,
+              type: 'task',
+              relatedId: id
+            });
+          }
+
+          // Notify Procurement
+          let supplyRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Tedarik');
+          if (!supplyRole) supplyRole = db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
+
+          if (supplyRole) {
+            createNotification({
+              roleId: supplyRole.id,
+              title: 'Yeni Tedarik İş Emri',
+              message: `Sipariş #${id.slice(0, 8)} için işlem bekleniyor.`,
+              type: 'task',
+              relatedId: id
+            });
+          }
+          break;
+        case 'design_approved':
+          targetRoleName = 'Tedarik'; // Or 'Matbaa' depending on setup, user said 'Tedarik'
+          notifTitle = 'Hammadde Tedarik Talebi';
+          notifMessage = `Sipariş #${id.slice(0, 8)} için malzeme tedariği bekleniyor.`;
+          break;
+        case 'supply_completed':
+          targetRoleName = 'Fabrika Müdürü'; // Assuming Production Manager
+          notifTitle = 'Üretim Planlama Talebi';
+          notifMessage = `Sipariş #${id.slice(0, 8)} için hammadde hazır, üretim planlanmalı.`;
+          break;
+        case 'production_completed':
+          targetRoleName = 'Muhasebe';
+          notifTitle = 'Fatura/İrsaliye Talebi';
+          notifMessage = `Sipariş #${id.slice(0, 8)} üretimi tamamlandı, evrak bekleniyor.`;
+          break;
+        case 'invoice_added':
+          targetRoleName = 'Sevkiyat';
+          notifTitle = 'Sevkiyat Talebi';
+          notifMessage = `Sipariş #${id.slice(0, 8)} evrakları hazır, sevkiyat bekleniyor.`;
+          break;
+        case 'shipping_completed':
+          targetRoleName = 'Admin'; // Or specific role for GM
+          notifTitle = 'Sipariş Tamamlama Onayı';
+          notifMessage = `Sipariş #${id.slice(0, 8)} sevk edildi, kapatma onayı bekleniyor.`;
+          break;
+      }
+
+      if (targetRoleName) {
+        // Find Role ID
+        // Special case for 'Admin' if it's not a role in DB but a specific user? 
+        // Usually 'Admin' is a role or we send to all admins.
+        // Let's assume 'Admin' role exists or we map to it.
+        // If 'Admin' is not found, maybe check for 'Yönetici' or similar.
+        let role = await db.prepare('SELECT id FROM roles WHERE name = ?').get(targetRoleName);
+
+        // Fallback for Supply if named differently (e.g. 'Matbaa' mentioned in Approvals.tsx)
+        if (!role && targetRoleName === 'Tedarik') {
+          role = await db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
+        }
+        // Fallback for Production if named differently
+        if (!role && targetRoleName === 'Fabrika Müdürü') {
+          role = await db.prepare('SELECT id FROM roles WHERE name = ?').get('Üretim');
         }
 
-        if (targetRoleName) {
-            // Find Role ID
-            // Special case for 'Admin' if it's not a role in DB but a specific user? 
-            // Usually 'Admin' is a role or we send to all admins.
-            // Let's assume 'Admin' role exists or we map to it.
-            // If 'Admin' is not found, maybe check for 'Yönetici' or similar.
-            let role = await db.prepare('SELECT id FROM roles WHERE name = ?').get(targetRoleName);
-            
-            // Fallback for Supply if named differently (e.g. 'Matbaa' mentioned in Approvals.tsx)
-            if (!role && targetRoleName === 'Tedarik') {
-                 role = await db.prepare('SELECT id FROM roles WHERE name = ?').get('Matbaa');
-            }
-            // Fallback for Production if named differently
-            if (!role && targetRoleName === 'Fabrika Müdürü') {
-                 role = await db.prepare('SELECT id FROM roles WHERE name = ?').get('Üretim');
-            }
-
-            if (role) {
-                createNotification({
-                    roleId: role.id,
-                    title: notifTitle,
-                    message: notifMessage,
-                    type: 'task',
-                    relatedId: id
-                });
-            } else if (targetRoleName === 'Admin') {
-                // If no role found, maybe send to all admin users?
-                // For now, let's skip if no specific role.
-                // Or hardcode to a specific role if we know it.
-            }
+        if (role) {
+          createNotification({
+            roleId: role.id,
+            title: notifTitle,
+            message: notifMessage,
+            type: 'task',
+            relatedId: id
+          });
+        } else if (targetRoleName === 'Admin') {
+          // If no role found, maybe send to all admin users?
+          // For now, let's skip if no specific role.
+          // Or hardcode to a specific role if we know it.
         }
+      }
     }
 
     if (updates.items) {
@@ -2440,12 +2440,12 @@ app.patch('/api/orders/:id', async (req, res) => {
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
-    
+
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE orders SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     // Shipping completed -> deduct finished stock
     try {
@@ -2516,12 +2516,12 @@ app.get('/api/personnel', async (req, res) => {
 
 app.post('/api/personnel', async (req, res) => {
   try {
-    const { 
-      id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
-      homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation, 
-      emergencyContactPhone, maritalStatus, sskNumber, department, startDate, 
-      recruitmentPlace, endDate, exitReason, childrenCount, childrenAges, 
-      parentsStatus, hasDisability, disabilityDescription, createdAt 
+    const {
+      id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address,
+      homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation,
+      emergencyContactPhone, maritalStatus, sskNumber, department, startDate,
+      recruitmentPlace, endDate, exitReason, childrenCount, childrenAges,
+      parentsStatus, hasDisability, disabilityDescription, createdAt
     } = req.body;
 
     const stmt = db.prepare(`
@@ -2536,10 +2536,10 @@ app.post('/api/personnel', async (req, res) => {
     `);
 
     await stmt.run(
-      id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address, 
-      homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation, 
-      emergencyContactPhone, maritalStatus, sskNumber, department, startDate, 
-      recruitmentPlace, endDate, exitReason, childrenCount, JSON.stringify(childrenAges || []), 
+      id, firstName, lastName, role, birthDate, birthPlace, tcNumber, address,
+      homePhone, mobilePhone, email, emergencyContactName, emergencyContactRelation,
+      emergencyContactPhone, maritalStatus, sskNumber, department, startDate,
+      recruitmentPlace, endDate, exitReason, childrenCount, JSON.stringify(childrenAges || []),
       parentsStatus, hasDisability ? 1 : 0, disabilityDescription, createdAt
     );
     res.status(201).json(req.body);
@@ -2552,7 +2552,7 @@ app.patch('/api/personnel/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     // Handle JSON fields and booleans
     if (updates.childrenAges) updates.childrenAges = JSON.stringify(updates.childrenAges);
     if (updates.documents) updates.documents = JSON.stringify(updates.documents);
@@ -2565,7 +2565,7 @@ app.patch('/api/personnel/:id', async (req, res) => {
       const stmt = db.prepare(`UPDATE personnel SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare('SELECT * FROM personnel WHERE id = ?').get(id);
     res.json(parsePersonnel(updated));
   } catch (error) {
@@ -2643,10 +2643,10 @@ app.get('/api/shifts', async (req, res) => {
 
 app.post('/api/shifts', async (req, res) => {
   try {
-    const { 
-      id, orderId, machineId, supervisorId, personnelIds, 
-      startTime, endTime, plannedQuantity, producedQuantity, scrapQuantity, 
-      status, createdAt 
+    const {
+      id, orderId, machineId, supervisorId, personnelIds,
+      startTime, endTime, plannedQuantity, producedQuantity, scrapQuantity,
+      status, createdAt
     } = req.body;
 
     const stmt = db.prepare(`
@@ -2659,10 +2659,10 @@ app.post('/api/shifts', async (req, res) => {
     `);
 
     await stmt.run(
-      id, orderId, machineId, supervisorId, 
-      JSON.stringify(personnelIds), 
-      startTime, endTime, plannedQuantity, 
-      producedQuantity || 0, scrapQuantity || 0, 
+      id, orderId, machineId, supervisorId,
+      JSON.stringify(personnelIds),
+      startTime, endTime, plannedQuantity,
+      producedQuantity || 0, scrapQuantity || 0,
       status || 'planned', createdAt
     );
     res.status(201).json(req.body);
@@ -2675,19 +2675,19 @@ app.patch('/api/shifts/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     if (updates.personnelIds) {
       updates.personnelIds = JSON.stringify(updates.personnelIds);
     }
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
-    
+
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE shifts SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare('SELECT * FROM shifts WHERE id = ?').get(id);
     res.json(parseShift(updated));
   } catch (error) {
@@ -2845,7 +2845,7 @@ app.get('/api/users', async (req, res) => {
 app.post('/api/users', async (req, res) => {
   try {
     const { id, username, password, roleId, fullName, isActive, createdAt } = req.body;
-    
+
     // Check if username exists
     const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(username);
     if (existing) {
@@ -2857,7 +2857,7 @@ app.post('/api/users', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     await stmt.run(id, username, password, roleId, fullName, isActive, createdAt);
-    
+
     const newUser = await db.prepare('SELECT id, username, fullName, roleId, isActive, createdAt FROM users WHERE id = ?').get(id);
     res.status(201).json(newUser);
   } catch (error) {
@@ -2869,27 +2869,27 @@ app.patch('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     // Remove fields that strictly shouldn't be updated or don't exist in the table
     delete updates.roleName; // Derived field from join
     delete updates.id; // Primary key
     delete updates.createdAt; // Creation timestamp
-    
+
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
-    
+
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE users SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare(`
       SELECT u.id, u.username, u.fullName, u.roleId, u.isActive, u.createdAt, r.name as roleName 
       FROM users u 
       LEFT JOIN roles r ON u.roleId = r.id 
       WHERE u.id = ?
     `).get(id);
-    
+
     res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -3069,19 +3069,19 @@ app.patch('/api/roles/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
     if (updates.permissions) {
       updates.permissions = JSON.stringify(updates.permissions);
     }
 
     const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), id];
-    
+
     if (fields.length > 0) {
       const stmt = db.prepare(`UPDATE roles SET ${fields} WHERE id = ?`);
       await stmt.run(...values);
     }
-    
+
     const updated = await db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
     res.json({
       ...updated,
@@ -3107,17 +3107,17 @@ app.delete('/api/roles/:id', async (req, res) => {
 // Varsayılan kalıp ölçüleri (kullanıcının verdiği tüm ölçüler)
 const DEFAULT_MOLDS = [
   // Perçinli Kare
-  ...['55x55','75x75','85x85','90x90','100x100','120x120','155x155','190x190','215x215','235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kare', dimensions: d })),
+  ...['55x55', '75x75', '85x85', '90x90', '100x100', '120x120', '155x155', '190x190', '215x215', '235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kare', dimensions: d })),
   // Perçinli Oval
-  ...['60x70','83x103','143x232','200x300'].map(d => ({ productType: 'percinli', boxShape: 'Oval', dimensions: d })),
+  ...['60x70', '83x103', '143x232', '200x300'].map(d => ({ productType: 'percinli', boxShape: 'Oval', dimensions: d })),
   // Perçinli Sekizgen
-  ...['85x110','220x220','190x275'].map(d => ({ productType: 'percinli', boxShape: 'Sekizgen', dimensions: d })),
+  ...['85x110', '220x220', '190x275'].map(d => ({ productType: 'percinli', boxShape: 'Sekizgen', dimensions: d })),
   // Perçinli Dikdörtgen
-  ...['45x65','80x120','80x140','90x150','100x75','100x130','110x150','115x190','135x190','140x240','155x195','170x260','180x225','180x240','215x235','200x300'].map(d => ({ productType: 'percinli', boxShape: 'Dikdörtgen', dimensions: d })),
+  ...['45x65', '80x120', '80x140', '90x150', '100x75', '100x130', '110x150', '115x190', '135x190', '140x240', '155x195', '170x260', '180x225', '180x240', '215x235', '200x300'].map(d => ({ productType: 'percinli', boxShape: 'Dikdörtgen', dimensions: d })),
   // Perçinli Yuvarlak (etiket: Ø)
   ...[42, 52, 55, 65, 69, 73, 82, 85, 90, 99, 105, 108, 120, 140, 153, 160, 175, 190, 200, 215, 240, 265].map(d => ({ productType: 'percinli', boxShape: 'Yuvarlak', dimensions: String(d), label: `Ø${d}` })),
   // Perçinli Kalpli
-  ...['90x90','90x90x25','205x190x40','235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kalpli', dimensions: d })),
+  ...['90x90', '90x90x25', '205x190x40', '235x235'].map(d => ({ productType: 'percinli', boxShape: 'Kalpli', dimensions: d })),
   // Perçinli Tepsi
   { productType: 'percinli', boxShape: 'Tepsi', dimensions: '304x234', label: '304x234' },
   { productType: 'percinli', boxShape: 'Tepsi', dimensions: '357x272', label: '357x272' },
@@ -3125,9 +3125,9 @@ const DEFAULT_MOLDS = [
   { productType: 'percinli', boxShape: 'Tepsi', dimensions: '315x215', label: '315x215' },
   { productType: 'percinli', boxShape: 'Tepsi', dimensions: '400x400', label: 'Ø400' },
   // Perçinli Konik
-  ...['130x165x160','130x165x140','90x120x105'].map(d => ({ productType: 'percinli', boxShape: 'Konik', dimensions: d })),
+  ...['130x165x160', '130x165x140', '90x120x105'].map(d => ({ productType: 'percinli', boxShape: 'Konik', dimensions: d })),
   // Sıvama Standart
-  ...['90x90x30 - Kalp Şekilli','205x190x40 - Kalp Şekilli','75x205x25','65x205x25 - Fermuarlı','105x205x25 - Fermuarlı','135x200x25 - Fermuarlı','175x215x45','90x80x15','90x80x30','100x100x30','105x105x40','97x58x20','94x58x20','95x120x22','69x45','85x40','99x30','105x40 - Expanded','132x45 - Expanded','O115 - Bardak Altlığı'].map(d => ({ productType: 'sivama', boxShape: 'Standart', dimensions: d })),
+  ...['90x90x30 - Kalp Şekilli', '205x190x40 - Kalp Şekilli', '75x205x25', '65x205x25 - Fermuarlı', '105x205x25 - Fermuarlı', '135x200x25 - Fermuarlı', '175x215x45', '90x80x15', '90x80x30', '100x100x30', '105x105x40', '97x58x20', '94x58x20', '95x120x22', '69x45', '85x40', '99x30', '105x40 - Expanded', '132x45 - Expanded', 'O115 - Bardak Altlığı'].map(d => ({ productType: 'sivama', boxShape: 'Standart', dimensions: d })),
 ];
 
 // Ensure default molds exist (Seed if missing)
@@ -3189,7 +3189,7 @@ app.get('/api/molds', async (req, res) => {
     let query = 'SELECT * FROM product_molds';
     const params = [];
     const conditions = [];
-    
+
     if (productType) {
       conditions.push('productType = ?');
       params.push(productType);
@@ -3198,13 +3198,13 @@ app.get('/api/molds', async (req, res) => {
       conditions.push('boxShape = ?');
       params.push(boxShape);
     }
-    
+
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
-    
+
     query += ' ORDER BY createdAt DESC';
-    
+
     const stmt = db.prepare(query);
     const molds = await stmt.all(...params);
     res.json(molds);
@@ -3216,12 +3216,12 @@ app.get('/api/molds', async (req, res) => {
 app.post('/api/molds', async (req, res) => {
   try {
     const { id, productType, boxShape, dimensions, label } = req.body;
-    
+
     const stmt = db.prepare(`
       INSERT INTO product_molds (id, productType, boxShape, dimensions, label, createdAt)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
-    
+
     await stmt.run(
       id || crypto.randomUUID(),
       productType,
@@ -3230,7 +3230,7 @@ app.post('/api/molds', async (req, res) => {
       label || null,
       new Date().toISOString()
     );
-    
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });

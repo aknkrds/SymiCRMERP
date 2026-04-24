@@ -26,7 +26,7 @@ export function Desktop() {
     const { settings } = useCompanySettings();
     const { logout, user, hasPermission } = useAuth();
     const { addItem, fetchDesktopData, setUsername: setDesktopUsername } = useDesktopStore();
-    const appVersion = '0.9.6.3';
+    const appVersion = '0.9.6.4';
     const { orders } = useOrders();
 
     const defaultBg = "url('/wallpapers/gradient-01.svg')";

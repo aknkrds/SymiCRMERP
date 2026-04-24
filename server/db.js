@@ -153,6 +153,11 @@ const initDb = () => {
   try { db.exec('ALTER TABLE orders ADD COLUMN salesRepId TEXT'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN salesRepName TEXT'); } catch (error) {}
   
+  // Add workflow assignment columns if they don't exist
+  try { db.exec('ALTER TABLE orders ADD COLUMN assignedUserId TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN assignedUserName TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN assignedRoleName TEXT'); } catch (error) {}
+  
   // Procurement Details Migration
   try { db.exec('ALTER TABLE orders ADD COLUMN procurementDetails TEXT'); } catch (error) {}
 
@@ -507,6 +512,37 @@ const initDb = () => {
       insertRole.run(role.id, role.name, role.permissions, new Date().toISOString());
     });
   }
+
+  // Goods Receipts (Mal Kabul)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS goods_receipts (
+      id TEXT PRIMARY KEY,
+      receiptDate TEXT NOT NULL,
+      supplier TEXT,
+      plateType TEXT,
+      quantity REAL,
+      dimensions TEXT,
+      notes TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
+
+  // Purchase Orders (Satın Alma)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+      id TEXT PRIMARY KEY,
+      orderDate TEXT NOT NULL,
+      supplier TEXT NOT NULL,
+      productName TEXT NOT NULL,
+      category TEXT,
+      quantity REAL,
+      unit TEXT,
+      unitPrice REAL,
+      totalPrice REAL,
+      notes TEXT,
+      createdAt TEXT NOT NULL
+    )
+  `);
 
   // Seed Admin User if empty
   const userCount = db.prepare('SELECT count(*) as count FROM users').get();

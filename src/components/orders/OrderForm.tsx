@@ -16,7 +16,9 @@ const orderSchema = z.object({
     customerName: z.string(),
     currency: z.string().default('TRY'),
     deadline: z.string().nullish(),
-    paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap']).nullish(),
+    paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap'], { 
+        errorMap: () => ({ message: 'Lütfen geçerli bir ödeme şekli seçiniz' }) 
+    }),
     maturityDays: z.coerce.number().optional(),
     prepaymentAmount: z.string().nullish(),
     prepaymentRate: z.coerce.number().optional(),
@@ -172,7 +174,17 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
 
     return (
         <div className="w-full space-y-8 pb-12">
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+            <form onSubmit={handleSubmit(onSubmit, (errors) => {
+                console.error("Validation Errors:", errors);
+                const firstError = Object.values(errors)[0];
+                if (firstError && typeof firstError === 'object' && 'message' in firstError) {
+                    alert('Lütfen zorunlu alanları doldurun: ' + firstError.message);
+                } else if (errors.items && Array.isArray(errors.items)) {
+                    alert('Lütfen sipariş kalemlerindeki eksikleri giderin.');
+                } else {
+                    alert('Lütfen formdaki hataları düzeltin.');
+                }
+            })} className="space-y-8">
                 {/* Header Information */}
                 <FormSection compact={readOnly} title="Genel Bilgiler" description="Müşteri seçimi ve sipariş temel detayları">
                     <InputGroup compact={readOnly} label="Müşteri" error={errors.customerId?.message} required className="relative" ref={customerDropdownRef}>
@@ -251,7 +263,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                         </div>
                     </InputGroup>
 
-                    <InputGroup compact={readOnly} label="Ödeme Şekli">
+                    <InputGroup compact={readOnly} label="Ödeme Şekli" required error={errors.paymentMethod?.message as string}>
                         <select {...register('paymentMethod')} disabled={readOnly} className={premiumInputClass}>
                             <option value="">Seçiniz</option>
                             <option value="havale_eft">Havale-EFT</option>

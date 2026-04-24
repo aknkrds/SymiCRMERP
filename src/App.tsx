@@ -12,6 +12,7 @@ import Products from './pages/Products';
 import Orders from './pages/Orders';
 import Design from './pages/Design';
 import Procurement from './pages/Procurement';
+import Purchasing from './pages/Purchasing';
 import Planning from './pages/Planning';
 import Production from './pages/Production';
 import Accounting from './pages/Accounting';
@@ -73,6 +74,7 @@ function App() {
 
                 <Route path="/design" element={<ProtectedRoute permission="design"><Design /></ProtectedRoute>} />
                 <Route path="/procurement" element={<ProtectedRoute permission="procurement"><Procurement /></ProtectedRoute>} />
+                <Route path="/purchasing" element={<ProtectedRoute permission="all_except_settings"><Purchasing /></ProtectedRoute>} />
                 <Route path="/planning" element={<ProtectedRoute permission="planning"><Planning /></ProtectedRoute>} />
                 <Route path="/production" element={<ProtectedRoute permission="production"><Production /></ProtectedRoute>} />
                 <Route path="/accounting" element={<ProtectedRoute permission="accounting"><Accounting /></ProtectedRoute>} />

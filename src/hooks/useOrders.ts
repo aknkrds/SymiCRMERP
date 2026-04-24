@@ -97,9 +97,14 @@ export function useOrders() {
             if (res.ok) {
                 const saved = await res.json();
                 setOrders(prev => [saved, ...prev]);
+            } else {
+                const errorData = await res.json().catch(() => ({}));
+                console.error('Error adding order:', res.status, errorData);
+                alert('Sipariş kaydedilirken sunucu hatası oluştu: ' + (errorData.error || res.statusText));
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('Error adding order:', err);
+            alert('Sipariş kaydedilemedi: ' + err.message);
         }
     };
 

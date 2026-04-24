@@ -6,6 +6,7 @@ import Products from '../pages/Products';
 import Orders from '../pages/Orders';
 import Design from '../pages/Design';
 import Procurement from '../pages/Procurement';
+import Purchasing from '../pages/Purchasing';
 import Planning from '../pages/Planning';
 import Production from '../pages/Production';
 import Accounting from '../pages/Accounting';
@@ -26,7 +27,8 @@ export const appsConfig = [
     { id: 'products', title: 'Ürünler', icon: Package, component: <Products />, permission: 'products', colorClass: 'bg-emerald-500' },
     { id: 'orders', title: 'Siparişler', icon: FileText, component: <Orders />, permission: 'orders', colorClass: 'bg-amber-500' },
     { id: 'design', title: 'Tasarım', icon: Palette, component: <Design />, permission: 'design', colorClass: 'bg-pink-500' },
-    { id: 'procurement', title: 'Satın Alma', icon: ShoppingCart, component: <Procurement />, permission: 'procurement', colorClass: 'bg-cyan-500' },
+    { id: 'procurement', title: 'Matbaa', icon: ShoppingCart, component: <Procurement />, permission: 'procurement', colorClass: 'bg-cyan-500' },
+    { id: 'purchasing', title: 'Satın Alma', icon: ShoppingCart, component: <Purchasing />, permission: 'all_except_settings', colorClass: 'bg-lime-500' },
     { id: 'planning', title: 'Planlama', icon: Calendar, component: <Planning />, permission: 'planning', colorClass: 'bg-violet-500' },
     { id: 'production', title: 'Üretim', icon: Factory, component: <Production />, permission: 'production', colorClass: 'bg-orange-500' },
     { id: 'accounting', title: 'Muhasebe', icon: Calculator, component: <Accounting />, permission: 'accounting', colorClass: 'bg-teal-500' },

@@ -41,7 +41,8 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
         { icon: Package, label: 'Ürünler & Reçeteler', to: '/products', permission: 'products' },
         { icon: FileText, label: 'Siparişler', to: '/orders', permission: 'orders' },
         { icon: Palette, label: 'Tasarım', to: '/design', permission: 'design' },
-        { icon: ShoppingCart, label: 'Satın Alma', to: '/procurement', permission: 'procurement' },
+        { icon: ShoppingCart, label: 'Matbaa', to: '/procurement', permission: 'procurement' },
+        { icon: ShoppingCart, label: 'Satın Alma', to: '/purchasing', permission: 'all_except_settings' },
         { icon: Calendar, label: 'Planlama', to: '/planning', permission: 'planning' },
         { icon: Factory, label: 'Üretim', to: '/production', permission: 'production' },
         { icon: Calculator, label: 'Muhasebe', to: '/accounting', permission: 'accounting' },
@@ -187,7 +188,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
 
                     {isOpen && (
                         <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
-                            <p className="font-medium">Symi CRM v.0.9.6.3</p>
+                            <p className="font-medium">Symi CRM v.0.9.6.4</p>
                             <p className="text-[10px] mt-0.5 text-slate-500">
                                 Tasarım & Geliştirme:{' '}
                                 <span className="font-semibold text-slate-200">Akın KARADAŞ - Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti</span>
