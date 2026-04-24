@@ -7,7 +7,7 @@ interface ProductDetailProps {
         jobSize?: string;
         boxSize?: string;
         efficiency?: string;
-    };
+    } | { type: string; jobSize: string; boxSize: string; efficiency: string; includesKapak?: boolean; includesDip?: boolean; }[];
     designImages?: (string | { url: string; productId?: string })[];
 }
 
@@ -215,22 +215,36 @@ export function ProductDetail({ product, onClose, jobDetails, designImages }: Pr
             </div>
 
             {/* Job Details (if available) - Moved here */}
-            {jobDetails && (jobDetails.jobSize || jobDetails.boxSize || jobDetails.efficiency) && (
+            {jobDetails && (
                 <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 pt-4 border-t border-slate-100">
-                    <h4 className="font-medium text-blue-800 mb-2 border-b border-blue-200 pb-2">Levha Bilgileri (Tasarım)</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-                        <div>
-                            <span className="block text-xs font-medium text-blue-500 mb-1">Levha Ebadı</span>
-                            <span className="font-medium text-blue-900">{jobDetails.jobSize || '-'}</span>
-                        </div>
-                        <div>
-                            <span className="block text-xs font-medium text-blue-500 mb-1">Kutu Boyutu</span>
-                            <span className="font-medium text-blue-900">{jobDetails.boxSize || '-'}</span>
-                        </div>
-                        <div>
-                            <span className="block text-xs font-medium text-blue-500 mb-1">Verim</span>
-                            <span className="font-medium text-blue-900">{jobDetails.efficiency || '-'}</span>
-                        </div>
+                    <h4 className="font-medium text-blue-800 mb-3 border-b border-blue-200 pb-2">Levha Bilgileri (Tasarım)</h4>
+                    <div className="space-y-3">
+                        {(Array.isArray(jobDetails) ? jobDetails : [{ type: 'Gövde', ...jobDetails }]).map((plate: any, idx: number) => (
+                            <div key={idx} className="bg-white/60 p-3 rounded border border-blue-100">
+                                <div className="text-xs font-bold text-blue-700 uppercase mb-2 flex justify-between">
+                                    <span>{plate.type || 'Gövde'} Levhası</span>
+                                    {(plate.includesKapak || plate.includesDip) && (
+                                        <span className="text-blue-500 normal-case font-medium">
+                                            Aynı Levhada: {[plate.includesKapak && 'Kapak', plate.includesDip && 'Dip'].filter(Boolean).join(', ')}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                                    <div>
+                                        <span className="block text-xs font-medium text-blue-500 mb-1">Levha Ebadı</span>
+                                        <span className="font-medium text-blue-900">{plate.jobSize || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-xs font-medium text-blue-500 mb-1">Kutu Boyutu / Levha Adeti</span>
+                                        <span className="font-medium text-blue-900">{plate.boxSize || '-'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="block text-xs font-medium text-blue-500 mb-1">Verim / Montaj</span>
+                                        <span className="font-medium text-blue-900">{plate.efficiency || '-'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

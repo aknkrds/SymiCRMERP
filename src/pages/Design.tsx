@@ -31,7 +31,7 @@ export default function Design() {
     const [jobOrder, setJobOrder] = useState<Order | null>(null);
     const [isJobModalOpen, setIsJobModalOpen] = useState(false);
     const [jobSelectedProductId, setJobSelectedProductId] = useState<string>('');
-    const [jobDetailsByProduct, setJobDetailsByProduct] = useState<Record<string, { jobSize: string; boxSize: string; efficiency: string }>>({});
+    const [jobDetailsByProduct, setJobDetailsByProduct] = useState<Record<string, { type: 'Gövde'|'Kapak'|'Dip'; jobSize: string; boxSize: string; efficiency: string; includesKapak?: boolean; includesDip?: boolean; }[]>>({});
 
     const handleSendToGM = async (orderId: string) => { if (confirm('Genel Müdür onayına gönderilsin mi?')) await updateStatus(orderId, 'waiting_manager_approval'); };
     const handleCompleteDesign = async (orderId: string) => { if (confirm('Tasarım tamamlandı mı?')) await updateOrder(orderId, { designStatus: 'completed' } as any); };
@@ -116,17 +116,29 @@ export default function Design() {
                                         <button onClick={() => {
                                             const defaultProductId = o.items[0]?.productId || '';
                                             const source = (o.designJobDetails && typeof o.designJobDetails === 'object') ? o.designJobDetails : {};
-                                            const next: Record<string, { jobSize: string; boxSize: string; efficiency: string }> = {};
+                                            const next: Record<string, { type: 'Gövde'|'Kapak'|'Dip'; jobSize: string; boxSize: string; efficiency: string; includesKapak?: boolean; includesDip?: boolean; }[]> = {};
                                             for (const it of o.items) {
-                                                const existing = (source as any)[it.productId] || {};
-                                                const fallbackFromOrder = it.productId === defaultProductId
-                                                    ? { jobSize: o.jobSize || '', boxSize: o.boxSize || '', efficiency: o.efficiency || '' }
-                                                    : { jobSize: '', boxSize: '', efficiency: '' };
-                                                next[it.productId] = {
-                                                    jobSize: existing.jobSize ?? fallbackFromOrder.jobSize,
-                                                    boxSize: existing.boxSize ?? fallbackFromOrder.boxSize,
-                                                    efficiency: existing.efficiency ?? fallbackFromOrder.efficiency,
-                                                };
+                                                const existing = (source as any)[it.productId];
+                                                if (Array.isArray(existing)) {
+                                                    next[it.productId] = existing;
+                                                } else if (existing && typeof existing === 'object') {
+                                                    next[it.productId] = [{
+                                                        type: 'Gövde',
+                                                        jobSize: existing.jobSize || '',
+                                                        boxSize: existing.boxSize || '',
+                                                        efficiency: existing.efficiency || ''
+                                                    }];
+                                                } else {
+                                                    const fallbackFromOrder = it.productId === defaultProductId
+                                                        ? { jobSize: o.jobSize || '', boxSize: o.boxSize || '', efficiency: o.efficiency || '' }
+                                                        : { jobSize: '', boxSize: '', efficiency: '' };
+                                                    next[it.productId] = [{
+                                                        type: 'Gövde',
+                                                        jobSize: fallbackFromOrder.jobSize,
+                                                        boxSize: fallbackFromOrder.boxSize,
+                                                        efficiency: fallbackFromOrder.efficiency
+                                                    }];
+                                                }
                                             }
                                             setJobOrder(o);
                                             setJobSelectedProductId(defaultProductId);
@@ -259,58 +271,140 @@ export default function Design() {
                                     <p className="text-xs text-slate-500 font-bold uppercase">Ürün seçiniz</p>
                                 </div>
                             ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div>
-                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Levha Ebadı</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
-                                        value={(jobDetailsByProduct[jobSelectedProductId]?.jobSize) || ''}
-                                        onChange={(e) => setJobDetailsByProduct(prev => ({
-                                            ...prev,
-                                            [jobSelectedProductId]: {
-                                                jobSize: e.target.value,
-                                                boxSize: prev[jobSelectedProductId]?.boxSize || '',
-                                                efficiency: prev[jobSelectedProductId]?.efficiency || '',
-                                            }
-                                        }))}
-                                        placeholder="Örn: 70x100"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Levha Adeti</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
-                                        value={(jobDetailsByProduct[jobSelectedProductId]?.boxSize) || ''}
-                                        onChange={(e) => setJobDetailsByProduct(prev => ({
-                                            ...prev,
-                                            [jobSelectedProductId]: {
-                                                jobSize: prev[jobSelectedProductId]?.jobSize || '',
-                                                boxSize: e.target.value,
-                                                efficiency: prev[jobSelectedProductId]?.efficiency || '',
-                                            }
-                                        }))}
-                                        placeholder="Örn: 500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Montaj</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
-                                        value={(jobDetailsByProduct[jobSelectedProductId]?.efficiency) || ''}
-                                        onChange={(e) => setJobDetailsByProduct(prev => ({
-                                            ...prev,
-                                            [jobSelectedProductId]: {
-                                                jobSize: prev[jobSelectedProductId]?.jobSize || '',
-                                                boxSize: prev[jobSelectedProductId]?.boxSize || '',
-                                                efficiency: e.target.value,
-                                            }
-                                        }))}
-                                        placeholder="Örn: 4'lü"
-                                    />
-                                </div>
+                            <div className="space-y-4">
+                                {(() => {
+                                    const plates = jobDetailsByProduct[jobSelectedProductId] || [];
+                                    const availableTypes = ['Kapak', 'Dip'] as const;
+                                    
+                                    return (
+                                        <>
+                                            {plates.map((plate, pIdx) => (
+                                                <div key={pIdx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg relative">
+                                                    {plate.type !== 'Gövde' && (
+                                                        <button 
+                                                            onClick={() => setJobDetailsByProduct(prev => ({ ...prev, [jobSelectedProductId]: prev[jobSelectedProductId].filter((_, i) => i !== pIdx) }))}
+                                                            className="absolute top-2 right-2 text-red-400 hover:text-red-600 p-1"
+                                                            title="Kaldır"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    )}
+                                                    <div className="flex items-center gap-4 mb-3">
+                                                        <span className="text-[11px] font-bold text-slate-700 uppercase">{plate.type} Levhası</span>
+                                                        {plate.type === 'Gövde' && (
+                                                            <div className="flex gap-3">
+                                                                <label className="flex items-center gap-1.5 text-[10px] text-slate-600 font-medium cursor-pointer">
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={plate.includesKapak || false} 
+                                                                        onChange={e => {
+                                                                            setJobDetailsByProduct(prev => {
+                                                                                const n = [...prev[jobSelectedProductId]];
+                                                                                n[pIdx] = { ...n[pIdx], includesKapak: e.target.checked };
+                                                                                return { ...prev, [jobSelectedProductId]: n };
+                                                                            });
+                                                                        }} 
+                                                                        className="accent-blue-600 w-3 h-3" 
+                                                                    />
+                                                                    Aynı Levhada Kapak
+                                                                </label>
+                                                                <label className="flex items-center gap-1.5 text-[10px] text-slate-600 font-medium cursor-pointer">
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        checked={plate.includesDip || false} 
+                                                                        onChange={e => {
+                                                                            setJobDetailsByProduct(prev => {
+                                                                                const n = [...prev[jobSelectedProductId]];
+                                                                                n[pIdx] = { ...n[pIdx], includesDip: e.target.checked };
+                                                                                return { ...prev, [jobSelectedProductId]: n };
+                                                                            });
+                                                                        }} 
+                                                                        className="accent-blue-600 w-3 h-3" 
+                                                                    />
+                                                                    Aynı Levhada Dip
+                                                                </label>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Levha Ebadı</label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                                                value={plate.jobSize}
+                                                                onChange={(e) => setJobDetailsByProduct(prev => {
+                                                                    const n = [...prev[jobSelectedProductId]];
+                                                                    n[pIdx] = { ...n[pIdx], jobSize: e.target.value };
+                                                                    return { ...prev, [jobSelectedProductId]: n };
+                                                                })}
+                                                                placeholder="Örn: 70x100"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Levha Adeti</label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                                                value={plate.boxSize}
+                                                                onChange={(e) => setJobDetailsByProduct(prev => {
+                                                                    const n = [...prev[jobSelectedProductId]];
+                                                                    n[pIdx] = { ...n[pIdx], boxSize: e.target.value };
+                                                                    return { ...prev, [jobSelectedProductId]: n };
+                                                                })}
+                                                                placeholder="Örn: 500"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Montaj</label>
+                                                            <input
+                                                                type="text"
+                                                                className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
+                                                                value={plate.efficiency}
+                                                                onChange={(e) => setJobDetailsByProduct(prev => {
+                                                                    const n = [...prev[jobSelectedProductId]];
+                                                                    n[pIdx] = { ...n[pIdx], efficiency: e.target.value };
+                                                                    return { ...prev, [jobSelectedProductId]: n };
+                                                                })}
+                                                                placeholder="Örn: 2 veya 4"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            
+                                            {(() => {
+                                                const usedTypes = plates.map(p => p.type);
+                                                const govde = plates.find(p => p.type === 'Gövde');
+                                                
+                                                const canAdd = availableTypes.filter(t => 
+                                                    !usedTypes.includes(t) && 
+                                                    (t === 'Kapak' ? !govde?.includesKapak : !govde?.includesDip)
+                                                );
+
+                                                if (canAdd.length > 0) {
+                                                    return (
+                                                        <div className="flex gap-2">
+                                                            {canAdd.map(type => (
+                                                                <button 
+                                                                    key={type}
+                                                                    onClick={() => setJobDetailsByProduct(prev => ({
+                                                                        ...prev, 
+                                                                        [jobSelectedProductId]: [...prev[jobSelectedProductId], { type, jobSize: '', boxSize: '', efficiency: '' }]
+                                                                    }))}
+                                                                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 rounded text-[10px] font-bold transition-colors"
+                                                                >
+                                                                    <Plus size={12} /> {type} Levhası Ekle
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </>
+                                    );
+                                })()}
                             </div>
                             )}
                             <div className="pt-4 border-t border-slate-50 flex justify-end gap-2">

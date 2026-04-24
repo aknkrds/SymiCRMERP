@@ -47,6 +47,8 @@ const orderSchema = z.object({
         'production_completed', 'invoice_added', 'shipping_completed',
         'order_completed', 'order_cancelled'
     ]).default('offer_sent'),
+    salesNotes: z.string().nullish(),
+    designNotes: z.string().nullish(),
 });
 
 interface OrderFormProps {
@@ -361,6 +363,30 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                             </div>
                         </InputGroup>
                     )}
+                </FormSection>
+
+                {/* Notlar Section */}
+                <FormSection compact={readOnly} title="Notlar" description="Sipariş için gerekli açıklamalar">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <InputGroup compact={readOnly} label="Satış Personeli Notu">
+                            <textarea
+                                {...register('salesNotes')}
+                                disabled={readOnly}
+                                rows={3}
+                                className={premiumInputClass}
+                                placeholder="Satış süreciyle ilgili notlar..."
+                            />
+                        </InputGroup>
+                        <InputGroup compact={readOnly} label="Tasarım Departmanı Notu">
+                            <textarea
+                                {...register('designNotes')}
+                                disabled={readOnly}
+                                rows={3}
+                                className={premiumInputClass}
+                                placeholder="Tasarım ekibi için özel notlar..."
+                            />
+                        </InputGroup>
+                    </div>
                 </FormSection>
 
                 {/* Items Section */}

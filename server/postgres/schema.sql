@@ -425,3 +425,14 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   notes TEXT,
   created_at TEXT NOT NULL
 );
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS sales_notes TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS design_notes TEXT;
+
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending';
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS received_quantity DOUBLE PRECISION DEFAULT 0;
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS receipts JSONB DEFAULT '[]'::jsonb;
+
+ALTER TABLE stock_items ADD COLUMN IF NOT EXISTS updated_at TEXT;
+
+ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS related_order_ids JSONB DEFAULT '[]'::jsonb;

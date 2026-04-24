@@ -2227,7 +2227,8 @@ app.post('/api/orders', async (req, res) => {
       prepaymentAmount, prepaymentRate,
       gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
       gofreQuantity, gofreUnitPrice,
-      salesRepId, salesRepName
+      salesRepId, salesRepName,
+      salesNotes, designNotes
     } = req.body;
 
     const finalId = id || crypto.randomUUID();
@@ -2242,9 +2243,10 @@ app.post('/api/orders', async (req, res) => {
         prepaymentAmount, prepaymentRate,
         gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
         gofreQuantity, gofreUnitPrice,
-        salesRepId, salesRepName
+        salesRepId, salesRepName,
+        salesNotes, designNotes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     await stmt.run(
@@ -2274,7 +2276,9 @@ app.post('/api/orders', async (req, res) => {
       gofreQuantity || null,
       gofreUnitPrice || null,
       salesRepId || null,
-      salesRepName || null
+      salesRepName || null,
+      salesNotes || null,
+      designNotes || null
     );
     const inserted = await db.prepare('SELECT * FROM orders WHERE id = ?').get(finalId);
     const parsed = parseOrder(inserted);
@@ -3243,6 +3247,148 @@ app.delete('/api/molds/:id', async (req, res) => {
     const stmt = db.prepare('DELETE FROM product_molds WHERE id = ?');
     await stmt.run(id);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// --- PURCHASING & STOCK API ---
+app.get('/api/goods-receipts', async (req, res) => {
+  try {
+    const items = await db.prepare('SELECT * FROM goods_receipts ORDER BY createdAt DESC').all();
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/goods-receipts', async (req, res) => {
+  try {
+    const { id, receiptDate, supplier, plateType, quantity, dimensions, notes, createdAt } = req.body;
+    await db.prepare('INSERT INTO goods_receipts (id, receiptDate, supplier, plateType, quantity, dimensions, notes, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, receiptDate, supplier, plateType, quantity, dimensions, notes, createdAt);
+    const inserted = await db.prepare('SELECT * FROM goods_receipts WHERE id = ?').get(id);
+    res.json(inserted);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/goods-receipts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.prepare('DELETE FROM goods_receipts WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/purchase-orders', async (req, res) => {
+  try {
+    const items = await db.prepare('SELECT * FROM purchase_orders ORDER BY createdAt DESC').all();
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/purchase-orders', async (req, res) => {
+  try {
+    const { id, orderDate, supplier, productName, category, quantity, unit, unitPrice, totalPrice, notes, createdAt, relatedOrderIds } = req.body;
+    await db.prepare('INSERT INTO purchase_orders (id, orderDate, supplier, productName, category, quantity, unit, unitPrice, totalPrice, notes, createdAt, status, receivedQuantity, receipts, relatedOrderIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, orderDate, supplier, productName, category, quantity, unit, unitPrice, totalPrice, notes, createdAt, 'pending', 0, JSON.stringify([]), JSON.stringify(relatedOrderIds || []));
+    const inserted = await db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    res.json(inserted);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/purchase-orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.prepare('DELETE FROM purchase_orders WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/purchase-orders/:id/receipt', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity, receiptDate, imageUrl, notes } = req.body;
+    
+    await db.transaction(async (tx) => {
+      const current = await tx.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+      if (!current) throw new Error('Sipariş bulunamadı');
+
+      let receipts = [];
+      try { receipts = JSON.parse(current.receipts || '[]'); } catch(e) {}
+      
+      receipts.push({
+        quantity: Number(quantity),
+        receiptDate,
+        imageUrl: imageUrl || null,
+        notes: notes || null,
+        addedAt: new Date().toISOString()
+      });
+
+      const newReceived = (current.receivedQuantity || 0) + Number(quantity);
+      
+      await tx.prepare('UPDATE purchase_orders SET receivedQuantity = ?, receipts = ? WHERE id = ?').run(
+        newReceived,
+        JSON.stringify(receipts),
+        id
+      );
+
+      const existingStock = await tx.prepare('SELECT id, quantity FROM stock_items WHERE product = ? AND company = ? LIMIT 1').get(
+        current.productName,
+        current.supplier
+      );
+
+      if (existingStock) {
+        await tx.prepare('UPDATE stock_items SET quantity = quantity + ?, updatedAt = ? WHERE id = ?').run(
+          Number(quantity),
+          new Date().toISOString(),
+          existingStock.id
+        );
+      } else {
+        await tx.prepare('INSERT INTO stock_items (id, stockNumber, company, product, quantity, unit, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+          crypto.randomUUID(),
+          `STK-${Date.now().toString().slice(-6)}`,
+          current.supplier,
+          current.productName,
+          Number(quantity),
+          current.unit || 'Adet',
+          new Date().toISOString()
+        );
+      }
+    })();
+
+    const updated = await db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/purchase-orders/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.prepare('UPDATE purchase_orders SET status = ? WHERE id = ?').run('completed', id);
+    const updated = await db.prepare('SELECT * FROM purchase_orders WHERE id = ?').get(id);
+    res.json(updated);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/stock-items', async (req, res) => {
+  try {
+    const items = await db.prepare('SELECT * FROM stock_items ORDER BY createdAt DESC').all();
+    res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

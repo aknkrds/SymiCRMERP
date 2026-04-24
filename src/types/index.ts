@@ -147,7 +147,7 @@ export interface Order {
     jobSize?: string;       // İşin ebadı
     boxSize?: string;       // Kutu boyutu
     efficiency?: string;    // Verim
-    designJobDetails?: Record<string, { jobSize?: string; boxSize?: string; efficiency?: string }>;
+    designJobDetails?: Record<string, { jobSize?: string; boxSize?: string; efficiency?: string } | { type: 'Gövde' | 'Kapak' | 'Dip'; jobSize: string; boxSize: string; efficiency: string; includesKapak?: boolean; includesDip?: boolean; }[]>;
     assignedUserId?: string;
     assignedUserName?: string;
     assignedRoleName?: string;
@@ -197,6 +197,8 @@ export interface Order {
     salesRepId?: string;
     salesRepName?: string;
     prepaymentRate?: number;
+    salesNotes?: string;
+    designNotes?: string;
     createdAt: string;
 }
 

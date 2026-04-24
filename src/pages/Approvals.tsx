@@ -205,24 +205,39 @@ export default function Approvals() {
                                     {Object.keys(designDetails).length > 0 && (
                                         <div className="space-y-3">
                                             {viewOrder.items.map(item => {
-                                                const detail = (designDetails as any)[item.productId];
-                                                if (!detail) return null;
+                                                const d = (designDetails as any)[item.productId];
+                                                if (!d) return null;
+                                                const plates = Array.isArray(d) ? d : [{ type: 'Gövde', ...d }];
                                                 return (
-                                                    <div key={item.productId} className="bg-white rounded-xl border border-indigo-100 p-3">
+                                                    <div key={item.productId} className="bg-white rounded-xl border border-indigo-100 p-3 mb-2">
                                                         <div className="text-[10px] font-bold text-indigo-700 uppercase mb-2">{item.productName}</div>
-                                                        <div className="grid grid-cols-3 gap-3 text-xs">
-                                                            <div>
-                                                                <span className="text-[9px] text-slate-500 uppercase font-bold block">Levha Ebadı</span>
-                                                                <span className="text-slate-800 font-mono">{detail.jobSize || '—'}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] text-slate-500 uppercase font-bold block">Levha Adeti</span>
-                                                                <span className="text-slate-800 font-mono">{detail.boxSize || '—'}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span className="text-[9px] text-slate-500 uppercase font-bold block">Montaj</span>
-                                                                <span className="text-slate-800 font-mono">{detail.efficiency || '—'}</span>
-                                                            </div>
+                                                        <div className="space-y-2">
+                                                            {plates.map((plate: any, pIdx: number) => (
+                                                                <div key={pIdx} className="bg-slate-50 border border-slate-100 rounded p-2">
+                                                                    <div className="text-[9px] font-bold text-slate-500 uppercase mb-1 flex justify-between">
+                                                                        <span>{plate.type || 'Gövde'} Levhası</span>
+                                                                        {(plate.includesKapak || plate.includesDip) && (
+                                                                        <span className="text-blue-500">
+                                                                            Aynı Levhada: {[plate.includesKapak && 'Kapak', plate.includesDip && 'Dip'].filter(Boolean).join(', ')}
+                                                                        </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="grid grid-cols-3 gap-3 text-xs">
+                                                                        <div>
+                                                                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Levha Ebadı</span>
+                                                                            <span className="text-slate-800 font-mono">{plate.jobSize || '—'}</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Levha Adeti</span>
+                                                                            <span className="text-slate-800 font-mono">{plate.boxSize || '—'}</span>
+                                                                        </div>
+                                                                        <div>
+                                                                            <span className="text-[9px] text-slate-500 uppercase font-bold block">Montaj</span>
+                                                                            <span className="text-slate-800 font-mono">{plate.efficiency || '—'}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     </div>
                                                 );
