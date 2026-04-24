@@ -150,6 +150,8 @@ const initDb = () => {
   try { db.exec('ALTER TABLE orders ADD COLUMN gofreVatRate REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN shippingPrice REAL'); } catch (error) {}
   try { db.exec('ALTER TABLE orders ADD COLUMN shippingVatRate REAL'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN salesRepId TEXT'); } catch (error) {}
+  try { db.exec('ALTER TABLE orders ADD COLUMN salesRepName TEXT'); } catch (error) {}
   
   // Procurement Details Migration
   try { db.exec('ALTER TABLE orders ADD COLUMN procurementDetails TEXT'); } catch (error) {}

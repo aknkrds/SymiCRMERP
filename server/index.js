@@ -2158,11 +2158,19 @@ const enrichOrderItems = async (orders) => {
 
   try {
       const placeholders = [...productIdsToFetch].map(() => '?').join(',');
-      const products = await db.prepare(`SELECT id, name, code, details FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
+      const products = await db.prepare(`SELECT id, name, code, details, dimensions FROM products WHERE id IN (${placeholders})`).all(...productIdsToFetch);
       
       const productMap = new Map();
       products.forEach(p => {
-           const name = `${p.code ? p.code + ' - ' : ''}${p.name}${p.details ? ' - ' + p.details : ''}`;
+           let dims = '';
+           try {
+               const d = typeof p.dimensions === 'string' ? JSON.parse(p.dimensions) : p.dimensions;
+               if (d && (d.length || d.width || d.depth)) {
+                   const parts = [d.length, d.width, d.depth].filter(v => v && Number(v) > 0);
+                   if (parts.length > 0) dims = ` (${parts.join('x')}mm)`;
+               }
+           } catch (e) {}
+           const name = `${p.code ? p.code + ' - ' : ''}${p.name}${dims}${p.details ? ' - ' + p.details : ''}`;
            productMap.set(p.id, name);
       });
 
@@ -2218,7 +2226,8 @@ app.post('/api/orders', async (req, res) => {
       paymentMethod, maturityDays,
       prepaymentAmount, prepaymentRate,
       gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
-      gofreQuantity, gofreUnitPrice
+      gofreQuantity, gofreUnitPrice,
+      salesRepId, salesRepName
     } = req.body;
 
     const finalId = id || crypto.randomUUID();
@@ -2232,9 +2241,10 @@ app.post('/api/orders', async (req, res) => {
         paymentMethod, maturityDays,
         prepaymentAmount, prepaymentRate,
         gofrePrice, gofreVatRate, shippingPrice, shippingVatRate,
-        gofreQuantity, gofreUnitPrice
+        gofreQuantity, gofreUnitPrice,
+        salesRepId, salesRepName
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     await stmt.run(
@@ -2262,7 +2272,9 @@ app.post('/api/orders', async (req, res) => {
       shippingPrice || null,
       shippingVatRate || null,
       gofreQuantity || null,
-      gofreUnitPrice || null
+      gofreUnitPrice || null,
+      salesRepId || null,
+      salesRepName || null
     );
     const inserted = await db.prepare('SELECT * FROM orders WHERE id = ?').get(finalId);
     const parsed = parseOrder(inserted);

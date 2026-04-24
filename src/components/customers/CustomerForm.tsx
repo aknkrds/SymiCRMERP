@@ -7,11 +7,11 @@ import { Mail, Phone, MapPin, User, Building } from 'lucide-react';
 
 const customerSchema = z.object({
     companyName: z.string().min(2, 'Firma ünvanı en az 2 karakter olmalıdır'),
-    contactName: z.string().min(2, 'Yetkili adı en az 2 karakter olmalıdır'),
-    email: z.string().email('Geçersiz email adresi'),
-    phone: z.string().min(10, 'Geçerli bir telefon numarası giriniz'),
-    mobile: z.string().min(10, 'Geçerli bir mobil numara giriniz'),
-    address: z.string().min(5, 'Adres en az 5 karakter olmalıdır'),
+    contactName: z.string().optional().or(z.literal('')),
+    email: z.string().optional().or(z.literal('')),
+    phone: z.string().optional().or(z.literal('')),
+    mobile: z.string().optional().or(z.literal('')),
+    address: z.string().optional().or(z.literal('')),
 });
 
 interface CustomerFormProps {
@@ -50,7 +50,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                     </div>
                 </InputGroup>
 
-                <InputGroup label="Yetkili Kişi" error={errors.contactName?.message} required>
+                <InputGroup label="Yetkili Kişi" error={errors.contactName?.message}>
                     <div className="relative group">
                         <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                         <input
@@ -66,7 +66,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                 title="İletişim Detayları" 
                 description="E-posta ve telefon numaraları"
             >
-                <InputGroup label="Email" error={errors.email?.message} required>
+                <InputGroup label="Email" error={errors.email?.message}>
                     <div className="relative group">
                         <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                         <input
@@ -79,7 +79,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                 </InputGroup>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <InputGroup label="Telefon" error={errors.phone?.message} required>
+                    <InputGroup label="Telefon" error={errors.phone?.message}>
                         <div className="relative group">
                             <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                             <input
@@ -90,7 +90,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                         </div>
                     </InputGroup>
 
-                    <InputGroup label="Mobil" error={errors.mobile?.message} required>
+                    <InputGroup label="Mobil" error={errors.mobile?.message}>
                         <div className="relative group">
                             <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                             <input
@@ -108,7 +108,7 @@ export function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormPr
                 description="Faturada görünecek açık adres"
             >
                 <div className="md:col-span-2">
-                    <InputGroup label="Açık Adres" error={errors.address?.message} required>
+                    <InputGroup label="Açık Adres" error={errors.address?.message}>
                         <div className="relative group">
                             <MapPin size={16} className="absolute left-3.5 top-3 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                             <textarea

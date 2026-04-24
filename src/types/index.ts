@@ -194,6 +194,9 @@ export interface Order {
     gofreVatRate?: number;
     shippingPrice?: number;
     shippingVatRate?: number;
+    salesRepId?: string;
+    salesRepName?: string;
+    prepaymentRate?: number;
     createdAt: string;
 }
 

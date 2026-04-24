@@ -278,7 +278,7 @@ export default function Design() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Kutu Boyutu</label>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Levha Adeti</label>
                                     <input
                                         type="text"
                                         className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
@@ -291,11 +291,11 @@ export default function Design() {
                                                 efficiency: prev[jobSelectedProductId]?.efficiency || '',
                                             }
                                         }))}
-                                        placeholder="Örn: Orta"
+                                        placeholder="Örn: 500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Verim</label>
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">Montaj</label>
                                     <input
                                         type="text"
                                         className="w-full p-2 bg-white border border-slate-200 rounded text-xs outline-none"
@@ -308,7 +308,7 @@ export default function Design() {
                                                 efficiency: e.target.value,
                                             }
                                         }))}
-                                        placeholder="Örn: %85"
+                                        placeholder="Örn: 4'lü"
                                     />
                                 </div>
                             </div>

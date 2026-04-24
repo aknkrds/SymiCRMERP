@@ -2,8 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Trash2, Plus, Search, ChevronDown, Package, DollarSign, Calendar, CreditCard, Info } from 'lucide-react';
+import { Trash2, Plus, Search, ChevronDown, Package, DollarSign, Calendar, CreditCard, Info, Users, Percent } from 'lucide-react';
 import { useCustomers } from '../../hooks/useCustomers';
+import { useUsers } from '../../hooks/useUsers';
 import type { OrderFormData, Product, ProductFormData } from '../../types';
 import { Modal } from '../ui/Modal';
 import { ProductForm } from '../products/ProductForm';
@@ -18,6 +19,9 @@ const orderSchema = z.object({
     paymentMethod: z.enum(['havale_eft', 'cek', 'cari_hesap']).nullish(),
     maturityDays: z.coerce.number().optional(),
     prepaymentAmount: z.string().nullish(),
+    prepaymentRate: z.coerce.number().optional(),
+    salesRepId: z.string().nullish(),
+    salesRepName: z.string().nullish(),
     gofrePrice: z.coerce.number().optional(),
     gofreQuantity: z.coerce.number().optional(),
     gofreUnitPrice: z.coerce.number().optional(),
@@ -53,6 +57,8 @@ interface OrderFormProps {
 
 export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, defaultVatRate = 20 }: OrderFormProps) {
     const { customers } = useCustomers();
+    const { users } = useUsers();
+    const salesUsers = users.filter(u => u.roleName === 'Satış');
     const [customerProducts, setCustomerProducts] = useState<Product[]>([]);
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
@@ -97,6 +103,7 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
     const watchedGofreVatRate = watch('gofreVatRate');
     const watchedShippingPrice = watch('shippingPrice');
     const watchedShippingVatRate = watch('shippingVatRate');
+    const watchedPrepaymentRate = watch('prepaymentRate');
 
     useEffect(() => {
         const qty = Number(watchedGofreQuantity) || 0;
@@ -223,6 +230,25 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                             <option value="USD">USD - Amerikan Doları</option>
                             <option value="EUR">EUR - Euro</option>
                         </select>
+                    </InputGroup>
+
+                    <InputGroup compact={readOnly} label="Satış Temsilcisi">
+                        <div className="relative group">
+                            <Users size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500" />
+                            <select
+                                value={watch('salesRepId') || ''}
+                                onChange={(e) => {
+                                    const user = salesUsers.find(u => u.id === e.target.value);
+                                    setValue('salesRepId', e.target.value || undefined);
+                                    setValue('salesRepName', user?.fullName || undefined);
+                                }}
+                                disabled={readOnly}
+                                className={`${premiumInputClass} pl-11`}
+                            >
+                                <option value="">Seçiniz</option>
+                                {salesUsers.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                            </select>
+                        </div>
                     </InputGroup>
 
                     <InputGroup compact={readOnly} label="Ödeme Şekli">
@@ -378,7 +404,12 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                                                 className={premiumInputClass}
                                                             >
                                                                 <option value="">Seçiniz...</option>
-                                                                {customerProducts.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
+                                                                {customerProducts.map(p => {
+                                                                    const dims = p.dimensions && (p.dimensions.length || p.dimensions.width || p.dimensions.depth)
+                                                                        ? ` (${[p.dimensions.length, p.dimensions.width, p.dimensions.depth].filter(v => v && Number(v) > 0).join('x')}mm)`
+                                                                        : '';
+                                                                    return <option key={p.id} value={p.id}>{p.code} - {p.name}{dims}</option>;
+                                                                })}
                                                             </select>
                                                         )}
                                                     />
@@ -454,6 +485,17 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                     <input type="number" step="0.01" {...register('shippingPrice')} disabled={readOnly} className={`${premiumInputClass} pl-9`} />
                                 </div>
                             </InputGroup>
+                            <InputGroup compact={readOnly} label="Peşin Tutar (%)">
+                                <div className="relative group">
+                                    <Percent size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500" />
+                                    <input type="number" step="1" min="0" max="100" placeholder="Örn: 30" {...register('prepaymentRate')} disabled={readOnly} className={`${premiumInputClass} pl-9`} />
+                                </div>
+                                {Number(watchedPrepaymentRate) > 0 && (
+                                    <div className="text-[10px] text-emerald-600 font-bold mt-1">
+                                        %{Number(watchedPrepaymentRate)} peşin → {(calculateGrandTotal() * Number(watchedPrepaymentRate) / 100).toLocaleString()} {watch('currency')} peşin
+                                    </div>
+                                )}
+                            </InputGroup>
                         </FormSection>
                     </div>
 
@@ -477,6 +519,23 @@ export function OrderForm({ initialData, onSubmit, onCancel, readOnly = false, d
                                     {calculateGrandTotal().toLocaleString()} {watch('currency')}
                                 </span>
                             </div>
+                            {Number(watchedPrepaymentRate) > 0 && (
+                                <>
+                                    <div className="h-px bg-emerald-200" />
+                                    <div className="flex justify-between text-sm text-emerald-700">
+                                        <span className="font-bold">Peşin (%{Number(watchedPrepaymentRate)})</span>
+                                        <span className="font-mono font-bold">
+                                            {(calculateGrandTotal() * Number(watchedPrepaymentRate) / 100).toLocaleString()} {watch('currency')}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-amber-700">
+                                        <span className="font-bold">{watchedPaymentMethod === 'cek' ? 'Çek' : 'Vade'}</span>
+                                        <span className="font-mono font-bold">
+                                            {(calculateGrandTotal() * (100 - Number(watchedPrepaymentRate)) / 100).toLocaleString()} {watch('currency')}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="bg-blue-100/50 p-3 rounded-xl flex items-start gap-2 text-blue-700 text-[10px] leading-relaxed">
                             <Info size={14} className="shrink-0 mt-0.5" />

@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { useUsers } from '../hooks/useUsers';
-import { TrendingUp, Users, Filter, Settings, Menu } from 'lucide-react';
+import { useProducts } from '../hooks/useProducts';
+import { TrendingUp, Users, Filter, Settings, Menu, Eye, X, Save, Package, DollarSign, Percent, FileText, Image as ImageIcon } from 'lucide-react';
 import { format, subMonths, parseISO } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import type { Order, ProcurementDispatchChangeRequest } from '../types';
+import type { Order, OrderFormData, ProcurementDispatchChangeRequest } from '../types';
 import { ERPPageLayout, ToolbarBtn } from '../components/ui/ERPPageLayout';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Modal } from '../components/ui/Modal';
+import { OrderForm } from '../components/orders/OrderForm';
 
 const ROLE_COLOR_MAP: Record<string, string> = {
     'Satış': 'bg-sky-50 text-sky-600 border-sky-100',
@@ -19,9 +22,12 @@ const ROLE_COLOR_MAP: Record<string, string> = {
 };
 
 export default function Approvals() {
-    const { orders, updateStatus } = useOrders() as any;
+    const { orders, updateStatus, updateOrder } = useOrders() as any;
     const { users } = useUsers();
+    const { products } = useProducts();
     const [dispatchChangeRequests, setDispatchChangeRequests] = useState<ProcurementDispatchChangeRequest[]>([]);
+    const [viewOrder, setViewOrder] = useState<Order | null>(null);
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
     const fetchDispatchData = async () => {
         try {
@@ -52,6 +58,34 @@ export default function Approvals() {
         });
         return Object.values(data);
     }, [orders]);
+
+    const handleViewOrder = (order: Order) => {
+        setViewOrder(order);
+        setIsViewModalOpen(true);
+    };
+
+    const handleGMSave = async (data: OrderFormData) => {
+        if (!viewOrder) return;
+        try {
+            await updateOrder(viewOrder.id, data);
+            setIsViewModalOpen(false);
+            setViewOrder(null);
+        } catch (err) {
+            console.error('GM save error:', err);
+        }
+    };
+
+    // Get design job details for a given order
+    const getDesignDetails = (order: Order) => {
+        const details = order.designJobDetails || {};
+        return details;
+    };
+
+    // Get design images for a given order
+    const getDesignImages = (order: Order) => {
+        const imgs = order.designImages || [];
+        return imgs.map((img: any) => typeof img === 'string' ? { url: img } : img);
+    };
 
     return (
         <ERPPageLayout
@@ -105,7 +139,11 @@ export default function Approvals() {
                                         <td className="px-4 py-3 font-mono text-slate-400 font-bold">#{o.id.slice(0,8)}</td>
                                         <td className="px-4 py-3 font-bold text-slate-700 uppercase">{o.customerName}</td>
                                         <td className="px-4 py-3 text-right">
-                                            <div className="flex justify-end gap-1"><button onClick={() => updateStatus(o.id, 'manager_approved')} className="p-1 px-3 bg-emerald-600 text-white rounded text-[9px] font-bold uppercase hover:bg-emerald-700 shadow-sm shadow-emerald-100">ONAYLA</button><button onClick={() => updateStatus(o.id, 'revision_requested')} className="p-1 px-3 bg-red-50 text-red-600 rounded text-[9px] font-bold border border-red-100 hover:bg-red-100 transition-all">REVİZE</button></div>
+                                            <div className="flex justify-end gap-1">
+                                                <button onClick={() => handleViewOrder(o)} className="p-1 px-3 bg-blue-50 text-blue-600 rounded text-[9px] font-bold border border-blue-100 hover:bg-blue-100 transition-all">GÖRÜNTÜLE</button>
+                                                <button onClick={() => updateStatus(o.id, 'manager_approved')} className="p-1 px-3 bg-emerald-600 text-white rounded text-[9px] font-bold uppercase hover:bg-emerald-700 shadow-sm shadow-emerald-100">ONAYLA</button>
+                                                <button onClick={() => updateStatus(o.id, 'revision_requested')} className="p-1 px-3 bg-red-50 text-red-600 rounded text-[9px] font-bold border border-red-100 hover:bg-red-100 transition-all">REVİZE</button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -140,6 +178,88 @@ export default function Approvals() {
                     </div>
                 </div>
             </div>
+
+            {/* GM View/Edit Modal */}
+            <Modal
+                isOpen={isViewModalOpen}
+                onClose={() => { setIsViewModalOpen(false); setViewOrder(null); }}
+                size="full"
+                theme="glass"
+                title={viewOrder ? `Sipariş Görüntüle & Düzenle — #${viewOrder.id.slice(0, 8)}` : 'Sipariş Detayı'}
+            >
+                {viewOrder && (
+                    <div className="space-y-6">
+                        {/* Design Info Section - Above the order form */}
+                        {(() => {
+                            const designDetails = getDesignDetails(viewOrder);
+                            const designImages = getDesignImages(viewOrder);
+                            const hasDesignInfo = Object.keys(designDetails).length > 0 || designImages.length > 0;
+                            if (!hasDesignInfo) return null;
+                            return (
+                                <div className="bg-indigo-50/50 rounded-2xl border border-indigo-100 p-5 space-y-4">
+                                    <div className="flex items-center gap-2 text-indigo-800 font-bold uppercase tracking-widest text-[10px]">
+                                        <FileText size={14} /> Tasarım Bilgileri
+                                    </div>
+                                    
+                                    {/* Design Job Details per product */}
+                                    {Object.keys(designDetails).length > 0 && (
+                                        <div className="space-y-3">
+                                            {viewOrder.items.map(item => {
+                                                const detail = (designDetails as any)[item.productId];
+                                                if (!detail) return null;
+                                                return (
+                                                    <div key={item.productId} className="bg-white rounded-xl border border-indigo-100 p-3">
+                                                        <div className="text-[10px] font-bold text-indigo-700 uppercase mb-2">{item.productName}</div>
+                                                        <div className="grid grid-cols-3 gap-3 text-xs">
+                                                            <div>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold block">Levha Ebadı</span>
+                                                                <span className="text-slate-800 font-mono">{detail.jobSize || '—'}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold block">Levha Adeti</span>
+                                                                <span className="text-slate-800 font-mono">{detail.boxSize || '—'}</span>
+                                                            </div>
+                                                            <div>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold block">Montaj</span>
+                                                                <span className="text-slate-800 font-mono">{detail.efficiency || '—'}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* Design Images */}
+                                    {designImages.length > 0 && (
+                                        <div>
+                                            <div className="text-[9px] font-bold text-indigo-600 uppercase mb-2 flex items-center gap-1">
+                                                <ImageIcon size={12} /> Tasarım Görselleri
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {designImages.map((img: any, idx: number) => (
+                                                    <div key={idx} className="w-24 h-24 rounded-lg border border-indigo-100 overflow-hidden">
+                                                        <img src={img.url} alt="Tasarım" className="w-full h-full object-cover" />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
+
+                        {/* Editable Order Form - readOnly=false so GM can edit everything */}
+                        <OrderForm
+                            key={viewOrder.id}
+                            initialData={viewOrder}
+                            onSubmit={handleGMSave}
+                            onCancel={() => { setIsViewModalOpen(false); setViewOrder(null); }}
+                            readOnly={false}
+                        />
+                    </div>
+                )}
+            </Modal>
         </ERPPageLayout>
     );
 }
