@@ -114,13 +114,14 @@ const main = async () => {
     process.exit(1);
   });
 
+  const readyTimeout = process.env.DEPLOY_READY_TIMEOUT ? parseInt(process.env.DEPLOY_READY_TIMEOUT, 10) : 60000;
   const connectOptions = {
     host,
     port,
     username,
     agent,
     tryKeyboard: true,
-    readyTimeout: 20000,
+    readyTimeout,
     keepaliveInterval: 15000
   };
 
