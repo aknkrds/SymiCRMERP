@@ -1,22 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Product, ProductFormData } from '../types';
+import { useAutoRefreshOnServerMutation } from './useAutoRefreshOnServerMutation';
 
 const API_URL = '/api/products';
 
 export function useProducts() {
     const [products, setProducts] = useState<Product[]>([]);
 
-    useEffect(() => {
-        fetch(API_URL)
-            .then(res => res.json())
-            .then(data => {
-                const sorted = data.sort((a: Product, b: Product) => 
-                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-                );
-                setProducts(sorted);
-            })
-            .catch(err => console.error('Error fetching products:', err));
+    const fetchProducts = useCallback(async () => {
+        try {
+            const res = await fetch(API_URL);
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                setProducts([]);
+                return;
+            }
+            const sorted = data.sort((a: Product, b: Product) =>
+                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            setProducts(sorted);
+        } catch (err) {
+            console.error('Error fetching products:', err);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchProducts();
+    }, [fetchProducts]);
+
+    useAutoRefreshOnServerMutation(fetchProducts, { debounceMs: 500 });
 
     const addProduct = async (data: ProductFormData) => {
         const newProduct: Product = {

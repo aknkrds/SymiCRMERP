@@ -1,23 +1,34 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Customer, CustomerFormData } from '../types';
+import { useAutoRefreshOnServerMutation } from './useAutoRefreshOnServerMutation';
 
 const API_URL = '/api/customers';
 
 export function useCustomers() {
     const [customers, setCustomers] = useState<Customer[]>([]);
 
-    useEffect(() => {
-        fetch(API_URL)
-            .then(res => res.json())
-            .then(data => {
-                // Sort by companyName asc
-                const sorted = data.sort((a: Customer, b: Customer) => 
-                    a.companyName.localeCompare(b.companyName, 'tr')
-                );
-                setCustomers(sorted);
-            })
-            .catch(err => console.error('Error fetching customers:', err));
+    const fetchCustomers = useCallback(async () => {
+        try {
+            const res = await fetch(API_URL);
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                setCustomers([]);
+                return;
+            }
+            const sorted = data.sort((a: Customer, b: Customer) =>
+                a.companyName.localeCompare(b.companyName, 'tr')
+            );
+            setCustomers(sorted);
+        } catch (err) {
+            console.error('Error fetching customers:', err);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchCustomers();
+    }, [fetchCustomers]);
+
+    useAutoRefreshOnServerMutation(fetchCustomers, { debounceMs: 500 });
 
     const addCustomer = async (data: CustomerFormData) => {
         const newCustomer: Customer = {

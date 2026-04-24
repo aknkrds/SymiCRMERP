@@ -57,6 +57,67 @@ const dbInit = async () => {
 };
 dbInit();
 
+const sseClients = new Set();
+
+const broadcastSse = (payload) => {
+  if (!payload) return;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of sseClients) {
+    try {
+      res.write(data);
+    } catch {
+      sseClients.delete(res);
+    }
+  }
+};
+
+setInterval(() => {
+  const data = `event: ping\ndata: {}\n\n`;
+  for (const res of sseClients) {
+    try {
+      res.write(data);
+    } catch {
+      sseClients.delete(res);
+    }
+  }
+}, 25000);
+
+app.get('/api/events', (req, res) => {
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  res.write(`event: connected\ndata: ${JSON.stringify(appMeta)}\n\n`);
+
+  sseClients.add(res);
+
+  req.on('close', () => {
+    sseClients.delete(res);
+  });
+});
+
+app.use('/api', (req, res, next) => {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return next();
+
+  const startedAt = Date.now();
+
+  res.on('finish', () => {
+    if (res.statusCode >= 200 && res.statusCode < 400) {
+      broadcastSse({
+        type: 'api_mutation',
+        method: req.method,
+        path: req.path,
+        at: new Date().toISOString(),
+        ms: Date.now() - startedAt
+      });
+    }
+  });
+
+  next();
+});
+
 // Configure Multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -232,13 +293,13 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
 // --- MESSAGING ENDPOINTS ---
 
 // Get messages for a specific user (sent and received)
-app.get('/api/messages', (req, res) => {
+app.get('/api/messages', async (req, res) => {
   try {
     const { userId } = req.query;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
-    const messages = db.prepare(`
+    const messages = await db.prepare(`
       SELECT * FROM messages 
       WHERE senderId = ? OR recipientId = ?
       ORDER BY createdAt DESC

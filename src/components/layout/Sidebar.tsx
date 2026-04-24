@@ -7,8 +7,11 @@ import {
     FileText,
     Settings,
     Menu,
+    ChevronLeft,
+    ChevronRight,
     Palette,
     ShoppingCart,
+    Printer,
     Factory,
     Calculator,
     Truck,
@@ -41,7 +44,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
         { icon: Package, label: 'Ürünler & Reçeteler', to: '/products', permission: 'products' },
         { icon: FileText, label: 'Siparişler', to: '/orders', permission: 'orders' },
         { icon: Palette, label: 'Tasarım', to: '/design', permission: 'design' },
-        { icon: ShoppingCart, label: 'Matbaa', to: '/procurement', permission: 'procurement' },
+        { icon: Printer, label: 'Matbaa', to: '/procurement', permission: 'procurement' },
         { icon: ShoppingCart, label: 'Satın Alma', to: '/purchasing', permission: 'all_except_settings' },
         { icon: Calendar, label: 'Planlama', to: '/planning', permission: 'planning' },
         { icon: Factory, label: 'Üretim', to: '/production', permission: 'production' },
@@ -70,9 +73,13 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
                     isOpen ? 'w-64 translate-x-0' : 'w-20 -translate-x-full md:translate-x-0 md:w-20'
                 )}
             >
-                <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800/70">
+                <div
+                    className={cn(
+                        'h-16 flex items-center px-3 border-b border-slate-800/70'
+                    )}
+                >
                     {/* Logo her zaman görünsün, kapalıyken sadece icon */}
-                    <div className={cn("flex items-center gap-2", !isOpen && "justify-center w-full md:w-auto")}>
+                    <div className={cn("flex items-center gap-2", isOpen ? "" : "flex-1 justify-center")}>
                         <img
                             src="/symi.png"
                             alt="Symi CRM"
@@ -86,15 +93,17 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
                         )}
                     </div>
 
-                    {isOpen && (
-                        <button
-                            onClick={() => setIsOpen(!isOpen)}
-                            className="p-2 hover:bg-slate-800/80 rounded-lg transition-colors md:flex hidden"
-                            title="Menüyü daralt"
-                        >
-                            <Menu size={20} />
-                        </button>
-                    )}
+                    <button
+                        onClick={() => setIsOpen(!isOpen)}
+                        className={cn(
+                            'hidden md:flex items-center justify-center w-9 h-9 rounded-full border border-slate-700/70 bg-slate-800/40 hover:bg-slate-800/70 hover:border-slate-600/80 transition-colors',
+                            isOpen ? 'ml-auto' : 'shrink-0'
+                        )}
+                        title={isOpen ? 'Menüyü daralt' : 'Menüyü genişlet'}
+                        aria-label={isOpen ? 'Menüyü daralt' : 'Menüyü genişlet'}
+                    >
+                        {isOpen ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+                    </button>
 
                     {/* Mobil için kapatma butonu */}
                     {isOpen && (
@@ -188,7 +197,7 @@ export function Sidebar({ isOpen, setIsOpen }: { isOpen: boolean; setIsOpen: (va
 
                     {isOpen && (
                         <div className="px-3 py-2 mt-4 text-[11px] text-slate-500 text-center border-t border-slate-800/80 pt-3">
-                            <p className="font-medium">Symi CRM v.0.9.6.5</p>
+                            <p className="font-medium">Symi CRM v.0.9.6.6</p>
                             <p className="text-[10px] mt-0.5 text-slate-500">
                                 Tasarım & Geliştirme:{' '}
                                 <span className="font-semibold text-slate-200">Akın KARADAŞ - Symi Tekstil Bilişim Hizmetleri Yazılım ve Danışmanlık Ltd Şti</span>

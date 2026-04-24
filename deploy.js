@@ -77,10 +77,14 @@ const main = async () => {
 
   const agent = process.env.SSH_AUTH_SOCK;
   console.log(`Deploy target: ${username}@${host}:${port}`);
-  if (!process.env.DEPLOY_PASSWORD) {
-    console.log('SSH Password is required. Type it and press Enter (input is hidden).');
+  const password = process.env.DEPLOY_PASSWORD || null;
+  if (deployFull && !password) {
+    console.error('DEPLOY_FULL=1 için DEPLOY_PASSWORD gerekli.');
+    process.exit(1);
   }
-  const password = process.env.DEPLOY_PASSWORD || await askHidden('SSH Password: ');
+  if (!password) {
+    console.log('SSH agent ile bağlanmayı deniyorum (DEPLOY_PASSWORD verilmedi).');
+  }
 
   const conn = new Client();
   conn.on('ready', () => {
@@ -108,16 +112,23 @@ const main = async () => {
   }).on('error', (e) => {
     console.error(e.message);
     process.exit(1);
-  }).connect({
+  });
+
+  const connectOptions = {
     host,
     port,
     username,
-    password,
     agent,
     tryKeyboard: true,
     readyTimeout: 20000,
     keepaliveInterval: 15000
-  });
+  };
+
+  if (password) {
+    conn.connect({ ...connectOptions, password });
+  } else {
+    conn.connect(connectOptions);
+  }
 };
 
 main();

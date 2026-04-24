@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Package, FileText, Palette, ShoppingCart, Calendar, Factory, Calculator, Truck, CheckCircle, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, Users, Package, FileText, Palette, ShoppingCart, Printer, Calendar, Factory, Calculator, Truck, CheckCircle, BarChart2 } from 'lucide-react';
 import Dashboard from '../pages/Dashboard';
 import Customers from '../pages/Customers';
 import Products from '../pages/Products';
@@ -27,7 +27,7 @@ export const appsConfig = [
     { id: 'products', title: 'Ürünler', icon: Package, component: <Products />, permission: 'products', colorClass: 'bg-emerald-500' },
     { id: 'orders', title: 'Siparişler', icon: FileText, component: <Orders />, permission: 'orders', colorClass: 'bg-amber-500' },
     { id: 'design', title: 'Tasarım', icon: Palette, component: <Design />, permission: 'design', colorClass: 'bg-pink-500' },
-    { id: 'procurement', title: 'Matbaa', icon: ShoppingCart, component: <Procurement />, permission: 'procurement', colorClass: 'bg-cyan-500' },
+    { id: 'procurement', title: 'Matbaa', icon: Printer, component: <Procurement />, permission: 'procurement', colorClass: 'bg-cyan-500' },
     { id: 'purchasing', title: 'Satın Alma', icon: ShoppingCart, component: <Purchasing />, permission: 'all_except_settings', colorClass: 'bg-lime-500' },
     { id: 'planning', title: 'Planlama', icon: Calendar, component: <Planning />, permission: 'planning', colorClass: 'bg-violet-500' },
     { id: 'production', title: 'Üretim', icon: Factory, component: <Production />, permission: 'production', colorClass: 'bg-orange-500' },

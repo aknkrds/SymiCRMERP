@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Order, OrderFormData } from '../types';
+import { useAutoRefreshOnServerMutation } from './useAutoRefreshOnServerMutation';
 
 const API_URL = '/api/orders';
 
@@ -9,28 +10,34 @@ export function useOrders() {
     const [orders, setOrders] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        fetch(API_URL)
-            .then(res => res.json())
-            .then(data => {
-                if (!Array.isArray(data)) {
-                    console.error('Expected array of orders but got:', data);
-                    setOrders([]);
-                    return;
-                }
-                // Filter out invalid items
-                const validOrders = data.filter(item => item && typeof item === 'object' && item.id);
-                
-                const sorted = validOrders.sort((a: Order, b: Order) => {
-                    const dateA = new Date(a.createdAt).getTime();
-                    const dateB = new Date(b.createdAt).getTime();
-                    return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
-                });
-                setOrders(sorted);
-            })
-            .catch(err => console.error('Error fetching orders:', err))
-            .finally(() => setLoading(false));
+    const fetchOrders = useCallback(async () => {
+        try {
+            const res = await fetch(API_URL);
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                console.error('Expected array of orders but got:', data);
+                setOrders([]);
+                return;
+            }
+            const validOrders = data.filter(item => item && typeof item === 'object' && item.id);
+            const sorted = validOrders.sort((a: Order, b: Order) => {
+                const dateA = new Date(a.createdAt).getTime();
+                const dateB = new Date(b.createdAt).getTime();
+                return (isNaN(dateB) ? 0 : dateB) - (isNaN(dateA) ? 0 : dateA);
+            });
+            setOrders(sorted);
+        } catch (err) {
+            console.error('Error fetching orders:', err);
+        } finally {
+            setLoading(false);
+        }
     }, []);
+
+    useEffect(() => {
+        fetchOrders();
+    }, [fetchOrders]);
+
+    useAutoRefreshOnServerMutation(fetchOrders, { debounceMs: 500 });
 
     const calculateTotals = (order: Pick<Order, 'items' | 'gofrePrice' | 'gofreVatRate' | 'shippingPrice' | 'shippingVatRate'>) => {
         let subtotal = 0;
@@ -70,13 +77,14 @@ export function useOrders() {
         });
 
         let generatedId: string;
-        if (options?.typePrefix) {
+        const typePrefix = options?.typePrefix;
+        if (typePrefix) {
             const existingNumbers = orders
-                .filter(o => o.id.startsWith(options.typePrefix))
-                .map(o => parseInt(o.id.slice(options.typePrefix.length), 10))
+                .filter(o => o.id.startsWith(typePrefix))
+                .map(o => parseInt(o.id.slice(typePrefix.length), 10))
                 .filter(n => !Number.isNaN(n));
             const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
-            generatedId = `${options.typePrefix}${nextNumber}`;
+            generatedId = `${typePrefix}${nextNumber}`;
         } else {
             generatedId = crypto.randomUUID();
         }

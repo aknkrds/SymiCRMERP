@@ -9,10 +9,12 @@ import { useCompanySettings } from '../../hooks/useCompanySettings';
 import { useState } from 'react';
 import { Menu } from 'lucide-react';
 import { MobileBottomNav } from '../mobile/MobileBottomNav';
+import { useServerEvents } from '../../hooks/useServerEvents';
 
 export function Layout() {
     const { settings } = useCompanySettings();
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
+    useServerEvents();
 
     return (
         <div className="flex h-screen bg-[var(--bg-main)]">
@@ -38,7 +40,7 @@ export function Layout() {
                         )}
                         <h2 className="text-base sm:text-lg font-semibold text-slate-800 tracking-tight flex items-center gap-2">
                             {settings.companyName}
-                            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">v.0.9.6.5</span>
+                            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">v.0.9.6.6</span>
                         </h2>
                     </div>
                     <div className="flex items-center gap-3 sm:gap-4">
